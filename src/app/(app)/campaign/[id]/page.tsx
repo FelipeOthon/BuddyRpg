@@ -26,7 +26,6 @@ async function CampaignRoomLoader({
     redirect(`/login?next=${encodeURIComponent(`/campaign/${id}`)}`);
   }
 
-  // Busca a campanha (RLS garante que apenas membros conseguem ler; se não for membro, retorna null -> 404)
   const { data: campaign } = await supabase
     .from("campaigns")
     .select("*")
@@ -48,25 +47,28 @@ async function CampaignRoomLoader({
     notFound();
   }
 
-  const { data: scenes } = await supabase
-    .from("scenes")
-    .select("*")
-    .eq("campaign_id", id)
-    .order("created_at", { ascending: true });
-
-  const { data: rawMembers } = await supabase
-    .from("campaign_members")
-    .select(
-      `
-      user_id,
-      role,
-      profiles (
-        username
-      )
-    `
-    )
-    .eq("campaign_id", id)
-    .order("joined_at", { ascending: true });
+  const [{ data: scenes }, { data: tokens }, { data: rawMembers }] =
+    await Promise.all([
+      supabase
+        .from("scenes")
+        .select("*")
+        .eq("campaign_id", id)
+        .order("created_at", { ascending: true }),
+      supabase.from("tokens").select("*").eq("campaign_id", id),
+      supabase
+        .from("campaign_members")
+        .select(
+          `
+          user_id,
+          role,
+          profiles (
+            username
+          )
+        `
+        )
+        .eq("campaign_id", id)
+        .order("joined_at", { ascending: true }),
+    ]);
 
   const members: CampaignMemberInfo[] = (rawMembers ?? []).map((m) => {
     const p = Array.isArray(m.profiles) ? m.profiles[0] : m.profiles;
@@ -82,7 +84,8 @@ async function CampaignRoomLoader({
       campaign={campaign}
       currentUserId={user.id}
       role={myMembership.role}
-      scenes={scenes ?? []}
+      initialScenes={scenes ?? []}
+      initialTokens={tokens ?? []}
       members={members}
     />
   );

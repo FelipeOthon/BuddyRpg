@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -15,7 +15,10 @@ import {
   UserCheck,
   Users,
 } from "lucide-react";
-import type { Campaign, CampaignRole, Scene } from "@/types/domain";
+import BoardClient from "@/components/board/BoardClient";
+import SceneManager from "@/components/scenes/SceneManager";
+import { useBoardStore } from "@/stores/boardStore";
+import type { Campaign, CampaignRole, Scene, Token } from "@/types/domain";
 
 export interface CampaignMemberInfo {
   userId: string;
@@ -27,21 +30,42 @@ type SidebarTab = "chat" | "sheets" | "scenes" | "members";
 
 export default function CampaignWorkspaceShell({
   campaign,
+  currentUserId,
   role,
-  scenes,
+  initialScenes,
+  initialTokens,
   members,
 }: {
   campaign: Campaign;
   currentUserId: string;
   role: CampaignRole;
-  scenes: Scene[];
+  initialScenes: Scene[];
+  initialTokens: Token[];
   members: CampaignMemberInfo[];
 }) {
   const isGm = role === "gm";
-  const [activeTab, setActiveTab] = useState<SidebarTab>("members");
+  const [activeTab, setActiveTab] = useState<SidebarTab>(
+    isGm ? "scenes" : "members"
+  );
   const [copied, setCopied] = useState<"code" | "link" | null>(null);
 
-  const activeScene = scenes.find((s) => s.is_active) ?? scenes[0] ?? null;
+  const { scenes, viewedSceneId, hydrateBoard } = useBoardStore();
+
+  useEffect(() => {
+    hydrateBoard({
+      scenes: initialScenes,
+      tokens: initialTokens,
+    });
+  }, [initialScenes, initialTokens, hydrateBoard]);
+
+  const effectiveScenes = scenes.length > 0 ? scenes : initialScenes;
+  const viewedScene =
+    (isGm
+      ? effectiveScenes.find((s) => s.id === viewedSceneId)
+      : undefined) ??
+    effectiveScenes.find((s) => s.is_active) ??
+    effectiveScenes[0] ??
+    null;
 
   const copyInvite = async (type: "code" | "link") => {
     const value =
@@ -124,34 +148,37 @@ export default function CampaignWorkspaceShell({
         </div>
       </header>
 
-      {/* Corpo: Tabuleiro à esquerda + Sidebar à direita */}
+      {/* Corpo: Tabuleiro Konva à esquerda + Sidebar à direita */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Área do Tabuleiro (Fase 3 conecta o BoardClient / Konva aqui) */}
-        <section className="relative flex flex-1 flex-col items-center justify-center bg-zinc-950 p-6">
-          <div className="max-w-md rounded-2xl border border-zinc-800 bg-zinc-900/70 p-6 text-center shadow-xl">
-            <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-400">
-              <Grid className="h-5 w-5" />
-            </div>
-            <h2 className="text-base font-bold text-white">
-              {activeScene ? `Cena Ativa: ${activeScene.name}` : "Sem cena ativa"}
-            </h2>
-            {activeScene && (
-              <p className="mt-1.5 text-xs text-zinc-400">
-                Grade: {activeScene.grid_size}px · Escala:{" "}
-                {activeScene.meters_per_cell}m/quadrado · Regra:{" "}
-                {activeScene.distance_rule}
+        <section className="relative flex flex-1 overflow-hidden bg-zinc-950">
+          {viewedScene ? (
+            <BoardClient
+              scene={viewedScene}
+              currentUserId={currentUserId}
+              role={role}
+            />
+          ) : (
+            <div className="flex flex-1 flex-col items-center justify-center p-6 text-center">
+              <Grid className="h-8 w-8 text-zinc-600" />
+              <p className="mt-2 text-sm font-medium text-zinc-300">
+                Nenhuma cena ativa no momento
               </p>
-            )}
-            <p className="mt-3 text-xs text-zinc-500">
-              O canvas interativo Konva (zoom, pan, régua, mapa e tokens) será
-              conectado nesta área na Fase 3.
-            </p>
-          </div>
+              <p className="mt-1 text-xs text-zinc-500">
+                {isGm
+                  ? "Crie ou ative uma cena na aba Cenas ao lado."
+                  : "Aguarde o Mestre ativar uma cena."}
+              </p>
+            </div>
+          )}
         </section>
 
         {/* Sidebar Lateral */}
         <aside className="flex w-80 shrink-0 flex-col border-l border-zinc-800 bg-zinc-900/80 sm:w-96">
-          <nav className="grid grid-cols-4 border-b border-zinc-800 bg-zinc-950/60 p-1">
+          <nav
+            className={`grid ${
+              isGm ? "grid-cols-4" : "grid-cols-3"
+            } border-b border-zinc-800 bg-zinc-950/60 p-1`}
+          >
             <button
               type="button"
               onClick={() => setActiveTab("chat")}
@@ -205,6 +232,10 @@ export default function CampaignWorkspaceShell({
           </nav>
 
           <div className="flex-1 overflow-y-auto p-4">
+            {activeTab === "scenes" && isGm && (
+              <SceneManager campaignId={campaign.id} />
+            )}
+
             {activeTab === "members" && (
               <div className="space-y-3">
                 <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-3">
@@ -262,41 +293,18 @@ export default function CampaignWorkspaceShell({
               </div>
             )}
 
-            {activeTab === "scenes" && isGm && (
-              <div className="space-y-2">
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
-                  Cenas da Campanha ({scenes.length})
-                </h3>
-                {scenes.map((s) => (
-                  <div
-                    key={s.id}
-                    className="flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-950/60 px-3.5 py-2.5"
-                  >
-                    <div>
-                      <p className="text-sm font-medium text-white">{s.name}</p>
-                      <p className="text-xs text-zinc-500">
-                        Grade {s.grid_size}px · {s.meters_per_cell}m
-                      </p>
-                    </div>
-                    {s.is_active && (
-                      <span className="rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-[11px] font-medium text-emerald-300">
-                        Ativa
-                      </span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-
             {activeTab === "chat" && (
               <p className="text-xs text-zinc-400">
-                O chat persistente e o rolador de dados (<code className="font-mono">/roll</code>) serão ativados na Fase 5.
+                O chat persistente e o rolador de dados (
+                <code className="font-mono">/roll</code>) serão ativados na Fase
+                5.
               </p>
             )}
 
             {activeTab === "sheets" && (
               <p className="text-xs text-zinc-400">
-                As fichas privadas em JSONB (com cadeado do Mestre 🔒) serão ativadas na Fase 6.
+                As fichas privadas em JSONB (com cadeado do Mestre 🔒) serão
+                ativadas na Fase 6.
               </p>
             )}
           </div>
