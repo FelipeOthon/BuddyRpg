@@ -32,9 +32,14 @@ Este guia resume como utilizar os recursos do **BuddyRPG** durante uma sessão d
 - **Zoom:** Use a roda do mouse (*scroll*) para aproximar ou afastar o mapa no ponto do cursor.
 - **Pan (Mover câmera):** Segure o **botão do meio do mouse**, ou segure a tecla **Espaço** e arraste, ou selecione a ferramenta **Mão (Pan)** na barra de ferramentas.
 - **Régua de Medição:** Selecione a ferramenta **Régua** e arraste entre dois pontos do mapa para medir a distância em **quadrados** e em **metros** em tempo real (visível para os participantes da sala).
-- **Gerenciamento de Cenas (Exclusivo do Mestre):**
-  - Crie novas cenas ocultas (`is_active = false`), envie imagens de mapa (PNG/JPG/WebP até 10 MB) e ajuste o tamanho da grade, opacidade, encaixe automático (*snap to grid*) e regra de distância (D&D 5e / Chebyshev, Euclidiana ou Alternada 1-2-1).
+- **Gerenciamento de Cenas & Forja de Mapas de Faerûn (Exclusivo do Mestre):**
+  - Crie novas cenas ocultas (`is_active = false`), envie imagens de mapa (PNG/JPG/WebP até 10 MB) ou clique em **✨ Abrir Forja / Gerador de Mapas**:
+    1. **Forja Procedural (2D Instantâneo):** Gere masmorras de pedra (*Undermountain*), cavernas bioluminescentes (*Underdark*), trilhas na *Floresta de Cormyr* ou o salão de uma *Taverna de Águas Profundas* alinhados à grade e salvos direto no Supabase Storage.
+    2. **Presets Clássicos de Forgotten Realms:** Carregue encontros prontos em 1 clique.
+    3. **IA Gratuita por Prompt & Importador de URL:** Gere um battlemap *top-down* descrevendo a cena em português ou cole o link de qualquer mapa da internet.
   - Clique em **Ativar Cena** quando quiser transportar todos os jogadores para aquele mapa.
+- **Dados 3D sobre o Tabuleiro:**
+  - Sempre que alguém rola dados no chat ou clica em um botão `🎲` na ficha, poliedros 3D (`d4`, `d6`, `d8`, `d10`, `d12`, `d20`, `d100`) são arremessados sobre o mapa em tempo real para toda a sala (com brilho especial em **20 Natural** e **1 Natural**). Você pode ligar/desligar a animação no botão **🎲 3D ON/OFF** da barra do tabuleiro.
 
 ---
 

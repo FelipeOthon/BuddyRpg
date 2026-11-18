@@ -11,6 +11,7 @@ import {
   Radio,
   Save,
   Trash2,
+  Wand2,
 } from "lucide-react";
 import {
   activateSceneAction,
@@ -21,6 +22,7 @@ import {
 import { uploadCampaignImage } from "@/lib/utils/storage";
 import { useBoardStore } from "@/stores/boardStore";
 import type { DistanceRule, Scene } from "@/types/domain";
+import MapStudioModal from "./MapStudioModal";
 
 export default function SceneManager({
   campaignId,
@@ -45,6 +47,7 @@ export default function SceneManager({
   const [error, setError] = useState<string | null>(null);
   const [savedNotice, setSavedNotice] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [isMapStudioOpen, setIsMapStudioOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   // Estado local do formulário sincronizado com a cena selecionada
@@ -359,11 +362,21 @@ export default function SceneManager({
             />
           </div>
 
-          {/* Upload de Mapa */}
-          <div>
-            <label className="mb-1 block text-xs text-zinc-300">
-              Imagem do Mapa (Supabase Storage)
+          {/* Upload de Mapa e Forja Procedural */}
+          <div className="space-y-2">
+            <label className="block text-xs text-zinc-300">
+              Mapa da Cena (Forja de Faerûn ou Upload)
             </label>
+
+            <button
+              type="button"
+              onClick={() => setIsMapStudioOpen(true)}
+              className="flex w-full items-center justify-center gap-2 rounded-xl border border-amber-500/40 bg-gradient-to-r from-amber-500/20 to-amber-600/15 px-3 py-2.5 text-xs font-bold text-amber-200 shadow transition hover:border-amber-400 hover:bg-amber-500/30"
+            >
+              <Wand2 className="h-4 w-4 text-amber-400" />
+              ✨ Abrir Forja / Gerador de Mapas
+            </button>
+
             <div className="flex items-center gap-2">
               <label className="flex flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-xl border border-dashed border-zinc-700 bg-zinc-900/70 px-3 py-2 text-xs font-medium text-zinc-200 transition hover:border-amber-500 hover:text-amber-300">
                 {isUploading ? (
@@ -535,6 +548,41 @@ export default function SceneManager({
             {savedNotice ? "Configurações Salvas!" : "Salvar Cena"}
           </button>
         </form>
+      )}
+
+      {isMapStudioOpen && currentScene && (
+        <MapStudioModal
+          campaignId={campaignId}
+          scene={currentScene}
+          onClose={() => setIsMapStudioOpen(false)}
+          onApplyMap={async ({ mapUrl: newUrl, width, height }) => {
+            setMapUrl(newUrl);
+            setMapWidth(width);
+            setMapHeight(height);
+            upsertScene({
+              ...currentScene,
+              map_url: newUrl,
+              map_width: width,
+              map_height: height,
+            });
+            const res = await updateSceneSettingsAction({
+              sceneId: currentScene.id,
+              campaignId,
+              name,
+              map_url: newUrl,
+              map_width: width,
+              map_height: height,
+              grid_size: gridSize,
+              grid_opacity: gridOpacity,
+              snap_to_grid: snapToGrid,
+              meters_per_cell: metersPerCell,
+              distance_rule: distanceRule,
+            });
+            if (res.scene) {
+              upsertScene(res.scene);
+            }
+          }}
+        />
       )}
     </div>
   );

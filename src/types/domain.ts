@@ -46,10 +46,52 @@ export interface RollResult {
   total: number;
 }
 
+export type RpgSystemId = "dnd5e" | "custom";
+export type SkillProficiency = "none" | "proficient" | "expertise";
+
 export interface SheetAttribute {
   key: string;
   label: string;
   value: number;
+}
+
+export interface SheetSkill {
+  key: string;
+  label: string;
+  abilityKey: string;
+  proficiency: SkillProficiency;
+}
+
+export interface SheetAttack {
+  id: string;
+  name: string;
+  attackBonus: number;
+  damageFormula: string;
+  damageType: string;
+  rangeOrNotes?: string;
+}
+
+export interface SheetSpellSlotLevel {
+  level: number;
+  total: number;
+  used: number;
+}
+
+export interface SheetSpell {
+  id: string;
+  level: number;
+  name: string;
+  schoolOrNotes?: string;
+  damageFormula?: string;
+  prepared: boolean;
+}
+
+export interface SheetCoins {
+  cp: number;
+  sp: number;
+  ep: number;
+  gp: number;
+  pp: number;
 }
 
 export interface SheetInventoryItem {
@@ -60,9 +102,29 @@ export interface SheetInventoryItem {
 }
 
 export interface SheetData {
+  system?: RpgSystemId;
   level: number;
   classOrArchetype?: string;
+  ancestryOrRace?: string;
+  backgroundOrFaction?: string;
+  armorClass?: number;
+  hpCurrent?: number;
+  hpMax?: number;
+  hpTemp?: number;
+  speed?: string;
+  hitDice?: string;
+  deathSaves?: {
+    successes: number;
+    failures: number;
+  };
+  saveProficiencies?: string[];
   attributes: SheetAttribute[];
+  skills?: SheetSkill[];
+  attacks?: SheetAttack[];
+  spellcastingAbility?: string;
+  spellSlots?: SheetSpellSlotLevel[];
+  spells?: SheetSpell[];
+  coins?: SheetCoins;
   inventory: SheetInventoryItem[];
   notes: string;
   custom: Record<string, string | number>;

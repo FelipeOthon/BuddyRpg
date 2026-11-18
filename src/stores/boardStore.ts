@@ -1,6 +1,11 @@
 import { create } from "zustand";
 import type { ViewportTransform } from "@/lib/board/geometry";
-import type { RulerBroadcastPayload, Scene, Token } from "@/types/domain";
+import type {
+  RollResult,
+  RulerBroadcastPayload,
+  Scene,
+  Token,
+} from "@/types/domain";
 
 export type BoardTool = "select" | "pan" | "ruler";
 
@@ -8,6 +13,13 @@ export interface RemoteDragPosition {
   x: number;
   y: number;
   userId: string;
+  ts: number;
+}
+
+export interface ActiveDice3DRoll {
+  id: string;
+  author: string;
+  roll: RollResult;
   ts: number;
 }
 
@@ -21,6 +33,8 @@ interface BoardState {
   draggingLocalTokenId: string | null;
   remoteTokenDrags: Record<string, RemoteDragPosition>;
   remoteRulers: Record<string, RulerBroadcastPayload>;
+  dice3dEnabled: boolean;
+  activeDice3dRoll: ActiveDice3DRoll | null;
 
   setTool: (tool: BoardTool) => void;
   setViewport: (viewport: ViewportTransform) => void;
@@ -36,6 +50,8 @@ interface BoardState {
   setRemoteTokenDrag: (tokenId: string, drag: RemoteDragPosition) => void;
   clearRemoteTokenDrag: (tokenId: string) => void;
   setRemoteRuler: (payload: RulerBroadcastPayload) => void;
+  setDice3dEnabled: (enabled: boolean) => void;
+  triggerDice3dRoll: (roll: ActiveDice3DRoll | null) => void;
 }
 
 export const useBoardStore = create<BoardState>((set) => ({
@@ -48,6 +64,8 @@ export const useBoardStore = create<BoardState>((set) => ({
   draggingLocalTokenId: null,
   remoteTokenDrags: {},
   remoteRulers: {},
+  dice3dEnabled: true,
+  activeDice3dRoll: null,
 
   setTool: (tool) => set({ tool }),
   setViewport: (viewport) => set({ viewport }),
@@ -177,4 +195,7 @@ export const useBoardStore = create<BoardState>((set) => ({
       }
       return { remoteRulers: next };
     }),
+
+  setDice3dEnabled: (enabled) => set({ dice3dEnabled: enabled }),
+  triggerDice3dRoll: (roll) => set({ activeDice3dRoll: roll }),
 }));

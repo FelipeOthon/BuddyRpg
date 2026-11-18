@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   AlertCircle,
@@ -19,6 +19,7 @@ import {
   Wifi,
 } from "lucide-react";
 import BoardClient from "@/components/board/BoardClient";
+import Dice3DOverlay from "@/components/board/Dice3DOverlay";
 import ChatPanel from "@/components/chat/ChatPanel";
 import SceneManager from "@/components/scenes/SceneManager";
 import CharacterSheetModal from "@/components/sheets/CharacterSheetModal";
@@ -34,6 +35,7 @@ import type {
   CampaignRole,
   CharacterRow,
   MessageRow,
+  RollResult,
   Scene,
   Token,
 } from "@/types/domain";
@@ -74,7 +76,13 @@ export default function CampaignWorkspaceShell({
     useState<CharacterRow[]>(initialCharacters);
   const [openCharacterId, setOpenCharacterId] = useState<string | null>(null);
 
-  const { scenes, viewedSceneId, hydrateBoard, upsertToken } = useBoardStore();
+  const {
+    scenes,
+    viewedSceneId,
+    hydrateBoard,
+    upsertToken,
+    triggerDice3dRoll,
+  } = useBoardStore();
 
   useEffect(() => {
     hydrateBoard({
@@ -88,12 +96,30 @@ export default function CampaignWorkspaceShell({
     setTimeout(() => setToastError(null), 4000);
   }, []);
 
-  const appendOrDedupeMessage = useCallback((msg: MessageRow) => {
-    setMessages((prev) => {
-      if (prev.some((m) => m.id === msg.id)) return prev;
-      return [...prev, msg];
-    });
-  }, []);
+  const lastAnimatedMsgIdRef = useRef<number | null>(null);
+
+  const appendOrDedupeMessage = useCallback(
+    (msg: MessageRow) => {
+      setMessages((prev) => {
+        if (prev.some((m) => m.id === msg.id)) return prev;
+        return [...prev, msg];
+      });
+
+      if (msg.roll_result && lastAnimatedMsgIdRef.current !== msg.id) {
+        lastAnimatedMsgIdRef.current = msg.id;
+        const author =
+          members.find((m) => m.userId === msg.user_id)?.username ??
+          "Aventureiro";
+        triggerDice3dRoll({
+          id: `roll-${msg.id}-${Date.now()}`,
+          author,
+          roll: msg.roll_result as unknown as RollResult,
+          ts: Date.now(),
+        });
+      }
+    },
+    [members, triggerDice3dRoll]
+  );
 
   const upsertCharacter = useCallback((char: CharacterRow) => {
     setCharacters((prev) => {
@@ -358,6 +384,7 @@ export default function CampaignWorkspaceShell({
                 onTokenDragCommit={handleTokenDragCommit}
                 onRulerBroadcast={handleRulerBroadcast}
               />
+              <Dice3DOverlay />
               <SelectedTokenHud
                 campaignId={campaign.id}
                 currentUserId={currentUserId}

@@ -3,7 +3,15 @@
 import { useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { AlertCircle, CheckCircle2, Dices, Loader2, LogIn, UserPlus } from "lucide-react";
+import {
+  AlertCircle,
+  CheckCircle2,
+  Dices,
+  Loader2,
+  LogIn,
+  Shield,
+  UserPlus,
+} from "lucide-react";
 import { signInAction, signUpAction } from "@/actions/auth";
 
 export default function LoginForm({
@@ -63,18 +71,18 @@ export default function LoginForm({
   };
 
   return (
-    <div className="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-900/80 p-8 shadow-2xl backdrop-blur">
+    <div className="fr-card w-full max-w-md rounded-2xl p-8 backdrop-blur">
       <div className="mb-6 flex flex-col items-center text-center">
         <Link href="/" className="mb-3 flex items-center gap-2.5">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-400">
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-amber-500/40 bg-amber-500/15 text-amber-300 shadow-[0_0_20px_rgba(245,158,11,0.25)]">
             <Dices className="h-6 w-6" />
           </div>
-          <span className="text-xl font-bold tracking-tight text-white">
-            Buddy<span className="text-amber-400">RPG</span>
+          <span className="font-display text-xl font-bold tracking-wider text-amber-100">
+            BUDDY<span className="text-amber-400">RPG</span>
           </span>
         </Link>
-        <p className="text-sm text-zinc-400">
-          Entre na sua conta para criar ou participar de mesas de RPG
+        <p className="text-xs text-amber-200/70">
+          Portais de Faerûn — Identifique-se para acessar as crônicas e mesas
         </p>
       </div>
 
@@ -89,7 +97,7 @@ export default function LoginForm({
         </div>
       )}
 
-      <div className="mb-6 grid grid-cols-2 rounded-xl border border-zinc-800 bg-zinc-950 p-1">
+      <div className="mb-6 grid grid-cols-2 rounded-xl border border-amber-500/25 bg-zinc-950/90 p-1">
         <button
           type="button"
           onClick={() => {
@@ -97,13 +105,13 @@ export default function LoginForm({
             setError(null);
             setInfoMessage(null);
           }}
-          className={`flex items-center justify-center gap-2 rounded-lg py-2 text-sm font-medium transition ${
+          className={`flex items-center justify-center gap-2 rounded-lg py-2 text-xs font-bold uppercase tracking-wider transition ${
             mode === "login"
-              ? "bg-amber-500 text-zinc-950 shadow"
-              : "text-zinc-400 hover:text-white"
+              ? "bg-gradient-to-r from-amber-500 to-amber-600 text-zinc-950 shadow"
+              : "text-zinc-400 hover:text-amber-200"
           }`}
         >
-          <LogIn className="h-4 w-4" />
+          <LogIn className="h-3.5 w-3.5" />
           Entrar
         </button>
         <button
@@ -113,14 +121,14 @@ export default function LoginForm({
             setError(null);
             setInfoMessage(null);
           }}
-          className={`flex items-center justify-center gap-2 rounded-lg py-2 text-sm font-medium transition ${
+          className={`flex items-center justify-center gap-2 rounded-lg py-2 text-xs font-bold uppercase tracking-wider transition ${
             mode === "signup"
-              ? "bg-amber-500 text-zinc-950 shadow"
-              : "text-zinc-400 hover:text-white"
+              ? "bg-gradient-to-r from-amber-500 to-amber-600 text-zinc-950 shadow"
+              : "text-zinc-400 hover:text-amber-200"
           }`}
         >
-          <UserPlus className="h-4 w-4" />
-          Criar Conta
+          <UserPlus className="h-3.5 w-3.5" />
+          Novo Registro
         </button>
       </div>
 
@@ -143,9 +151,9 @@ export default function LoginForm({
           <div>
             <label
               htmlFor="username"
-              className="mb-1.5 block text-xs font-medium text-zinc-300"
+              className="mb-1.5 block text-xs font-semibold text-amber-200/90"
             >
-              Nome de usuário (apelido na mesa)
+              Nome de Aventureiro / Mestre
             </label>
             <input
               id="username"
@@ -155,8 +163,8 @@ export default function LoginForm({
               maxLength={24}
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              placeholder="ex: mestre_orthos"
-              className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3.5 py-2.5 text-sm text-white placeholder-zinc-500 outline-none transition focus:border-amber-500"
+              placeholder="ex: elminster_sabio"
+              className="w-full rounded-xl border border-amber-500/25 bg-zinc-950 px-3.5 py-2.5 text-sm text-white placeholder-zinc-500 outline-none transition focus:border-amber-400"
             />
           </div>
         )}
@@ -164,7 +172,7 @@ export default function LoginForm({
         <div>
           <label
             htmlFor="email"
-            className="mb-1.5 block text-xs font-medium text-zinc-300"
+            className="mb-1.5 block text-xs font-semibold text-amber-200/90"
           >
             E-mail
           </label>
@@ -174,17 +182,17 @@ export default function LoginForm({
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder="seu@email.com"
-            className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3.5 py-2.5 text-sm text-white placeholder-zinc-500 outline-none transition focus:border-amber-500"
+            placeholder="aventureiro@faerun.com"
+            className="w-full rounded-xl border border-amber-500/25 bg-zinc-950 px-3.5 py-2.5 text-sm text-white placeholder-zinc-500 outline-none transition focus:border-amber-400"
           />
         </div>
 
         <div>
           <label
             htmlFor="password"
-            className="mb-1.5 block text-xs font-medium text-zinc-300"
+            className="mb-1.5 block text-xs font-semibold text-amber-200/90"
           >
-            Senha
+            Palavra-Passe (Senha)
           </label>
           <input
             id="password"
@@ -194,24 +202,27 @@ export default function LoginForm({
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="Mínimo de 6 caracteres"
-            className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3.5 py-2.5 text-sm text-white placeholder-zinc-500 outline-none transition focus:border-amber-500"
+            className="w-full rounded-xl border border-amber-500/25 bg-zinc-950 px-3.5 py-2.5 text-sm text-white placeholder-zinc-500 outline-none transition focus:border-amber-400"
           />
         </div>
 
         <button
           type="submit"
           disabled={isPending}
-          className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-amber-500 px-4 py-2.5 text-sm font-semibold text-zinc-950 transition hover:bg-amber-400 disabled:opacity-60"
+          className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 px-4 py-3 text-sm font-bold text-zinc-950 shadow-[0_0_20px_rgba(245,158,11,0.25)] transition hover:from-amber-400 hover:to-amber-500 disabled:opacity-60"
         >
           {isPending ? (
             <>
               <Loader2 className="h-4 w-4 animate-spin" />
-              Processando...
+              Conjurando Portal...
             </>
           ) : mode === "login" ? (
-            "Entrar no BuddyRPG"
+            <>
+              <Shield className="h-4 w-4" />
+              Entrar no Salão
+            </>
           ) : (
-            "Criar minha conta"
+            "Inscrever-se na Guilda"
           )}
         </button>
       </form>
