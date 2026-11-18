@@ -38,6 +38,8 @@ function makeToken(overrides: Partial<Token> = {}): Token {
     hp_max: 20,
     is_hidden: false,
     conditions: [],
+    ring_color: null,
+    is_locked: false,
     updated_at: "2026-01-01T00:00:10.000Z",
     ...overrides,
   };
@@ -55,6 +57,10 @@ describe("useBoardStore", () => {
       draggingLocalTokenId: null,
       remoteTokenDrags: {},
       remoteRulers: {},
+      pinnedRulers: [],
+      rulerPinMode: false,
+      remotePointers: {},
+      uiHidden: false,
       combat: { active: false, round: 1, turnIndex: 0, combatants: [] },
     });
   });
@@ -137,5 +143,51 @@ describe("useBoardStore", () => {
     const state = useBoardStore.getState();
     expect(state.viewedSceneId).toBe("scene-2");
     expect(state.tokens.map((t) => t.id)).toEqual(["t2"]);
+  });
+
+  it("manages pinned rulers, remote pointers, and uiHidden", () => {
+    const store = useBoardStore.getState();
+    store.addPinnedRuler({
+      id: "r1",
+      userId: "u1",
+      username: "Mestre",
+      color: "#a855f7",
+      sceneId: "scene-1",
+      startX: 0,
+      startY: 0,
+      endX: 140,
+      endY: 0,
+    });
+    expect(useBoardStore.getState().pinnedRulers).toHaveLength(1);
+
+    store.removePinnedRuler("r1");
+    expect(useBoardStore.getState().pinnedRulers).toHaveLength(0);
+
+    store.setRemotePointer({
+      userId: "u2",
+      username: "Player",
+      color: "#38bdf8",
+      sceneId: "scene-1",
+      x: 100,
+      y: 200,
+      active: true,
+      ts: 1,
+    });
+    expect(useBoardStore.getState().remotePointers["u2"]?.active).toBe(true);
+
+    store.setRemotePointer({
+      userId: "u2",
+      username: "Player",
+      color: "#38bdf8",
+      sceneId: "scene-1",
+      x: 100,
+      y: 200,
+      active: false,
+      ts: 2,
+    });
+    expect(useBoardStore.getState().remotePointers["u2"]).toBeUndefined();
+
+    store.setUiHidden(true);
+    expect(useBoardStore.getState().uiHidden).toBe(true);
   });
 });

@@ -6,12 +6,23 @@ import {
   EyeOff,
   Heart,
   Loader2,
+  Lock,
   Minus,
   Plus,
   ScrollText,
   Trash2,
+  Unlock,
   X,
 } from "lucide-react";
+
+const RING_COLORS = [
+  "#ef4444",
+  "#f59e0b",
+  "#10b981",
+  "#38bdf8",
+  "#a855f7",
+  "#ec4899",
+] as const;
 
 const QUICK_CONDITIONS = [
   "Caído",
@@ -61,8 +72,9 @@ export default function SelectedTokenHud({
     token &&
       !token.id.startsWith("demo-token-") &&
       (role === "gm" ||
-        token.owner_id === currentUserId ||
-        linkedCharacter?.owner_id === currentUserId)
+        (!token.is_locked &&
+          (token.owner_id === currentUserId ||
+            linkedCharacter?.owner_id === currentUserId)))
   );
 
   const handleDelete = useCallback(() => {
@@ -85,6 +97,32 @@ export default function SelectedTokenHud({
     });
   }, [token, canEdit, removeToken, campaignId, upsertToken, onError]);
 
+  const toggleLock = useCallback(() => {
+    if (!token || role !== "gm") return;
+    const nextLocked = !token.is_locked;
+    const prevToken = token;
+
+    upsertToken({
+      ...token,
+      is_locked: nextLocked,
+      updated_at: new Date().toISOString(),
+    });
+
+    startTransition(async () => {
+      const res = await updateTokenStatsAction({
+        tokenId: token.id,
+        campaignId,
+        isLocked: nextLocked,
+      });
+      if (!res.ok) {
+        upsertToken(prevToken);
+        onError?.(res.error ?? "Erro ao travar/destravar token.");
+      } else if (res.token) {
+        upsertToken(res.token);
+      }
+    });
+  }, [token, role, upsertToken, campaignId, onError]);
+
   useEffect(() => {
     if (!token || token.id.startsWith("demo-token-") || !canEdit) return;
 
@@ -102,12 +140,15 @@ export default function SelectedTokenHud({
       if (e.key === "Delete") {
         e.preventDefault();
         handleDelete();
+      } else if (e.key.toLowerCase() === "l" && role === "gm") {
+        e.preventDefault();
+        toggleLock();
       }
     };
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [token, canEdit, handleDelete]);
+  }, [token, canEdit, role, handleDelete, toggleLock]);
 
   if (!token || token.id.startsWith("demo-token-")) {
     return null;
@@ -191,6 +232,31 @@ export default function SelectedTokenHud({
       if (!res.ok) {
         upsertToken(prevToken);
         onError?.(res.error ?? "Erro ao atualizar condições.");
+      } else if (res.token) {
+        upsertToken(res.token);
+      }
+    });
+  };
+
+  const setRingColor = (ringColor: string | null) => {
+    if (!canEdit) return;
+    const prevToken = token;
+
+    upsertToken({
+      ...token,
+      ring_color: ringColor,
+      updated_at: new Date().toISOString(),
+    });
+
+    startTransition(async () => {
+      const res = await updateTokenStatsAction({
+        tokenId: token.id,
+        campaignId,
+        ringColor,
+      });
+      if (!res.ok) {
+        upsertToken(prevToken);
+        onError?.(res.error ?? "Erro ao alterar cor do anel.");
       } else if (res.token) {
         upsertToken(res.token);
       }
@@ -300,8 +366,55 @@ export default function SelectedTokenHud({
                   </>
                 )}
               </button>
+
+              <button
+                type="button"
+                onClick={toggleLock}
+                disabled={isPending}
+                title={
+                  token.is_locked
+                    ? "Token travado (jogadores não podem mover)"
+                    : "Travar token contra movimento"
+                }
+                className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-xs font-semibold transition ${
+                  token.is_locked
+                    ? "border-amber-500/40 bg-amber-500/15 text-amber-300"
+                    : "border-zinc-700 bg-zinc-800 text-zinc-300 hover:text-white"
+                }`}
+              >
+                {token.is_locked ? (
+                  <>
+                    <Lock className="h-3.5 w-3.5" />
+                    Travado
+                  </>
+                ) : (
+                  <>
+                    <Unlock className="h-3.5 w-3.5" />
+                    Livre
+                  </>
+                )}
+              </button>
             </>
           )}
+
+          <div className="h-6 w-px bg-zinc-800" />
+          <div className="flex items-center gap-1" title="Anel colorido do token">
+            {RING_COLORS.map((c) => {
+              const active = token.ring_color === c;
+              return (
+                <button
+                  key={c}
+                  type="button"
+                  disabled={isPending}
+                  onClick={() => setRingColor(active ? null : c)}
+                  className={`h-4 w-4 rounded-full border transition ${
+                    active ? "scale-110 border-white ring-1 ring-white" : "border-zinc-700"
+                  }`}
+                  style={{ backgroundColor: c }}
+                />
+              );
+            })}
+          </div>
 
           <div className="h-6 w-px bg-zinc-800" />
           <div className="flex flex-wrap items-center gap-1">

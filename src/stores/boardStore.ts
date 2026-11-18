@@ -1,13 +1,15 @@
 import { create } from "zustand";
 import type { ViewportTransform } from "@/lib/board/geometry";
 import type {
+  PinnedRuler,
+  PointerBroadcastPayload,
   RollResult,
   RulerBroadcastPayload,
   Scene,
   Token,
 } from "@/types/domain";
 
-export type BoardTool = "select" | "pan" | "ruler";
+export type BoardTool = "select" | "pan" | "ruler" | "pointer";
 
 export interface RemoteDragPosition {
   x: number;
@@ -71,6 +73,10 @@ interface BoardState {
   draggingLocalTokenId: string | null;
   remoteTokenDrags: Record<string, RemoteDragPosition>;
   remoteRulers: Record<string, RulerBroadcastPayload>;
+  pinnedRulers: PinnedRuler[];
+  rulerPinMode: boolean;
+  remotePointers: Record<string, PointerBroadcastPayload>;
+  uiHidden: boolean;
   dice3dEnabled: boolean;
   activeDice3dRoll: ActiveDice3DRoll | null;
   combat: CombatStatePayload;
@@ -89,6 +95,12 @@ interface BoardState {
   setRemoteTokenDrag: (tokenId: string, drag: RemoteDragPosition) => void;
   clearRemoteTokenDrag: (tokenId: string) => void;
   setRemoteRuler: (payload: RulerBroadcastPayload) => void;
+  setRulerPinMode: (pin: boolean) => void;
+  addPinnedRuler: (ruler: PinnedRuler) => void;
+  removePinnedRuler: (rulerId: string) => void;
+  clearPinnedRulers: (sceneId?: string) => void;
+  setRemotePointer: (payload: PointerBroadcastPayload) => void;
+  setUiHidden: (hidden: boolean) => void;
   setDice3dEnabled: (enabled: boolean) => void;
   triggerDice3dRoll: (roll: ActiveDice3DRoll | null) => void;
   setCombatState: (combat: CombatStatePayload) => void;
@@ -104,6 +116,10 @@ export const useBoardStore = create<BoardState>((set) => ({
   draggingLocalTokenId: null,
   remoteTokenDrags: {},
   remoteRulers: {},
+  pinnedRulers: [],
+  rulerPinMode: false,
+  remotePointers: {},
+  uiHidden: false,
   dice3dEnabled: true,
   activeDice3dRoll: null,
   combat: DEFAULT_COMBAT_STATE,
@@ -257,6 +273,40 @@ export const useBoardStore = create<BoardState>((set) => ({
       }
       return { remoteRulers: next };
     }),
+
+  setRulerPinMode: (rulerPinMode) => set({ rulerPinMode }),
+
+  addPinnedRuler: (ruler) =>
+    set((state) => ({
+      pinnedRulers: state.pinnedRulers.some((r) => r.id === ruler.id)
+        ? state.pinnedRulers
+        : [...state.pinnedRulers, ruler],
+    })),
+
+  removePinnedRuler: (rulerId) =>
+    set((state) => ({
+      pinnedRulers: state.pinnedRulers.filter((r) => r.id !== rulerId),
+    })),
+
+  clearPinnedRulers: (sceneId) =>
+    set((state) => ({
+      pinnedRulers: sceneId
+        ? state.pinnedRulers.filter((r) => r.sceneId !== sceneId)
+        : [],
+    })),
+
+  setRemotePointer: (payload) =>
+    set((state) => {
+      const next = { ...state.remotePointers };
+      if (!payload.active) {
+        delete next[payload.userId];
+      } else {
+        next[payload.userId] = payload;
+      }
+      return { remotePointers: next };
+    }),
+
+  setUiHidden: (uiHidden) => set({ uiHidden }),
 
   setDice3dEnabled: (enabled) => set({ dice3dEnabled: enabled }),
   triggerDice3dRoll: (roll) => set({ activeDice3dRoll: roll }),

@@ -82,8 +82,22 @@ describe("validation schemas", () => {
         tokenId: validUuid,
         campaignId: validUuid,
         hpCurrent: -3,
-      }).data?.hpCurrent
-    ).toBe(0);
+        ringColor: "#38bdf8",
+        isLocked: true,
+      }).data
+    ).toMatchObject({
+      hpCurrent: 0,
+      ringColor: "#38bdf8",
+      isLocked: true,
+    });
+
+    expect(
+      updateTokenStatsSchema.safeParse({
+        tokenId: validUuid,
+        campaignId: validUuid,
+        ringColor: "red",
+      }).success
+    ).toBe(false);
 
     expect(
       createSceneSchema.safeParse({

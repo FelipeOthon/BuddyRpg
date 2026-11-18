@@ -12,10 +12,14 @@ import type {
   CampaignRole,
   CharacterRow,
   MessageRow,
+  PinnedRuler,
+  PinnedRulerBroadcastPayload,
+  PointerBroadcastPayload,
   RulerBroadcastPayload,
   Scene,
   Token,
   TokenDragPayload,
+  ViewportSyncPayload,
 } from "@/types/domain";
 
 export type RealtimeConnectionStatus = "connecting" | "connected" | "error";
@@ -97,6 +101,11 @@ export function useCampaignRealtime(params: {
     removeToken,
     setRemoteTokenDrag,
     setRemoteRuler,
+    addPinnedRuler,
+    removePinnedRuler,
+    clearPinnedRulers,
+    setRemotePointer,
+    setViewport,
     setCombatState,
   } = useBoardStore();
 
@@ -210,6 +219,28 @@ export function useCampaignRealtime(params: {
         if (!p || !p.userId || p.userId === currentUserId) return;
         setRemoteRuler(p);
       })
+      .on("broadcast", { event: "ruler:pin" }, (msg) => {
+        const p = msg.payload as PinnedRulerBroadcastPayload | undefined;
+        if (!p || p.userId === currentUserId) return;
+        if (p.action === "add" && p.ruler) {
+          addPinnedRuler(p.ruler);
+        } else if (p.action === "remove" && p.rulerId) {
+          removePinnedRuler(p.rulerId);
+        } else if (p.action === "clear") {
+          clearPinnedRulers(p.sceneId);
+        }
+      })
+      .on("broadcast", { event: "pointer:ping" }, (msg) => {
+        const p = msg.payload as PointerBroadcastPayload | undefined;
+        if (!p || !p.userId || p.userId === currentUserId) return;
+        setRemotePointer(p);
+      })
+      .on("broadcast", { event: "viewport:sync" }, (msg) => {
+        const p = msg.payload as ViewportSyncPayload | undefined;
+        if (!p || !p.userId || p.userId === currentUserId) return;
+        if (!gmIdsRef.current.has(p.userId)) return;
+        setViewport({ x: p.x, y: p.y, scale: p.scale });
+      })
       .on("broadcast", { event: "combat:state" }, (msg) => {
         const p = msg.payload as
           | (CombatStatePayload & { userId?: string })
@@ -273,11 +304,17 @@ export function useCampaignRealtime(params: {
     removeToken,
     setRemoteTokenDrag,
     setRemoteRuler,
+    addPinnedRuler,
+    removePinnedRuler,
+    clearPinnedRulers,
+    setRemotePointer,
+    setViewport,
     setCombatState,
   ]);
 
   const lastDragSentRef = useRef(0);
   const lastRulerSentRef = useRef(0);
+  const lastPointerSentRef = useRef(0);
 
   const broadcastTokenDrag = useCallback(
     (tokenId: string, sceneId: string, x: number, y: number) => {
@@ -339,10 +376,89 @@ export function useCampaignRealtime(params: {
     [currentUserId]
   );
 
+  const broadcastPointer = useCallback(
+    (sceneId: string, pos: Point2D, active: boolean) => {
+      const now = Date.now();
+      if (active && now - lastPointerSentRef.current < 45) return;
+      lastPointerSentRef.current = now;
+
+      const payload: PointerBroadcastPayload = {
+        userId: currentUserId,
+        username: currentUsername,
+        color: pickColorForUser(currentUserId),
+        sceneId,
+        x: pos.x,
+        y: pos.y,
+        active,
+        ts: now,
+      };
+      mainChannelRef.current?.send({
+        type: "broadcast",
+        event: "pointer:ping",
+        payload,
+      });
+    },
+    [currentUserId, currentUsername]
+  );
+
+  const broadcastRulerPin = useCallback(
+    (
+      action: "add" | "remove" | "clear",
+      sceneId: string,
+      ruler?: Omit<PinnedRuler, "userId" | "username" | "color">,
+      rulerId?: string
+    ): PinnedRuler | null => {
+      let fullRuler: PinnedRuler | undefined;
+      if (action === "add" && ruler) {
+        fullRuler = {
+          ...ruler,
+          userId: currentUserId,
+          username: currentUsername,
+          color: pickColorForUser(currentUserId),
+        };
+      }
+      const payload: PinnedRulerBroadcastPayload = {
+        action,
+        sceneId,
+        userId: currentUserId,
+        ...(fullRuler ? { ruler: fullRuler } : {}),
+        ...(rulerId ? { rulerId } : {}),
+      };
+      mainChannelRef.current?.send({
+        type: "broadcast",
+        event: "ruler:pin",
+        payload,
+      });
+      return fullRuler ?? null;
+    },
+    [currentUserId, currentUsername]
+  );
+
+  const broadcastViewportSync = useCallback(
+    (sceneId: string, x: number, y: number, scale: number) => {
+      const payload: ViewportSyncPayload = {
+        userId: currentUserId,
+        sceneId,
+        x,
+        y,
+        scale,
+      };
+      mainChannelRef.current?.send({
+        type: "broadcast",
+        event: "viewport:sync",
+        payload,
+      });
+    },
+    [currentUserId]
+  );
+
   return {
     status,
     broadcastTokenDrag,
     broadcastRuler,
+    broadcastRulerPin,
+    broadcastPointer,
+    broadcastViewportSync,
     broadcastCombatState,
   };
 }

@@ -39,6 +39,7 @@ import type {
   CampaignRole,
   CharacterRow,
   MessageRow,
+  PinnedRuler,
   RollResult,
   Scene,
   Token,
@@ -116,6 +117,7 @@ export default function CampaignWorkspaceShell({
   const {
     scenes,
     viewedSceneId,
+    uiHidden,
     hydrateBoard,
     upsertToken,
     triggerDice3dRoll,
@@ -255,6 +257,9 @@ export default function CampaignWorkspaceShell({
     status,
     broadcastTokenDrag,
     broadcastRuler,
+    broadcastRulerPin,
+    broadcastPointer,
+    broadcastViewportSync,
     broadcastCombatState,
   } = useCampaignRealtime({
     campaignId: campaign.id,
@@ -340,6 +345,34 @@ export default function CampaignWorkspaceShell({
     [viewedScene, broadcastRuler]
   );
 
+  const handleRulerPinBroadcast = useCallback(
+    (
+      action: "add" | "remove" | "clear",
+      ruler?: Omit<PinnedRuler, "userId" | "username" | "color">,
+      rulerId?: string
+    ) => {
+      if (!viewedScene) return null;
+      return broadcastRulerPin(action, viewedScene.id, ruler, rulerId);
+    },
+    [viewedScene, broadcastRulerPin]
+  );
+
+  const handlePointerBroadcast = useCallback(
+    (pos: Point2D, active: boolean) => {
+      if (!viewedScene) return;
+      broadcastPointer(viewedScene.id, pos, active);
+    },
+    [viewedScene, broadcastPointer]
+  );
+
+  const handleSyncView = useCallback(
+    (x: number, y: number, scale: number) => {
+      if (!viewedScene || !isGm) return;
+      broadcastViewportSync(viewedScene.id, x, y, scale);
+    },
+    [viewedScene, isGm, broadcastViewportSync]
+  );
+
   const toggleSidebar = () => {
     setSidebarOpen((prev) =>
       prev === null ? window.innerWidth < 768 : !prev
@@ -359,7 +392,8 @@ export default function CampaignWorkspaceShell({
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-zinc-950 text-zinc-100">
       {/* Top Bar da Mesa */}
-      <header className="flex h-13 shrink-0 items-center justify-between gap-2 border-b border-amber-500/20 bg-zinc-900/95 px-2.5 sm:px-4">
+      {!uiHidden && (
+        <header className="flex h-13 shrink-0 items-center justify-between gap-2 border-b border-amber-500/20 bg-zinc-900/95 px-2.5 sm:px-4">
         <div className="flex min-w-0 items-center gap-2 sm:gap-3">
           <Link
             href="/dashboard"
@@ -488,13 +522,14 @@ export default function CampaignWorkspaceShell({
             )}
           </button>
         </div>
-      </header>
+        </header>
+      )}
 
       {/* Corpo: Tabuleiro Konva à esquerda + Sidebar à direita (Drawer no Mobile / Colapsável no PC) */}
       <div className="relative flex flex-1 overflow-hidden">
         <section className="relative flex flex-1 overflow-hidden bg-zinc-950">
           {/* Botão flutuante para reabrir o menu quando escondido */}
-          {sidebarOpen !== true && (
+          {!uiHidden && sidebarOpen !== true && (
             <button
               type="button"
               onClick={() => setSidebarOpen(true)}
@@ -519,25 +554,33 @@ export default function CampaignWorkspaceShell({
               <BoardClient
                 scene={viewedScene}
                 currentUserId={currentUserId}
+                currentUsername={currentUsername}
                 role={role}
                 onTokenDragBroadcast={handleTokenDragBroadcast}
                 onTokenDragCommit={handleTokenDragCommit}
                 onRulerBroadcast={handleRulerBroadcast}
+                onRulerPinBroadcast={handleRulerPinBroadcast}
+                onPointerBroadcast={handlePointerBroadcast}
+                onSyncView={handleSyncView}
               />
-              <InitiativeTrackerBar
-                scene={viewedScene}
-                role={role}
-                onBroadcastCombat={broadcastCombatState}
-              />
+              {!uiHidden && (
+                <InitiativeTrackerBar
+                  scene={viewedScene}
+                  role={role}
+                  onBroadcastCombat={broadcastCombatState}
+                />
+              )}
               <Dice3DOverlay />
-              <SelectedTokenHud
-                campaignId={campaign.id}
-                currentUserId={currentUserId}
-                role={role}
-                characters={characters}
-                onOpenCharacter={(c) => setOpenCharacterId(c.id)}
-                onError={showError}
-              />
+              {!uiHidden && (
+                <SelectedTokenHud
+                  campaignId={campaign.id}
+                  currentUserId={currentUserId}
+                  role={role}
+                  characters={characters}
+                  onOpenCharacter={(c) => setOpenCharacterId(c.id)}
+                  onError={showError}
+                />
+              )}
             </>
           ) : (
             <div className="flex flex-1 flex-col items-center justify-center p-6 text-center">
@@ -555,7 +598,7 @@ export default function CampaignWorkspaceShell({
         </section>
 
         {/* Backdrop escuro no Mobile quando a Sidebar está aberta */}
-        {sidebarOpen === true && (
+        {!uiHidden && sidebarOpen === true && (
           <div
             onClick={() => setSidebarOpen(false)}
             className="fixed inset-x-0 top-13 bottom-0 z-30 bg-black/60 backdrop-blur-[1px] md:hidden"
@@ -565,11 +608,13 @@ export default function CampaignWorkspaceShell({
         {/* Sidebar Lateral (Drawer no Mobile, Painel Colapsável no PC) */}
         <aside
           className={`${
-            sidebarOpen === true
-              ? "fixed top-13 right-0 bottom-0 z-40 flex w-[88vw] max-w-sm shadow-2xl md:static md:w-96 md:shadow-none"
-              : sidebarOpen === null
-                ? "hidden md:static md:flex md:w-96"
-                : "hidden"
+            uiHidden
+              ? "hidden"
+              : sidebarOpen === true
+                ? "fixed top-13 right-0 bottom-0 z-40 flex w-[88vw] max-w-sm shadow-2xl md:static md:w-96 md:shadow-none"
+                : sidebarOpen === null
+                  ? "hidden md:static md:flex md:w-96"
+                  : "hidden"
           } shrink-0 flex-col border-l border-amber-500/20 bg-zinc-900/95 backdrop-blur`}
         >
           <div className="flex items-center border-b border-zinc-800 bg-zinc-950/60 p-1">

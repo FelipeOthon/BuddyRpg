@@ -2,13 +2,18 @@
 
 import { useEffect, useState } from "react";
 import {
+  Crosshair,
   Dices,
+  EyeOff,
   Grid,
   Hand,
   Magnet,
   MousePointer,
+  Pin,
+  Radio,
   RotateCcw,
   Ruler,
+  Trash2,
   Volume2,
   VolumeX,
   ZoomIn,
@@ -26,9 +31,13 @@ import type { Scene } from "@/types/domain";
 export default function BoardToolbar({
   scene,
   isGm,
+  onSyncView,
+  onClearPinnedRulers,
 }: {
   scene: Scene;
   isGm: boolean;
+  onSyncView?: (x: number, y: number, scale: number) => void;
+  onClearPinnedRulers?: () => void;
 }) {
   const {
     tool,
@@ -36,11 +45,19 @@ export default function BoardToolbar({
     viewport,
     setViewport,
     resetViewport,
+    rulerPinMode,
+    setRulerPinMode,
+    pinnedRulers,
+    uiHidden,
+    setUiHidden,
     dice3dEnabled,
     setDice3dEnabled,
   } = useBoardStore();
   const [audioOn, setAudioOn] = useState(true);
   const [ambience, setAmbience] = useState<AmbiencePreset>("none");
+  const scenePinnedCount = pinnedRulers.filter(
+    (r) => r.sceneId === scene.id
+  ).length;
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -55,16 +72,37 @@ export default function BoardToolbar({
         return;
       }
 
+      if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === "h") {
+        e.preventDefault();
+        setUiHidden(!uiHidden);
+        return;
+      }
+
+      if (e.ctrlKey && e.altKey && e.key.toLowerCase() === "s" && isGm) {
+        e.preventDefault();
+        onSyncView?.(viewport.x, viewport.y, viewport.scale);
+        return;
+      }
+
+      if (e.ctrlKey && e.altKey && e.key.toLowerCase() === "r") {
+        e.preventDefault();
+        resetViewport();
+        return;
+      }
+
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+
       const key = e.key.toLowerCase();
-      if (key === "v") setTool("select");
-      else if (key === "h") setTool("pan");
-      else if (key === "r") setTool("ruler");
+      if (key === "v" || key === "s") setTool("select");
+      else if (key === "h" || key === "w") setTool("pan");
+      else if (key === "r" || key === "m") setTool("ruler");
+      else if (key === "q") setTool("pointer");
       else if (key === "0") resetViewport();
     };
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [setTool, resetViewport]);
+  }, [setTool, resetViewport, uiHidden, setUiHidden, isGm, onSyncView, viewport]);
 
   const zoomBy = (factor: number) => {
     const nextScale = clamp(
@@ -98,6 +136,12 @@ export default function BoardToolbar({
       label: "Régua de Distância",
       shortcut: "R",
       icon: Ruler,
+    },
+    {
+      id: "pointer",
+      label: "Ponteiro Laser (ou Botão Direito)",
+      shortcut: "Q",
+      icon: Crosshair,
     },
   ];
 
@@ -136,6 +180,34 @@ export default function BoardToolbar({
         })}
 
         <div className="mx-1 h-4 w-px bg-zinc-800" />
+
+        {tool === "ruler" && (
+          <button
+            type="button"
+            onClick={() => setRulerPinMode(!rulerPinMode)}
+            title="Fixar réguas no mapa ao soltar (ou segure Shift)"
+            className={`flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs font-semibold transition ${
+              rulerPinMode
+                ? "border border-purple-500/40 bg-purple-500/20 text-purple-200"
+                : "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+            }`}
+          >
+            <Pin className="h-3.5 w-3.5" />
+            <span className="hidden lg:inline">Fixar</span>
+          </button>
+        )}
+
+        {scenePinnedCount > 0 && onClearPinnedRulers && (
+          <button
+            type="button"
+            onClick={onClearPinnedRulers}
+            title="Limpar réguas fixadas nesta cena"
+            className="flex items-center gap-1 rounded-lg border border-rose-500/30 bg-rose-500/10 px-2 py-1.5 text-xs font-semibold text-rose-300 transition hover:bg-rose-500/20"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            <span className="hidden lg:inline">Réguas ({scenePinnedCount})</span>
+          </button>
+        )}
 
         <button
           type="button"
@@ -242,10 +314,32 @@ export default function BoardToolbar({
         <button
           type="button"
           onClick={resetViewport}
-          title="Centralizar visão"
+          title="Centralizar visão (Ctrl+Alt+R)"
           className="rounded-lg p-1.5 text-zinc-400 transition hover:bg-zinc-800 hover:text-amber-200"
         >
           <RotateCcw className="h-3.5 w-3.5" />
+        </button>
+
+        {isGm && onSyncView && (
+          <button
+            type="button"
+            onClick={() =>
+              onSyncView(viewport.x, viewport.y, viewport.scale)
+            }
+            title="Sincronizar câmera de todos os jogadores com a sua (Ctrl+Alt+S)"
+            className="rounded-lg p-1.5 text-amber-300 transition hover:bg-amber-500/15"
+          >
+            <Radio className="h-3.5 w-3.5" />
+          </button>
+        )}
+
+        <button
+          type="button"
+          onClick={() => setUiHidden(true)}
+          title="Modo Foco: Ocultar menus (Ctrl+Shift+H)"
+          className="rounded-lg p-1.5 text-zinc-400 transition hover:bg-zinc-800 hover:text-white"
+        >
+          <EyeOff className="h-3.5 w-3.5" />
         </button>
       </div>
     </div>

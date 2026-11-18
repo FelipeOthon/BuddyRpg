@@ -2,7 +2,11 @@
 
 import dynamic from "next/dynamic";
 import type { Point2D } from "@/lib/board/geometry";
-import type { CampaignRole, Scene } from "@/types/domain";
+import type {
+  CampaignRole,
+  PinnedRuler,
+  Scene,
+} from "@/types/domain";
 
 const BoardCanvas = dynamic(() => import("./BoardCanvas"), {
   ssr: false,
@@ -16,6 +20,7 @@ const BoardCanvas = dynamic(() => import("./BoardCanvas"), {
 export default function BoardClient(props: {
   scene: Scene;
   currentUserId: string;
+  currentUsername: string;
   role: CampaignRole;
   onTokenDragBroadcast?: (tokenId: string, x: number, y: number) => void;
   onTokenDragCommit?: (
@@ -26,6 +31,13 @@ export default function BoardClient(props: {
     prevY: number
   ) => void;
   onRulerBroadcast?: (start: Point2D, end: Point2D, active: boolean) => void;
+  onRulerPinBroadcast?: (
+    action: "add" | "remove" | "clear",
+    ruler?: Omit<PinnedRuler, "userId" | "username" | "color">,
+    rulerId?: string
+  ) => PinnedRuler | null;
+  onPointerBroadcast?: (pos: Point2D, active: boolean) => void;
+  onSyncView?: (x: number, y: number, scale: number) => void;
 }) {
   return <BoardCanvas {...props} />;
 }

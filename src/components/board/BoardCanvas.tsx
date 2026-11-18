@@ -1,29 +1,36 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { Eye } from "lucide-react";
 import { Layer, Stage } from "react-konva";
 import type Konva from "konva";
 import type { KonvaEventObject } from "konva/lib/Node";
 import { clamp, screenToWorld, type Point2D } from "@/lib/board/geometry";
 import { useKeyPressed } from "@/hooks/useKeyPressed";
 import { useBoardStore } from "@/stores/boardStore";
-import type { CampaignRole, Scene, Token } from "@/types/domain";
+import type { CampaignRole, PinnedRuler, Scene, Token } from "@/types/domain";
 import MapLayer from "./MapLayer";
 import GridLayer from "./GridLayer";
 import TokenNode from "./TokenNode";
 import RulerLayer, { type LocalRulerState } from "./RulerLayer";
+import PointerLayer from "./PointerLayer";
 import BoardToolbar from "./BoardToolbar";
 
 export default function BoardCanvas({
   scene,
   currentUserId,
+  currentUsername,
   role,
   onTokenDragBroadcast,
   onTokenDragCommit,
   onRulerBroadcast,
+  onRulerPinBroadcast,
+  onPointerBroadcast,
+  onSyncView,
 }: {
   scene: Scene;
   currentUserId: string;
+  currentUsername: string;
   role: CampaignRole;
   onTokenDragBroadcast?: (tokenId: string, x: number, y: number) => void;
   onTokenDragCommit?: (
@@ -38,6 +45,13 @@ export default function BoardCanvas({
     end: Point2D,
     active: boolean
   ) => void;
+  onRulerPinBroadcast?: (
+    action: "add" | "remove" | "clear",
+    ruler?: Omit<PinnedRuler, "userId" | "username" | "color">,
+    rulerId?: string
+  ) => PinnedRuler | null;
+  onPointerBroadcast?: (pos: Point2D, active: boolean) => void;
+  onSyncView?: (x: number, y: number, scale: number) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<Konva.Stage>(null);
@@ -49,6 +63,13 @@ export default function BoardCanvas({
   );
   const pinchDistRef = useRef<number | null>(null);
   const [localRuler, setLocalRuler] = useState<LocalRulerState | null>(null);
+  const [localPointer, setLocalPointer] = useState<Point2D | null>(null);
+  const [tokenDragRuler, setTokenDragRuler] =
+    useState<LocalRulerState | null>(null);
+  const tokenDragCenterRef = useRef<{
+    origin: Point2D;
+    halfSize: number;
+  } | null>(null);
 
   // Token de demonstração local caso a cena ainda não tenha tokens no banco
   const [demoTokenPos, setDemoTokenPos] = useState<Point2D>({
@@ -57,6 +78,7 @@ export default function BoardCanvas({
   });
 
   const spaceDown = useKeyPressed(" ");
+  const shiftDown = useKeyPressed("Shift");
   const {
     tool,
     viewport,
@@ -67,6 +89,14 @@ export default function BoardCanvas({
     setDraggingLocalTokenId,
     remoteTokenDrags,
     remoteRulers,
+    pinnedRulers,
+    rulerPinMode,
+    addPinnedRuler,
+    removePinnedRuler,
+    clearPinnedRulers,
+    remotePointers,
+    uiHidden,
+    setUiHidden,
     upsertToken,
   } = useBoardStore();
 
@@ -107,6 +137,8 @@ export default function BoardCanvas({
     hp_max: 30,
     is_hidden: false,
     conditions: [],
+    ring_color: null,
+    is_locked: false,
     updated_at: new Date().toISOString(),
   };
 
@@ -116,6 +148,7 @@ export default function BoardCanvas({
   const canUserMoveToken = (token: Token): boolean => {
     if (token.id.startsWith("demo-token-")) return true;
     if (role === "gm") return true;
+    if (token.is_locked) return false;
     return token.owner_id === currentUserId;
   };
 
@@ -148,8 +181,19 @@ export default function BoardCanvas({
     if (!stage) return;
 
     const isMiddleClick = e.evt.button === 1;
+    const isRightClick = e.evt.button === 2;
     const isLeftClick = e.evt.button === 0;
     const wantPan = isMiddleClick || (isLeftClick && (spaceDown || tool === "pan"));
+
+    if (isRightClick || (isLeftClick && tool === "pointer")) {
+      e.evt.preventDefault();
+      const pointer = stage.getPointerPosition();
+      if (!pointer) return;
+      const worldPt = screenToWorld(pointer, viewport);
+      setLocalPointer(worldPt);
+      onPointerBroadcast?.(worldPt, true);
+      return;
+    }
 
     if (wantPan) {
       e.evt.preventDefault();
@@ -189,6 +233,17 @@ export default function BoardCanvas({
       return;
     }
 
+    if (localPointer) {
+      const stage = stageRef.current;
+      if (!stage) return;
+      const pointer = stage.getPointerPosition();
+      if (!pointer) return;
+      const worldPt = screenToWorld(pointer, viewport);
+      setLocalPointer(worldPt);
+      onPointerBroadcast?.(worldPt, true);
+      return;
+    }
+
     if (localRuler) {
       const stage = stageRef.current;
       if (!stage) return;
@@ -206,7 +261,33 @@ export default function BoardCanvas({
       setIsPanning(false);
       panStartRef.current = null;
     }
+    if (localPointer) {
+      onPointerBroadcast?.(localPointer, false);
+      setLocalPointer(null);
+    }
     if (localRuler) {
+      const dist = Math.hypot(
+        localRuler.end.x - localRuler.start.x,
+        localRuler.end.y - localRuler.start.y
+      );
+      if ((rulerPinMode || shiftDown) && dist > 12) {
+        const id = `ruler-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+        const base = {
+          id,
+          sceneId: scene.id,
+          startX: localRuler.start.x,
+          startY: localRuler.start.y,
+          endX: localRuler.end.x,
+          endY: localRuler.end.y,
+        };
+        const created = onRulerPinBroadcast?.("add", base) ?? {
+          ...base,
+          userId: currentUserId,
+          username: currentUsername,
+          color: "#a855f7",
+        };
+        addPinnedRuler(created);
+      }
       onRulerBroadcast?.(localRuler.start, localRuler.end, false);
       setLocalRuler(null);
     }
@@ -310,15 +391,34 @@ export default function BoardCanvas({
 
   const handleTokenDragStart = (tokenId: string) => {
     setDraggingLocalTokenId(tokenId);
+    const token = renderedTokens.find((t) => t.id === tokenId);
+    if (token) {
+      const halfSize = (Math.min(Math.max(token.size || 1, 1), 4) * scene.grid_size) / 2;
+      const center = {
+        x: token.pos_x + halfSize,
+        y: token.pos_y + halfSize,
+      };
+      tokenDragCenterRef.current = { origin: center, halfSize };
+      setTokenDragRuler({ start: center, end: center });
+    }
   };
 
   const handleTokenDragMove = (tokenId: string, x: number, y: number) => {
+    if (tokenDragCenterRef.current) {
+      const { origin, halfSize } = tokenDragCenterRef.current;
+      setTokenDragRuler({
+        start: origin,
+        end: { x: x + halfSize, y: y + halfSize },
+      });
+    }
     if (tokenId.startsWith("demo-token-")) return;
     onTokenDragBroadcast?.(tokenId, x, y);
   };
 
   const handleTokenDragEnd = (tokenId: string, x: number, y: number) => {
     setDraggingLocalTokenId(null);
+    tokenDragCenterRef.current = null;
+    setTokenDragRuler(null);
 
     if (tokenId.startsWith("demo-token-")) {
       setDemoTokenPos({ x, y });
@@ -344,7 +444,7 @@ export default function BoardCanvas({
       ? "cursor-grabbing"
       : spaceDown || tool === "pan"
         ? "cursor-grab"
-        : tool === "ruler"
+        : tool === "ruler" || tool === "pointer"
           ? "cursor-crosshair"
           : "cursor-default";
 
@@ -354,7 +454,27 @@ export default function BoardCanvas({
       onContextMenu={(e) => e.preventDefault()}
       className={`relative h-full w-full touch-none overflow-hidden bg-zinc-950 select-none ${cursorClass}`}
     >
-      <BoardToolbar scene={scene} isGm={role === "gm"} />
+      {!uiHidden ? (
+        <BoardToolbar
+          scene={scene}
+          isGm={role === "gm"}
+          onSyncView={onSyncView}
+          onClearPinnedRulers={() => {
+            clearPinnedRulers(scene.id);
+            onRulerPinBroadcast?.("clear");
+          }}
+        />
+      ) : (
+        <button
+          type="button"
+          onClick={() => setUiHidden(false)}
+          title="Mostrar interface (Ctrl+Shift+H)"
+          className="absolute top-3 right-3 z-30 inline-flex items-center gap-1.5 rounded-xl border border-amber-500/40 bg-zinc-950/90 px-3 py-1.5 text-xs font-semibold text-amber-300 shadow-xl backdrop-blur transition hover:bg-zinc-900"
+        >
+          <Eye className="h-3.5 w-3.5" />
+          Mostrar UI
+        </button>
+      )}
 
       <Stage
         ref={stageRef}
@@ -407,23 +527,37 @@ export default function BoardCanvas({
           })}
         </Layer>
 
-        {/* Camada 3: Régua de Medição */}
-        <Layer listening={false}>
+        {/* Camada 3: Régua de Medição e Pointer Laser */}
+        <Layer>
           <RulerLayer
             localRuler={localRuler}
+            tokenDragRuler={tokenDragRuler}
             remoteRulers={remoteRulers}
+            pinnedRulers={pinnedRulers}
+            onRemovePinnedRuler={(rulerId) => {
+              removePinnedRuler(rulerId);
+              onRulerPinBroadcast?.("remove", undefined, rulerId);
+            }}
             sceneId={scene.id}
             gridSize={scene.grid_size}
             metersPerCell={scene.meters_per_cell}
             rule={scene.distance_rule}
           />
+          <PointerLayer
+            localPointer={localPointer}
+            remotePointers={remotePointers}
+            sceneId={scene.id}
+            localUsername={currentUsername}
+          />
         </Layer>
       </Stage>
 
       {/* Dica de controles no rodapé do tabuleiro */}
-      <div className="pointer-events-none absolute bottom-3 left-4 z-10 hidden rounded-lg border border-zinc-800/80 bg-zinc-900/80 px-3 py-1.5 text-[11px] text-zinc-400 backdrop-blur sm:block">
-        Scroll: Zoom · Botão do meio ou Espaço+Arrastar: Pan · Régua (R): Medir distância
-      </div>
+      {!uiHidden && (
+        <div className="pointer-events-none absolute bottom-3 left-4 z-10 hidden rounded-lg border border-zinc-800/80 bg-zinc-900/80 px-3 py-1.5 text-[11px] text-zinc-400 backdrop-blur sm:block">
+          Scroll: Zoom · Espaço+Arrastar: Pan · Botão Direito (Q): Pointer · Régua (R, Shift fixa) · Foco: Ctrl+Shift+H
+        </div>
+      )}
     </div>
   );
 }

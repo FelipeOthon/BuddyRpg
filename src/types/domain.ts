@@ -150,3 +150,42 @@ export interface RulerBroadcastPayload {
   endY: number;
   active: boolean;
 }
+
+export interface PinnedRuler {
+  id: string;
+  userId: string;
+  username: string;
+  color: string;
+  sceneId: string;
+  startX: number;
+  startY: number;
+  endX: number;
+  endY: number;
+}
+
+export interface PinnedRulerBroadcastPayload {
+  action: "add" | "remove" | "clear";
+  ruler?: PinnedRuler;
+  rulerId?: string;
+  sceneId: string;
+  userId: string;
+}
+
+export interface PointerBroadcastPayload {
+  userId: string;
+  username: string;
+  color: string;
+  sceneId: string;
+  x: number;
+  y: number;
+  active: boolean;
+  ts: number;
+}
+
+export interface ViewportSyncPayload {
+  userId: string;
+  sceneId: string;
+  x: number;
+  y: number;
+  scale: number;
+}

@@ -224,6 +224,8 @@ export interface Database {
           hp_max: number;
           is_hidden: boolean;
           conditions: string[];
+          ring_color: string | null;
+          is_locked: boolean;
           updated_at: string;
         };
         Insert: {
@@ -241,6 +243,8 @@ export interface Database {
           hp_max?: number;
           is_hidden?: boolean;
           conditions?: string[];
+          ring_color?: string | null;
+          is_locked?: boolean;
           updated_at?: string;
         };
         Update: {
@@ -258,6 +262,8 @@ export interface Database {
           hp_max?: number;
           is_hidden?: boolean;
           conditions?: string[];
+          ring_color?: string | null;
+          is_locked?: boolean;
           updated_at?: string;
         };
         Relationships: [

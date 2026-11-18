@@ -6,6 +6,15 @@ import type { KonvaEventObject } from "konva/lib/Node";
 import { snapToGrid } from "@/lib/board/geometry";
 import type { Token } from "@/types/domain";
 
+const CONDITION_BADGES: Record<string, { icon: string; color: string }> = {
+  Caído: { icon: "▼", color: "#f59e0b" },
+  Envenenado: { icon: "☠", color: "#10b981" },
+  Atordoado: { icon: "⚡", color: "#eab308" },
+  Concentrando: { icon: "✦", color: "#38bdf8" },
+  Invisível: { icon: "◌", color: "#818cf8" },
+  Morto: { icon: "✕", color: "#ef4444" },
+};
+
 function TokenAvatar({
   url,
   pixelSize,
@@ -84,12 +93,16 @@ export default function TokenNode({
     onDragEnd(token.id, snapped.x, snapped.y);
   };
 
+  const ringStroke =
+    token.ring_color ||
+    (isSelected ? "#fbbf24" : canMove ? "#38bdf8" : "#ef4444");
+
   return (
     <Group
       x={displayX}
       y={displayY}
       opacity={token.is_hidden ? 0.45 : 1}
-      draggable={canMove}
+      draggable={canMove && !token.is_locked}
       onClick={(e) => {
         e.cancelBubble = true;
         onSelect(token.id);
@@ -106,13 +119,29 @@ export default function TokenNode({
       onDragMove={handleDragMove}
       onDragEnd={handleDragEnd}
     >
+      {/* Halo externo do Colored Ring (quando definido) */}
+      {token.ring_color && (
+        <Circle
+          x={radius}
+          y={radius}
+          radius={radius + 2}
+          stroke={token.ring_color}
+          strokeWidth={3}
+          opacity={0.7}
+          shadowColor={token.ring_color}
+          shadowBlur={10}
+          shadowOpacity={0.65}
+          listening={false}
+        />
+      )}
+
       {/* Anel de Seleção / Permissão */}
       <Circle
         x={radius}
         y={radius}
         radius={radius - 2}
         fill="#1e293b"
-        stroke={isSelected ? "#fbbf24" : canMove ? "#38bdf8" : "#ef4444"}
+        stroke={ringStroke}
         strokeWidth={isSelected ? 4 : 2.5}
         dash={token.is_hidden ? [6, 4] : undefined}
         shadowColor="#000000"
@@ -155,6 +184,61 @@ export default function TokenNode({
         />
       </Group>
 
+      {/* Cadeado quando travado pelo GM */}
+      {token.is_locked && (
+        <Group x={4} y={4} listening={false}>
+          <Circle
+            x={8}
+            y={8}
+            radius={9}
+            fill="rgba(9, 9, 11, 0.9)"
+            stroke="#fbbf24"
+            strokeWidth={1.2}
+          />
+          <Text
+            x={0}
+            y={2}
+            width={16}
+            align="center"
+            text="🔒"
+            fontSize={10}
+          />
+        </Group>
+      )}
+
+      {/* Badges visuais circulares de condições no arco superior/direito */}
+      {token.conditions &&
+        token.conditions.slice(0, 5).map((cond, idx) => {
+          const meta = CONDITION_BADGES[cond] ?? {
+            icon: cond[0]?.toUpperCase() ?? "!",
+            color: "#f43f5e",
+          };
+          const angle = -Math.PI / 4 + idx * 0.48;
+          const bx = radius + Math.cos(angle) * (radius - 2);
+          const by = radius + Math.sin(angle) * (radius - 2);
+
+          return (
+            <Group key={cond} x={bx} y={by} listening={false}>
+              <Circle
+                radius={9}
+                fill="#09090b"
+                stroke={meta.color}
+                strokeWidth={1.6}
+              />
+              <Text
+                x={-9}
+                y={-5.5}
+                width={18}
+                align="center"
+                text={meta.icon}
+                fontSize={10}
+                fontStyle="bold"
+                fill={meta.color}
+              />
+            </Group>
+          );
+        })}
+
       {/* Rótulo com Nome e HP */}
       <Group x={-10} y={pixelSize + 4} listening={false}>
         <Rect
@@ -175,29 +259,6 @@ export default function TokenNode({
           wrap="none"
         />
       </Group>
-
-      {/* Condições ativas */}
-      {token.conditions && token.conditions.length > 0 && (
-        <Group x={-10} y={pixelSize + 24} listening={false}>
-          <Rect
-            width={pixelSize + 20}
-            height={15}
-            cornerRadius={4}
-            fill="rgba(127, 29, 29, 0.85)"
-          />
-          <Text
-            width={pixelSize + 20}
-            y={2}
-            align="center"
-            text={token.conditions.slice(0, 3).join(" · ")}
-            fontSize={9}
-            fontStyle="bold"
-            fill="#fecaca"
-            ellipsis
-            wrap="none"
-          />
-        </Group>
-      )}
     </Group>
   );
 }

@@ -104,6 +104,13 @@ export const updateTokenStatsSchema = z.object({
   characterId: z.string().uuid("Personagem inválido.").nullable().optional(),
   isHidden: z.boolean().optional(),
   conditions: z.array(z.string().trim().min(1).max(24)).max(12).optional(),
+  ringColor: z
+    .string()
+    .trim()
+    .regex(/^#[0-9a-fA-F]{6}$/, "Cor do anel inválida.")
+    .nullable()
+    .optional(),
+  isLocked: z.boolean().optional(),
 });
 
 export const createSceneSchema = z.object({

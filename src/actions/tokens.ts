@@ -105,6 +105,8 @@ export async function updateTokenStatsAction(input: {
   characterId?: string | null;
   isHidden?: boolean;
   conditions?: string[];
+  ringColor?: string | null;
+  isLocked?: boolean;
 }): Promise<TokenActionResult> {
   const parsed = updateTokenStatsSchema.safeParse(input);
   if (!parsed.success) {
@@ -132,7 +134,8 @@ export async function updateTokenStatsAction(input: {
   if (v.ownerId !== undefined) patch.owner_id = v.ownerId;
   if (v.characterId !== undefined) patch.character_id = v.characterId;
   if (v.conditions !== undefined) patch.conditions = v.conditions;
-  if (v.isHidden !== undefined) {
+  if (v.ringColor !== undefined) patch.ring_color = v.ringColor;
+  if (v.isHidden !== undefined || v.isLocked !== undefined) {
     const { data: membership } = await supabase
       .from("campaign_members")
       .select("role")
@@ -143,10 +146,11 @@ export async function updateTokenStatsAction(input: {
     if (membership?.role !== "gm") {
       return {
         ok: false,
-        error: "Apenas o Mestre pode ocultar ou revelar tokens.",
+        error: "Apenas o Mestre pode ocultar ou travar tokens.",
       };
     }
-    patch.is_hidden = v.isHidden;
+    if (v.isHidden !== undefined) patch.is_hidden = v.isHidden;
+    if (v.isLocked !== undefined) patch.is_locked = v.isLocked;
   }
 
   const { data, error } = await supabase
