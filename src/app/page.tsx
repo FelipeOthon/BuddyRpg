@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Dices, Map, Shield, Sparkles, Users } from "lucide-react";
+import { ArrowRight, Dices, LogIn, Map, Shield, Sparkles, Users } from "lucide-react";
 
 export default function Home() {
   return (
@@ -7,7 +7,7 @@ export default function Home() {
       <header className="border-b border-zinc-800/80 bg-zinc-950/80 backdrop-blur">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
           <div className="flex items-center gap-2.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-400">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-400">
               <Dices className="h-5 w-5" />
             </div>
             <span className="text-lg font-bold tracking-tight text-white">
@@ -16,10 +16,18 @@ export default function Home() {
           </div>
           <nav className="flex items-center gap-3">
             <Link
-              href="/api/health"
-              className="rounded-lg border border-zinc-800 bg-zinc-900 px-3.5 py-2 text-xs font-medium text-zinc-300 transition hover:border-zinc-700 hover:text-white"
+              href="/login"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-900 px-3.5 py-2 text-xs font-medium text-zinc-200 transition hover:border-zinc-700 hover:text-white"
             >
-              Status da API
+              <LogIn className="h-3.5 w-3.5" />
+              Entrar
+            </Link>
+            <Link
+              href="/dashboard"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-amber-500 px-3.5 py-2 text-xs font-semibold text-zinc-950 transition hover:bg-amber-400"
+            >
+              Minhas Mesas
+              <ArrowRight className="h-3.5 w-3.5" />
             </Link>
           </nav>
         </div>
@@ -40,9 +48,25 @@ export default function Home() {
 
         <p className="mt-6 max-w-2xl text-base leading-relaxed text-zinc-400 sm:text-lg">
           Mapas interativos com grade configurável, tokens sincronizados em tempo
-          real, rolador de dados integrado no chat e fichas flexíveis com
+          real, rolador de dados integrado no chat e fichas privadas com
           controle do Mestre.
         </p>
+
+        <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
+          <Link
+            href="/dashboard"
+            className="inline-flex items-center gap-2 rounded-xl bg-amber-500 px-6 py-3 text-sm font-semibold text-zinc-950 shadow-lg transition hover:bg-amber-400"
+          >
+            Começar Agora
+            <ArrowRight className="h-4 w-4" />
+          </Link>
+          <Link
+            href="/login"
+            className="inline-flex items-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900 px-6 py-3 text-sm font-semibold text-zinc-200 transition hover:border-zinc-700 hover:text-white"
+          >
+            Criar Conta Gratuita
+          </Link>
+        </div>
 
         <div className="mt-14 grid w-full max-w-4xl gap-4 text-left sm:grid-cols-3">
           <div className="rounded-xl border border-zinc-800/80 bg-zinc-900/50 p-5">
