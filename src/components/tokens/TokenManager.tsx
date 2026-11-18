@@ -16,7 +16,7 @@ import type { CampaignMemberInfo } from "@/components/campaign/CampaignWorkspace
 import { snapToGrid } from "@/lib/board/geometry";
 import { uploadCampaignImage } from "@/lib/utils/storage";
 import { useBoardStore } from "@/stores/boardStore";
-import type { CampaignRole, Scene, Token } from "@/types/domain";
+import type { CampaignRole, CharacterRow, Scene, Token } from "@/types/domain";
 
 export default function TokenManager({
   campaignId,
@@ -24,12 +24,14 @@ export default function TokenManager({
   currentUserId,
   role,
   members,
+  characters = [],
 }: {
   campaignId: string;
   scene: Scene;
   currentUserId: string;
   role: CampaignRole;
   members: CampaignMemberInfo[];
+  characters?: CharacterRow[];
 }) {
   const isGm = role === "gm";
   const {
@@ -47,6 +49,7 @@ export default function TokenManager({
   const [hpCurrent, setHpCurrent] = useState(20);
   const [hpMax, setHpMax] = useState(20);
   const [ownerId, setOwnerId] = useState(currentUserId);
+  const [characterId, setCharacterId] = useState<string>("");
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -103,6 +106,7 @@ export default function TokenManager({
         hpCurrent,
         hpMax,
         ownerId: isGm ? ownerId : currentUserId,
+        characterId: characterId || null,
         posX: spawnPos.x,
         posY: spawnPos.y,
       });
@@ -225,6 +229,34 @@ export default function TokenManager({
             />
           </div>
         </div>
+
+        {characters.length > 0 && (
+          <div>
+            <label className="mb-1 block text-[11px] text-zinc-400">
+              Vincular Ficha de Personagem (Opcional)
+            </label>
+            <select
+              value={characterId}
+              onChange={(e) => {
+                const cid = e.target.value;
+                setCharacterId(cid);
+                const found = characters.find((c) => c.id === cid);
+                if (found) {
+                  if (!name.trim()) setName(found.name);
+                  if (isGm && found.owner_id) setOwnerId(found.owner_id);
+                }
+              }}
+              className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-2.5 py-1.5 text-xs text-white"
+            >
+              <option value="">Sem ficha vinculada</option>
+              {characters.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {isGm && (
           <div>

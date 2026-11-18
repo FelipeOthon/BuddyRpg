@@ -1,20 +1,24 @@
 "use client";
 
 import { useTransition } from "react";
-import { Heart, Loader2, Minus, Plus, Trash2, X } from "lucide-react";
+import { Heart, Loader2, Minus, Plus, ScrollText, Trash2, X } from "lucide-react";
 import { deleteTokenAction, updateTokenStatsAction } from "@/actions/tokens";
 import { useBoardStore } from "@/stores/boardStore";
-import type { CampaignRole, Token } from "@/types/domain";
+import type { CampaignRole, CharacterRow, Token } from "@/types/domain";
 
 export default function SelectedTokenHud({
   campaignId,
   currentUserId,
   role,
+  characters = [],
+  onOpenCharacter,
   onError,
 }: {
   campaignId: string;
   currentUserId: string;
   role: CampaignRole;
+  characters?: CharacterRow[];
+  onOpenCharacter?: (char: CharacterRow) => void;
   onError?: (msg: string) => void;
 }) {
   const {
@@ -34,7 +38,13 @@ export default function SelectedTokenHud({
     return null;
   }
 
-  const canEdit = role === "gm" || token.owner_id === currentUserId;
+  const linkedCharacter = token.character_id
+    ? characters.find((c) => c.id === token.character_id)
+    : undefined;
+  const canEdit =
+    role === "gm" ||
+    token.owner_id === currentUserId ||
+    linkedCharacter?.owner_id === currentUserId;
 
   const adjustHp = (delta: number) => {
     if (!canEdit) return;
@@ -103,6 +113,21 @@ export default function SelectedTokenHud({
           </p>
         </div>
       </div>
+
+      {linkedCharacter && onOpenCharacter && (
+        <>
+          <div className="h-6 w-px bg-zinc-800" />
+          <button
+            type="button"
+            onClick={() => onOpenCharacter(linkedCharacter)}
+            className="inline-flex items-center gap-1 rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-xs font-semibold text-amber-300 transition hover:bg-amber-500/20"
+            title="Abrir ficha vinculada"
+          >
+            <ScrollText className="h-3.5 w-3.5" />
+            Ficha
+          </button>
+        </>
+      )}
 
       {canEdit && (
         <>

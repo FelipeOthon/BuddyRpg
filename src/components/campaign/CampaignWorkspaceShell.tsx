@@ -21,6 +21,8 @@ import {
 import BoardClient from "@/components/board/BoardClient";
 import ChatPanel from "@/components/chat/ChatPanel";
 import SceneManager from "@/components/scenes/SceneManager";
+import CharacterSheetModal from "@/components/sheets/CharacterSheetModal";
+import CharactersPanel from "@/components/sheets/CharactersPanel";
 import SelectedTokenHud from "@/components/tokens/SelectedTokenHud";
 import TokenManager from "@/components/tokens/TokenManager";
 import { useCampaignRealtime } from "@/hooks/useCampaignRealtime";
@@ -30,6 +32,7 @@ import { useBoardStore } from "@/stores/boardStore";
 import type {
   Campaign,
   CampaignRole,
+  CharacterRow,
   MessageRow,
   Scene,
   Token,
@@ -50,6 +53,7 @@ export default function CampaignWorkspaceShell({
   initialScenes,
   initialTokens,
   initialMessages,
+  initialCharacters,
   members,
 }: {
   campaign: Campaign;
@@ -58,6 +62,7 @@ export default function CampaignWorkspaceShell({
   initialScenes: Scene[];
   initialTokens: Token[];
   initialMessages: MessageRow[];
+  initialCharacters: CharacterRow[];
   members: CampaignMemberInfo[];
 }) {
   const isGm = role === "gm";
@@ -65,6 +70,9 @@ export default function CampaignWorkspaceShell({
   const [copied, setCopied] = useState<"code" | "link" | null>(null);
   const [toastError, setToastError] = useState<string | null>(null);
   const [messages, setMessages] = useState<MessageRow[]>(initialMessages);
+  const [characters, setCharacters] =
+    useState<CharacterRow[]>(initialCharacters);
+  const [openCharacterId, setOpenCharacterId] = useState<string | null>(null);
 
   const { scenes, viewedSceneId, hydrateBoard, upsertToken } = useBoardStore();
 
@@ -87,6 +95,19 @@ export default function CampaignWorkspaceShell({
     });
   }, []);
 
+  const upsertCharacter = useCallback((char: CharacterRow) => {
+    setCharacters((prev) => {
+      const exists = prev.some((c) => c.id === char.id);
+      if (!exists) return [...prev, char];
+      return prev.map((c) => (c.id === char.id ? char : c));
+    });
+  }, []);
+
+  const removeCharacter = useCallback((charId: string) => {
+    setCharacters((prev) => prev.filter((c) => c.id !== charId));
+    setOpenCharacterId((prev) => (prev === charId ? null : prev));
+  }, []);
+
   const handleMessageChange = useCallback(
     (
       op: "INSERT" | "UPDATE" | "DELETE",
@@ -100,6 +121,24 @@ export default function CampaignWorkspaceShell({
       }
     },
     [appendOrDedupeMessage]
+  );
+
+  const handleCharacterChange = useCallback(
+    (
+      op: "INSERT" | "UPDATE" | "DELETE",
+      record: CharacterRow | null,
+      oldRecord: CharacterRow | null
+    ) => {
+      if ((op === "INSERT" || op === "UPDATE") && record) {
+        // Garante privacidade no cliente caso chegue apenas para dono ou GM
+        if (isGm || record.owner_id === currentUserId) {
+          upsertCharacter(record);
+        }
+      } else if (op === "DELETE" && oldRecord) {
+        removeCharacter(oldRecord.id);
+      }
+    },
+    [isGm, currentUserId, upsertCharacter, removeCharacter]
   );
 
   const currentUsername = useMemo(() => {
@@ -121,6 +160,7 @@ export default function CampaignWorkspaceShell({
     role,
     gmUserIds,
     onMessageChange: handleMessageChange,
+    onCharacterChange: handleCharacterChange,
   });
 
   const effectiveScenes = scenes.length > 0 ? scenes : initialScenes;
@@ -131,6 +171,11 @@ export default function CampaignWorkspaceShell({
     effectiveScenes.find((s) => s.is_active) ??
     effectiveScenes[0] ??
     null;
+
+  const openCharacter = useMemo(
+    () => characters.find((c) => c.id === openCharacterId) ?? null,
+    [characters, openCharacterId]
+  );
 
   const handleTokenDragBroadcast = useCallback(
     (tokenId: string, x: number, y: number) => {
@@ -317,6 +362,8 @@ export default function CampaignWorkspaceShell({
                 campaignId={campaign.id}
                 currentUserId={currentUserId}
                 role={role}
+                characters={characters}
+                onOpenCharacter={(c) => setOpenCharacterId(c.id)}
                 onError={showError}
               />
             </>
@@ -424,6 +471,20 @@ export default function CampaignWorkspaceShell({
                 currentUserId={currentUserId}
                 role={role}
                 members={members}
+                characters={characters}
+              />
+            )}
+
+            {activeTab === "sheets" && (
+              <CharactersPanel
+                campaignId={campaign.id}
+                currentUserId={currentUserId}
+                role={role}
+                characters={characters}
+                members={members}
+                onUpsertCharacter={upsertCharacter}
+                onRemoveCharacter={removeCharacter}
+                onOpenCharacter={(c) => setOpenCharacterId(c.id)}
               />
             )}
 
@@ -487,16 +548,26 @@ export default function CampaignWorkspaceShell({
                 </ul>
               </div>
             )}
-
-            {activeTab === "sheets" && (
-              <p className="text-xs text-zinc-400">
-                As fichas privadas em JSONB (com cadeado do Mestre 🔒) serão
-                ativadas na Fase 6.
-              </p>
-            )}
           </div>
         </aside>
       </div>
+
+      {/* Modal de Ficha de Personagem */}
+      {openCharacter && (
+        <CharacterSheetModal
+          character={openCharacter}
+          campaignId={campaign.id}
+          currentUserId={currentUserId}
+          role={role}
+          ownerName={
+            members.find((m) => m.userId === openCharacter.owner_id)
+              ?.username ?? "Mestre"
+          }
+          onClose={() => setOpenCharacterId(null)}
+          onUpdateCharacter={upsertCharacter}
+          onRollMessageSent={appendOrDedupeMessage}
+        />
+      )}
     </div>
   );
 }

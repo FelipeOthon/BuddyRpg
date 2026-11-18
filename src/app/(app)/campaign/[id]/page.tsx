@@ -52,6 +52,7 @@ async function CampaignRoomLoader({
     { data: tokens },
     { data: rawMembers },
     { data: recentMessages },
+    { data: characters },
   ] = await Promise.all([
     supabase
       .from("scenes")
@@ -78,6 +79,11 @@ async function CampaignRoomLoader({
       .eq("campaign_id", id)
       .order("created_at", { ascending: false })
       .limit(100),
+    supabase
+      .from("characters")
+      .select("*")
+      .eq("campaign_id", id)
+      .order("created_at", { ascending: true }),
   ]);
 
   const members: CampaignMemberInfo[] = (rawMembers ?? []).map((m) => {
@@ -99,6 +105,7 @@ async function CampaignRoomLoader({
       initialScenes={scenes ?? []}
       initialTokens={tokens ?? []}
       initialMessages={chronologicalMessages}
+      initialCharacters={characters ?? []}
       members={members}
     />
   );
