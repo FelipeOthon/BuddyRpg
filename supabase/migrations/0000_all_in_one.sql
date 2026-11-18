@@ -389,9 +389,39 @@ begin
 end;
 $$;
 -- ============================================================================
--- 0003_rls.sql â€” PolÃ­ticas de Row Level Security (RLS) e privilÃ©gios de coluna
+-- 0003_rls.sql â€” Grants de Schema/Tabelas, PolÃ­ticas de RLS e Backfill de Perfis
 -- BuddyRPG VTT (idempotente)
 -- ============================================================================
+
+-- Garante permissÃµes de tabela/sequÃªncia/funÃ§Ãµes para as roles da API do Supabase
+grant usage on schema public to anon, authenticated, service_role;
+grant all on all tables in schema public to anon, authenticated, service_role;
+grant all on all sequences in schema public to anon, authenticated, service_role;
+grant all on all routines in schema public to anon, authenticated, service_role;
+
+alter default privileges in schema public grant all on tables to anon, authenticated, service_role;
+alter default privileges in schema public grant all on sequences to anon, authenticated, service_role;
+alter default privileges in schema public grant all on routines to anon, authenticated, service_role;
+
+-- Garante que qualquer usuÃ¡rio jÃ¡ existente em auth.users tenha seu registro em public.profiles
+insert into public.profiles (id, username, avatar_url)
+select
+  u.id,
+  lower(
+    substr(
+      regexp_replace(
+        coalesce(u.raw_user_meta_data ->> 'username', split_part(u.email, '@', 1), 'user'),
+        '[^a-zA-Z0-9_-]',
+        '',
+        'g'
+      ),
+      1,
+      20
+    ) || '_' || substr(replace(u.id::text, '-', ''), 1, 4)
+  ),
+  u.raw_user_meta_data ->> 'avatar_url'
+from auth.users u
+on conflict (id) do nothing;
 
 alter table public.profiles enable row level security;
 alter table public.campaigns enable row level security;
@@ -637,10 +667,11 @@ create policy tokens_delete on public.tokens
   );
 
 -- ============================================================================
--- 7. MESSAGES (Leitura para membros; roll_result bloqueado para clientes)
+-- 7. MESSAGES (Leitura para membros; roll_result bloqueado para clientes via RLS)
 -- ============================================================================
--- Revoga escrita direta em roll_result por clientes comuns (apenas service_role grava roll_result)
-revoke insert (roll_result), update (roll_result) on public.messages from anon, authenticated;
+-- Nota: mantemos GRANT na tabela para authenticated e bloqueamos roll_result != null na policy messages_insert
+grant select, insert, delete on public.messages to authenticated;
+grant all on public.messages to service_role;
 
 drop policy if exists messages_select on public.messages;
 create policy messages_select on public.messages

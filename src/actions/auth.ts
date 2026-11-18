@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { getSupabaseEnv } from "@/lib/supabase/env";
 import { loginSchema, signUpSchema } from "@/lib/validation/schemas";
 
@@ -82,12 +83,46 @@ export async function signUpAction(formData: {
   }
 
   const supabase = await createServerSupabaseClient();
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
   const nextPath =
     formData.next && formData.next.startsWith("/")
       ? formData.next
       : "/dashboard";
 
+  // Cria o usuário já confirmado via Admin API (evita o limite de 2 e-mails/hora do plano gratuito do Supabase)
+  if (process.env.SUPABASE_SECRET_KEY) {
+    const adminSupabase = createAdminSupabaseClient();
+    const { error: createErr } = await adminSupabase.auth.admin.createUser({
+      email: parsed.data.email,
+      password: parsed.data.password,
+      email_confirm: true,
+      user_metadata: {
+        username: parsed.data.username,
+      },
+    });
+
+    if (createErr) {
+      return {
+        ok: false,
+        error: createErr.message.includes("already been registered")
+          ? "Este e-mail já está cadastrado. Use a aba Entrar."
+          : createErr.message,
+      };
+    }
+
+    const { error: signInErr } = await supabase.auth.signInWithPassword({
+      email: parsed.data.email,
+      password: parsed.data.password,
+    });
+
+    if (signInErr) {
+      return { ok: false, error: signInErr.message };
+    }
+
+    revalidatePath("/", "layout");
+    return { ok: true, redirectTo: nextPath };
+  }
+
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
   const { data, error } = await supabase.auth.signUp({
     email: parsed.data.email,
     password: parsed.data.password,
