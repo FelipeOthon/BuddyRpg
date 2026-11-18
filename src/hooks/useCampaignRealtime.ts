@@ -19,6 +19,7 @@ import type {
   RulerBroadcastPayload,
   Scene,
   SceneElement,
+  SceneFogShape,
   Token,
   TokenDragPayload,
   ViewportSyncPayload,
@@ -32,6 +33,7 @@ export interface DatabaseBroadcastPayload {
     | "tokens"
     | "scenes"
     | "scene_elements"
+    | "scene_fog_shapes"
     | "messages"
     | "characters";
   type: "INSERT" | "UPDATE" | "DELETE";
@@ -108,6 +110,8 @@ export function useCampaignRealtime(params: {
     removeToken,
     upsertElement,
     removeElement,
+    upsertFogShape,
+    removeFogShape,
     setRemoteTokenDrag,
     setRemoteRuler,
     addPinnedRuler,
@@ -160,24 +164,31 @@ export function useCampaignRealtime(params: {
           const scene = data.record as unknown as Scene;
           upsertScene(scene);
 
-          // Se a cena acabou de ser ativada, recarrega os tokens e elementos dela via REST
+          // Se a cena acabou de ser ativada, recarrega os tokens, elementos e névoa dela via REST
           if (scene.is_active) {
-            const [{ data: sceneTokens }, { data: sceneEls }] =
-              await Promise.all([
-                supabase
-                  .from("tokens")
-                  .select("*")
-                  .eq("scene_id", scene.id),
-                supabase
-                  .from("scene_elements")
-                  .select("*")
-                  .eq("scene_id", scene.id),
-              ]);
+            const [
+              { data: sceneTokens },
+              { data: sceneEls },
+              { data: sceneFog },
+            ] = await Promise.all([
+              supabase.from("tokens").select("*").eq("scene_id", scene.id),
+              supabase
+                .from("scene_elements")
+                .select("*")
+                .eq("scene_id", scene.id),
+              supabase
+                .from("scene_fog_shapes")
+                .select("*")
+                .eq("scene_id", scene.id),
+            ]);
             if (!isUnmounted && sceneTokens) {
               sceneTokens.forEach((t) => upsertToken(t));
             }
             if (!isUnmounted && sceneEls) {
               sceneEls.forEach((el) => upsertElement(el));
+            }
+            if (!isUnmounted && sceneFog) {
+              sceneFog.forEach((f) => upsertFogShape(f));
             }
           }
         }
@@ -187,6 +198,13 @@ export function useCampaignRealtime(params: {
           if (oldId) removeElement(oldId);
         } else if (data.record) {
           upsertElement(data.record as unknown as SceneElement);
+        }
+      } else if (data.table === "scene_fog_shapes") {
+        if (data.type === "DELETE") {
+          const oldId = data.old_record?.id as string | undefined;
+          if (oldId) removeFogShape(oldId);
+        } else if (data.record) {
+          upsertFogShape(data.record as unknown as SceneFogShape);
         }
       } else if (data.table === "messages") {
         onMessageRef.current?.(
@@ -343,6 +361,8 @@ export function useCampaignRealtime(params: {
     setRemoteDrawPreview,
     upsertElement,
     removeElement,
+    upsertFogShape,
+    removeFogShape,
     setViewport,
     setCombatState,
   ]);

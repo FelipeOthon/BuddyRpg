@@ -221,6 +221,33 @@ export const updateSceneElementSchema = z.object({
   isHidden: z.boolean().optional(),
 });
 
+export const updateSceneFogSettingsSchema = z.object({
+  sceneId: z.string().uuid("Cena inválida."),
+  campaignId: z.string().uuid("Campanha inválida."),
+  fogEnabled: z.boolean(),
+  fogMode: z.enum(["static", "dynamic", "hybrid"]).optional(),
+  fogColor: z
+    .string()
+    .trim()
+    .regex(/^#[0-9a-fA-F]{6}$/, "Cor de névoa inválida.")
+    .optional(),
+});
+
+export const createFogShapeSchema = z.object({
+  sceneId: z.string().uuid("Cena inválida."),
+  campaignId: z.string().uuid("Campanha inválida."),
+  operation: z.enum(["cover", "reveal"]),
+  shapeKind: z.enum(["rect", "circle", "polygon"]),
+  data: z.object({
+    x: z.number().finite().optional(),
+    y: z.number().finite().optional(),
+    width: z.number().finite().optional(),
+    height: z.number().finite().optional(),
+    radius: z.number().finite().optional(),
+    points: z.array(z.number().finite()).max(1000).optional(),
+  }),
+});
+
 export const combatStateSchema = z.object({
   active: z.boolean(),
   round: z.number().int().min(1),

@@ -44,6 +44,7 @@ import type {
   RollResult,
   Scene,
   SceneElement,
+  SceneFogShape,
   Token,
 } from "@/types/domain";
 
@@ -62,6 +63,7 @@ export default function CampaignWorkspaceShell({
   initialScenes,
   initialTokens,
   initialElements = [],
+  initialFogShapes = [],
   initialMessages,
   initialCharacters,
   members,
@@ -72,6 +74,7 @@ export default function CampaignWorkspaceShell({
   initialScenes: Scene[];
   initialTokens: Token[];
   initialElements?: SceneElement[];
+  initialFogShapes?: SceneFogShape[];
   initialMessages: MessageRow[];
   initialCharacters: CharacterRow[];
   members: CampaignMemberInfo[];
@@ -132,8 +135,9 @@ export default function CampaignWorkspaceShell({
       scenes: initialScenes,
       tokens: initialTokens,
       elements: initialElements,
+      fogShapes: initialFogShapes,
     });
-  }, [initialScenes, initialTokens, initialElements, hydrateBoard]);
+  }, [initialScenes, initialTokens, initialElements, initialFogShapes, hydrateBoard]);
 
   const showError = useCallback((msg: string) => {
     setToastError(msg);

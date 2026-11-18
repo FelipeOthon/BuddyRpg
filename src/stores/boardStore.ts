@@ -2,6 +2,7 @@ import { create } from "zustand";
 import type { ViewportTransform } from "@/lib/board/geometry";
 import type {
   DrawPreviewPayload,
+  FogOperation,
   PinnedRuler,
   PointerBroadcastPayload,
   RollResult,
@@ -9,6 +10,7 @@ import type {
   Scene,
   SceneElement,
   SceneElementKind,
+  SceneFogShape,
   Token,
 } from "@/types/domain";
 
@@ -18,7 +20,13 @@ export type BoardTool =
   | "ruler"
   | "pointer"
   | "draw"
-  | "text";
+  | "text"
+  | "fog";
+
+export interface FogToolConfig {
+  operation: FogOperation;
+  mode: "rect" | "circle" | "polygon" | "slice";
+}
 
 export interface DrawConfig {
   kind: Extract<
@@ -90,6 +98,8 @@ interface BoardState {
   viewedSceneId: string | null;
   tokens: Token[];
   elements: SceneElement[];
+  fogShapes: SceneFogShape[];
+  fogToolConfig: FogToolConfig;
   selectedTokenId: string | null;
   selectedElementId: string | null;
   drawConfig: DrawConfig;
@@ -112,6 +122,7 @@ interface BoardState {
     scenes: Scene[];
     tokens: Token[];
     elements?: SceneElement[];
+    fogShapes?: SceneFogShape[];
   }) => void;
   setViewedSceneId: (sceneId: string) => void;
   upsertScene: (scene: Scene) => void;
@@ -121,6 +132,10 @@ interface BoardState {
   upsertElement: (element: SceneElement) => void;
   removeElement: (elementId: string) => void;
   clearDrawingsForScene: (sceneId: string) => void;
+  upsertFogShape: (shape: SceneFogShape) => void;
+  removeFogShape: (shapeId: string) => void;
+  clearFogForScene: (sceneId: string) => void;
+  setFogToolConfig: (patch: Partial<FogToolConfig>) => void;
   setSelectedTokenId: (tokenId: string | null) => void;
   setSelectedElementId: (elementId: string | null) => void;
   setDrawConfig: (patch: Partial<DrawConfig>) => void;
@@ -147,6 +162,11 @@ export const useBoardStore = create<BoardState>((set) => ({
   viewedSceneId: null,
   tokens: [],
   elements: [],
+  fogShapes: [],
+  fogToolConfig: {
+    operation: "cover",
+    mode: "rect",
+  },
   selectedTokenId: null,
   selectedElementId: null,
   drawConfig: {
@@ -172,7 +192,7 @@ export const useBoardStore = create<BoardState>((set) => ({
   setViewport: (viewport) => set({ viewport }),
   resetViewport: () => set({ viewport: { x: 40, y: 40, scale: 1 } }),
 
-  hydrateBoard: ({ scenes, tokens, elements }) =>
+  hydrateBoard: ({ scenes, tokens, elements, fogShapes }) =>
     set((state) => {
       const activeScene =
         scenes.find((s) => s.is_active) ?? scenes[0] ?? null;
@@ -190,6 +210,7 @@ export const useBoardStore = create<BoardState>((set) => ({
         viewedSceneId: nextViewedId,
         tokens,
         ...(elements !== undefined ? { elements } : {}),
+        ...(fogShapes !== undefined ? { fogShapes } : {}),
         combat: viewedScene
           ? extractCombatState(viewedScene)
           : DEFAULT_COMBAT_STATE,
@@ -324,6 +345,27 @@ export const useBoardStore = create<BoardState>((set) => ({
           el.scene_id !== sceneId ||
           (el.layer !== "drawing" && el.layer !== "text")
       ),
+    })),
+  upsertFogShape: (shape) =>
+    set((state) => {
+      const exists = state.fogShapes.some((s) => s.id === shape.id);
+      return {
+        fogShapes: exists
+          ? state.fogShapes.map((s) => (s.id === shape.id ? shape : s))
+          : [...state.fogShapes, shape],
+      };
+    }),
+  removeFogShape: (shapeId) =>
+    set((state) => ({
+      fogShapes: state.fogShapes.filter((s) => s.id !== shapeId),
+    })),
+  clearFogForScene: (sceneId) =>
+    set((state) => ({
+      fogShapes: state.fogShapes.filter((s) => s.scene_id !== sceneId),
+    })),
+  setFogToolConfig: (patch) =>
+    set((state) => ({
+      fogToolConfig: { ...state.fogToolConfig, ...patch },
     })),
   setDraggingLocalTokenId: (tokenId) => set({ draggingLocalTokenId: tokenId }),
 

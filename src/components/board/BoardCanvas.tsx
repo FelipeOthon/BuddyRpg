@@ -14,11 +14,22 @@ import {
   deleteSceneElementAction,
   updateSceneElementAction,
 } from "@/actions/elements";
+import {
+  clearSceneFogAction,
+  createFogShapeAction,
+  replaceFogShapesAction,
+  updateSceneFogSettingsAction,
+} from "@/actions/fog";
 import { createTokenAction } from "@/actions/tokens";
+import {
+  rectToFlatPolygon,
+  slicePolygonByLine,
+} from "@/lib/board/fogGeometry";
 import { uploadCampaignImage } from "@/lib/utils/storage";
 import type {
   CampaignRole,
   DrawPreviewPayload,
+  FogShapeData,
   PinnedRuler,
   Scene,
   Token,
@@ -27,6 +38,8 @@ import MapLayer from "./MapLayer";
 import GridLayer from "./GridLayer";
 import ElementsLayer, { type LocalDrawState } from "./ElementsLayer";
 import DrawingSubToolbar from "./DrawingSubToolbar";
+import FogLayer, { type LocalFogPreview } from "./FogLayer";
+import FogSubToolbar from "./FogSubToolbar";
 import TokenNode from "./TokenNode";
 import RulerLayer, { type LocalRulerState } from "./RulerLayer";
 import PointerLayer from "./PointerLayer";
@@ -85,6 +98,9 @@ export default function BoardCanvas({
   const [localRuler, setLocalRuler] = useState<LocalRulerState | null>(null);
   const [localPointer, setLocalPointer] = useState<Point2D | null>(null);
   const [localDraw, setLocalDraw] = useState<LocalDrawState | null>(null);
+  const [localFogPreview, setLocalFogPreview] =
+    useState<LocalFogPreview | null>(null);
+  const [fogPolygonPoints, setFogPolygonPoints] = useState<number[]>([]);
   const [textDraft, setTextDraft] = useState<{
     world: Point2D;
     screen: Point2D;
@@ -117,6 +133,8 @@ export default function BoardCanvas({
     setViewport,
     tokens,
     elements,
+    fogShapes,
+    fogToolConfig,
     selectedTokenId,
     selectedElementId,
     drawConfig,
@@ -126,6 +144,10 @@ export default function BoardCanvas({
     upsertElement,
     removeElement,
     clearDrawingsForScene,
+    upsertFogShape,
+    removeFogShape,
+    clearFogForScene,
+    upsertScene,
     setDraggingLocalTokenId,
     remoteTokenDrags,
     remoteRulers,
@@ -296,6 +318,30 @@ export default function BoardCanvas({
       return;
     }
 
+    if (isLeftClick && tool === "fog" && role === "gm") {
+      const pointer = stage.getPointerPosition();
+      if (!pointer) return;
+      const worldPt = screenToWorld(pointer, viewport);
+
+      if (fogToolConfig.mode === "polygon") {
+        const nextPts = [...fogPolygonPoints, worldPt.x, worldPt.y];
+        setFogPolygonPoints(nextPts);
+        setLocalFogPreview({
+          mode: "polygon",
+          operation: fogToolConfig.operation,
+          points: nextPts,
+        });
+      } else {
+        setLocalFogPreview({
+          mode: fogToolConfig.mode,
+          operation: fogToolConfig.operation,
+          start: worldPt,
+          end: worldPt,
+        });
+      }
+      return;
+    }
+
     if (e.target === stage) {
       setSelectedTokenId(null);
       setSelectedElementId(null);
@@ -322,6 +368,16 @@ export default function BoardCanvas({
       const worldPt = screenToWorld(pointer, viewport);
       setLocalPointer(worldPt);
       onPointerBroadcast?.(worldPt, true);
+      return;
+    }
+
+    if (localFogPreview && localFogPreview.mode !== "polygon") {
+      const stage = stageRef.current;
+      if (!stage) return;
+      const pointer = stage.getPointerPosition();
+      if (!pointer) return;
+      const worldPt = screenToWorld(pointer, viewport);
+      setLocalFogPreview((prev) => (prev ? { ...prev, end: worldPt } : null));
       return;
     }
 
@@ -391,6 +447,113 @@ export default function BoardCanvas({
     if (localPointer) {
       onPointerBroadcast?.(localPointer, false);
       setLocalPointer(null);
+    }
+    if (localFogPreview && localFogPreview.mode !== "polygon") {
+      const finishedFog = localFogPreview;
+      setLocalFogPreview(null);
+      if (finishedFog.start && finishedFog.end) {
+        const dx = finishedFog.end.x - finishedFog.start.x;
+        const dy = finishedFog.end.y - finishedFog.start.y;
+        if (Math.hypot(dx, dy) > 10) {
+          if (finishedFog.mode === "slice") {
+            const coverTargets = fogShapes.filter(
+              (s) =>
+                s.scene_id === scene.id &&
+                s.operation === "cover" &&
+                (s.shape_kind === "rect" || s.shape_kind === "polygon")
+            );
+            const deleteIds: string[] = [];
+            const newShapes: Array<{
+              operation: "cover";
+              shapeKind: "polygon";
+              data: FogShapeData;
+            }> = [];
+
+            for (const target of coverTargets) {
+              const d = (target.data ?? {}) as FogShapeData;
+              const poly =
+                target.shape_kind === "rect"
+                  ? rectToFlatPolygon(
+                      d.x ?? 0,
+                      d.y ?? 0,
+                      d.width ?? 0,
+                      d.height ?? 0
+                    )
+                  : (d.points ?? []);
+              const sliced = slicePolygonByLine(
+                poly,
+                finishedFog.start,
+                finishedFog.end
+              );
+              if (sliced) {
+                deleteIds.push(target.id);
+                newShapes.push(
+                  {
+                    operation: "cover",
+                    shapeKind: "polygon",
+                    data: { points: sliced[0] },
+                  },
+                  {
+                    operation: "cover",
+                    shapeKind: "polygon",
+                    data: { points: sliced[1] },
+                  }
+                );
+              }
+            }
+
+            if (deleteIds.length > 0) {
+              deleteIds.forEach((id) => removeFogShape(id));
+              void replaceFogShapesAction({
+                sceneId: scene.id,
+                campaignId: scene.campaign_id,
+                deleteIds,
+                newShapes,
+              }).then((res) => {
+                if (res.ok && res.shapes) {
+                  res.shapes.forEach((sh) => upsertFogShape(sh));
+                }
+              });
+            }
+          } else {
+            const shapeKind = finishedFog.mode === "circle" ? "circle" : "rect";
+            const data: FogShapeData =
+              shapeKind === "circle"
+                ? {
+                    x: finishedFog.start.x,
+                    y: finishedFog.start.y,
+                    radius: Math.hypot(dx, dy),
+                  }
+                : {
+                    x: Math.min(finishedFog.start.x, finishedFog.end.x),
+                    y: Math.min(finishedFog.start.y, finishedFog.end.y),
+                    width: Math.abs(dx),
+                    height: Math.abs(dy),
+                  };
+
+            if (!scene.fog_enabled) {
+              upsertScene({ ...scene, fog_enabled: true });
+              void updateSceneFogSettingsAction({
+                sceneId: scene.id,
+                campaignId: scene.campaign_id,
+                fogEnabled: true,
+              });
+            }
+
+            void createFogShapeAction({
+              sceneId: scene.id,
+              campaignId: scene.campaign_id,
+              operation: finishedFog.operation,
+              shapeKind,
+              data,
+            }).then((res) => {
+              if (res.ok && res.shape) {
+                upsertFogShape(res.shape);
+              }
+            });
+          }
+        }
+      }
     }
     if (localDraw) {
       const finished = localDraw;
@@ -666,6 +829,103 @@ export default function BoardCanvas({
     });
   };
 
+  const finishFogPolygon = () => {
+    if (role !== "gm" || fogPolygonPoints.length < 6) {
+      setFogPolygonPoints([]);
+      setLocalFogPreview(null);
+      return;
+    }
+    const pts = fogPolygonPoints;
+    const op = fogToolConfig.operation;
+    setFogPolygonPoints([]);
+    setLocalFogPreview(null);
+
+    if (!scene.fog_enabled) {
+      upsertScene({ ...scene, fog_enabled: true });
+      void updateSceneFogSettingsAction({
+        sceneId: scene.id,
+        campaignId: scene.campaign_id,
+        fogEnabled: true,
+      });
+    }
+
+    void createFogShapeAction({
+      sceneId: scene.id,
+      campaignId: scene.campaign_id,
+      operation: op,
+      shapeKind: "polygon",
+      data: { points: pts },
+    }).then((res) => {
+      if (res.ok && res.shape) {
+        upsertFogShape(res.shape);
+      }
+    });
+  };
+
+  const handleToggleFogEnabled = (enabled: boolean) => {
+    if (role !== "gm") return;
+    upsertScene({ ...scene, fog_enabled: enabled });
+    void updateSceneFogSettingsAction({
+      sceneId: scene.id,
+      campaignId: scene.campaign_id,
+      fogEnabled: enabled,
+    });
+  };
+
+  const handleChangeFogMode = (fogMode: Scene["fog_mode"]) => {
+    if (role !== "gm") return;
+    upsertScene({ ...scene, fog_mode: fogMode });
+    void updateSceneFogSettingsAction({
+      sceneId: scene.id,
+      campaignId: scene.campaign_id,
+      fogEnabled: scene.fog_enabled,
+      fogMode,
+    });
+  };
+
+  const handleCoverAllFog = () => {
+    if (role !== "gm") return;
+    const existingIds = fogShapes
+      .filter((s) => s.scene_id === scene.id)
+      .map((s) => s.id);
+    clearFogForScene(scene.id);
+    upsertScene({ ...scene, fog_enabled: true });
+    void updateSceneFogSettingsAction({
+      sceneId: scene.id,
+      campaignId: scene.campaign_id,
+      fogEnabled: true,
+    });
+    void replaceFogShapesAction({
+      sceneId: scene.id,
+      campaignId: scene.campaign_id,
+      deleteIds: existingIds,
+      newShapes: [
+        {
+          operation: "cover",
+          shapeKind: "rect",
+          data: {
+            x: 0,
+            y: 0,
+            width: scene.map_width || 2000,
+            height: scene.map_height || 2000,
+          },
+        },
+      ],
+    }).then((res) => {
+      if (res.ok && res.shapes) {
+        res.shapes.forEach((sh) => upsertFogShape(sh));
+      }
+    });
+  };
+
+  const handleClearAllFog = () => {
+    if (role !== "gm") return;
+    setFogPolygonPoints([]);
+    setLocalFogPreview(null);
+    clearFogForScene(scene.id);
+    void clearSceneFogAction({ sceneId: scene.id });
+  };
+
   const selectedElement =
     elements.find((el) => el.id === selectedElementId) ?? null;
 
@@ -677,7 +937,8 @@ export default function BoardCanvas({
         : tool === "ruler" ||
             tool === "pointer" ||
             tool === "draw" ||
-            tool === "text"
+            tool === "text" ||
+            tool === "fog"
           ? "cursor-crosshair"
           : "cursor-default";
 
@@ -739,6 +1000,16 @@ export default function BoardCanvas({
                 ...patch,
               });
             }}
+          />
+          <FogSubToolbar
+            scene={scene}
+            isGm={role === "gm"}
+            polygonPointCount={fogPolygonPoints.length}
+            onFinishPolygon={finishFogPolygon}
+            onToggleFogEnabled={handleToggleFogEnabled}
+            onChangeFogMode={handleChangeFogMode}
+            onCoverAll={handleCoverAllFog}
+            onClearAll={handleClearAllFog}
           />
         </>
       ) : (
@@ -879,7 +1150,17 @@ export default function BoardCanvas({
           })}
         </Layer>
 
-        {/* Camada 4: Régua de Medição e Pointer Laser */}
+        {/* Camada 4: Névoa de Guerra (opaca p/ jogadores, 48% translúcida p/ GM) */}
+        <Layer opacity={role === "gm" ? 0.48 : 1} listening={false}>
+          <FogLayer
+            scene={scene}
+            fogShapes={fogShapes}
+            localPreview={localFogPreview}
+            isGm={role === "gm"}
+          />
+        </Layer>
+
+        {/* Camada 5: Régua de Medição e Pointer Laser */}
         <Layer>
           <RulerLayer
             localRuler={localRuler}

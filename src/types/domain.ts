@@ -2,6 +2,9 @@ import type {
   CampaignRole,
   Database,
   DistanceRule,
+  FogMode,
+  FogOperation,
+  FogShapeKind,
   GridType,
   SceneElementKind,
   SceneElementLayer,
@@ -10,6 +13,9 @@ import type {
 export type {
   CampaignRole,
   DistanceRule,
+  FogMode,
+  FogOperation,
+  FogShapeKind,
   GridType,
   SceneElementKind,
   SceneElementLayer,
@@ -22,6 +28,8 @@ export type CampaignMember =
 export type Scene = Database["public"]["Tables"]["scenes"]["Row"];
 export type SceneElement =
   Database["public"]["Tables"]["scene_elements"]["Row"];
+export type SceneFogShape =
+  Database["public"]["Tables"]["scene_fog_shapes"]["Row"];
 export type Token = Database["public"]["Tables"]["tokens"]["Row"];
 export type CharacterRow = Database["public"]["Tables"]["characters"]["Row"];
 export type MessageRow = Database["public"]["Tables"]["messages"]["Row"];
@@ -230,4 +238,13 @@ export interface DrawPreviewPayload {
   rotation: number;
   data: SceneElementData;
   active: boolean;
+}
+
+export interface FogShapeData {
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
+  radius?: number;
+  points?: number[];
 }

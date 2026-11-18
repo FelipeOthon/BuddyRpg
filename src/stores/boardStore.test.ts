@@ -20,6 +20,9 @@ function makeScene(overrides: Partial<Scene> = {}): Scene {
     distance_rule: "chebyshev",
     is_active: true,
     combat_state: null,
+    fog_enabled: false,
+    fog_mode: "static",
+    fog_color: "#09090b",
     created_at: "2026-01-01T00:00:00.000Z",
     ...overrides,
   };
@@ -57,6 +60,7 @@ describe("useBoardStore", () => {
       viewedSceneId: null,
       tokens: [],
       elements: [],
+      fogShapes: [],
       selectedTokenId: null,
       selectedElementId: null,
       remoteDrawPreviews: {},

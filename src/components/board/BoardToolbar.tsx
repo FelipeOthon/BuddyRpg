@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import {
+  CloudFog,
   Crosshair,
   Dices,
   EyeOff,
@@ -101,6 +102,7 @@ export default function BoardToolbar({
       else if (key === "q") setTool("pointer");
       else if (key === "d") setTool("draw");
       else if (key === "t") setTool("text");
+      else if (key === "f" && isGm) setTool("fog");
       else if (key === "0") resetViewport();
     };
 
@@ -159,6 +161,16 @@ export default function BoardToolbar({
       shortcut: "T",
       icon: Type,
     },
+    ...(isGm
+      ? [
+          {
+            id: "fog" as BoardTool,
+            label: "Névoa de Guerra",
+            shortcut: "F",
+            icon: CloudFog,
+          },
+        ]
+      : []),
   ];
 
   return (

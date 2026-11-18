@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   createCampaignSchema,
+  createFogShapeSchema,
   createSceneSchema,
   createTokenSchema,
   joinCampaignSchema,
@@ -124,5 +125,15 @@ describe("validation schemas", () => {
     expect(scene.map_height).toBe(200);
     expect(scene.grid_opacity).toBe(1);
     expect(scene.meters_per_cell).toBe(0.1);
+
+    expect(
+      createFogShapeSchema.safeParse({
+        sceneId: validUuid,
+        campaignId: validUuid,
+        operation: "cover",
+        shapeKind: "rect",
+        data: { x: 0, y: 0, width: 500, height: 500 },
+      }).success
+    ).toBe(true);
   });
 });

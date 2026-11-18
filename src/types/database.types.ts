@@ -25,6 +25,9 @@ export type SceneElementKind =
   | "text"
   | "image"
   | "aura";
+export type FogMode = "static" | "dynamic" | "hybrid";
+export type FogOperation = "cover" | "reveal";
+export type FogShapeKind = "rect" | "circle" | "polygon";
 
 export interface Database {
   public: {
@@ -136,6 +139,9 @@ export interface Database {
           distance_rule: DistanceRule;
           is_active: boolean;
           combat_state: Json | null;
+          fog_enabled: boolean;
+          fog_mode: FogMode;
+          fog_color: string;
           created_at: string;
         };
         Insert: {
@@ -155,6 +161,9 @@ export interface Database {
           distance_rule?: DistanceRule;
           is_active?: boolean;
           combat_state?: Json | null;
+          fog_enabled?: boolean;
+          fog_mode?: FogMode;
+          fog_color?: string;
           created_at?: string;
         };
         Update: {
@@ -174,11 +183,59 @@ export interface Database {
           distance_rule?: DistanceRule;
           is_active?: boolean;
           combat_state?: Json | null;
+          fog_enabled?: boolean;
+          fog_mode?: FogMode;
+          fog_color?: string;
           created_at?: string;
         };
         Relationships: [
           {
             foreignKeyName: "scenes_campaign_id_fkey";
+            columns: ["campaign_id"];
+            isOneToOne: false;
+            referencedRelation: "campaigns";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      scene_fog_shapes: {
+        Row: {
+          id: string;
+          scene_id: string;
+          campaign_id: string;
+          operation: FogOperation;
+          shape_kind: FogShapeKind;
+          data: Json;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          scene_id: string;
+          campaign_id: string;
+          operation: FogOperation;
+          shape_kind: FogShapeKind;
+          data?: Json;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          scene_id?: string;
+          campaign_id?: string;
+          operation?: FogOperation;
+          shape_kind?: FogShapeKind;
+          data?: Json;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "scene_fog_shapes_scene_id_fkey";
+            columns: ["scene_id"];
+            isOneToOne: false;
+            referencedRelation: "scenes";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "scene_fog_shapes_campaign_id_fkey";
             columns: ["campaign_id"];
             isOneToOne: false;
             referencedRelation: "campaigns";
