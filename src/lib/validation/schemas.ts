@@ -54,7 +54,8 @@ const safeImageUrlSchema = z
     (v) =>
       v.startsWith("https://") ||
       v.startsWith("http://") ||
-      v.startsWith("data:image/"),
+      v.startsWith("data:image/") ||
+      (v.startsWith("/icons/") && !v.includes("..")),
     "URL de imagem inválida."
   );
 

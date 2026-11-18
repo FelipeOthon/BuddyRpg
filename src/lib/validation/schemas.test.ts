@@ -74,6 +74,24 @@ describe("validation schemas", () => {
         imageUrl: "javascript:alert(1)",
       }).success
     ).toBe(false);
+
+    expect(
+      createTokenSchema.safeParse({
+        sceneId: validUuid,
+        campaignId: validUuid,
+        name: "Beholder",
+        imageUrl: "/icons/abberations/beholder.png",
+      }).success
+    ).toBe(true);
+
+    expect(
+      createTokenSchema.safeParse({
+        sceneId: validUuid,
+        campaignId: validUuid,
+        name: "Traversal",
+        imageUrl: "/icons/../secrets.png",
+      }).success
+    ).toBe(false);
   });
 
   it("validates token stats update and scene schemas", () => {
