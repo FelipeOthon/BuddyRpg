@@ -244,7 +244,7 @@ export const updateSceneFogSettingsSchema = z.object({
   fogColor: z
     .string()
     .trim()
-    .regex(/^#[0-9a-fA-F]{6}$/, "Cor de névoa inválida.")
+    .regex(/^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/, "Cor de névoa inválida.")
     .optional(),
 });
 

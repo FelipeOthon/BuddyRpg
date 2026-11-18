@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef } from "react";
 import type Konva from "konva";
 import { Circle, Group, Line, Rect } from "react-konva";
+import { parseFogColor } from "@/lib/board/fogColor";
 import type { Point2D } from "@/lib/board/geometry";
 import { getSmokeTextures } from "@/lib/board/smokeTexture";
 import type {
@@ -26,6 +27,7 @@ function renderFogShape(params: {
   shape_kind: "rect" | "circle" | "polygon";
   data: FogShapeData;
   fogColor: string;
+  backingOpacity: number;
   isGm: boolean;
   smokeDense: HTMLCanvasElement | null;
   smokeWisps: HTMLCanvasElement | null;
@@ -36,6 +38,7 @@ function renderFogShape(params: {
     shape_kind,
     data: d,
     fogColor,
+    backingOpacity,
     isGm,
     smokeDense,
     smokeWisps,
@@ -88,12 +91,12 @@ function renderFogShape(params: {
     );
   }
 
-  // Modo Cobrir (cover): base opaca + 3 camadas FBM volumétricas em direções distintas
+  // Modo Cobrir (cover): base escura + 3 camadas FBM volumétricas em direções distintas
   const borderStroke = isGm ? "rgba(245, 158, 11, 0.35)" : undefined;
   const baseShadow = {
     shadowColor: fogColor,
     shadowBlur: 36,
-    shadowOpacity: 0.95,
+    shadowOpacity: 0.95 * backingOpacity,
   };
 
   if (shape_kind === "rect") {
@@ -110,6 +113,7 @@ function renderFogShape(params: {
           width={w}
           height={h}
           fill={fogColor}
+          opacity={backingOpacity}
           stroke={borderStroke}
           strokeWidth={borderStroke ? 1.5 : 0}
           dash={borderStroke ? [8, 6] : undefined}
@@ -168,6 +172,7 @@ function renderFogShape(params: {
           y={cy}
           radius={r}
           fill={fogColor}
+          opacity={backingOpacity}
           stroke={borderStroke}
           strokeWidth={borderStroke ? 1.5 : 0}
           dash={borderStroke ? [8, 6] : undefined}
@@ -218,6 +223,7 @@ function renderFogShape(params: {
         points={pts}
         closed
         fill={fogColor}
+        opacity={backingOpacity}
         stroke={borderStroke}
         strokeWidth={borderStroke ? 1.5 : 0}
         dash={borderStroke ? [8, 6] : undefined}
@@ -272,7 +278,12 @@ export default function FogLayer({
   const groupRef = useRef<Konva.Group>(null);
   const smokeTextures = useMemo(() => getSmokeTextures(), []);
 
-  const fogColor = scene.fog_color || "#070a12";
+  const { hex: fogColor, opacity: sceneFogOpacity } = parseFogColor(
+    scene.fog_color
+  );
+  // Em intensidades menores que 100%, reduz o fundo escuro para destacar os redemoinhos de fumaça
+  const backingOpacity =
+    sceneFogOpacity >= 0.99 ? 1 : Math.max(0.28, sceneFogOpacity * 0.72);
   const sceneShapes = fogShapes.filter((s) => s.scene_id === scene.id);
   const coverShapes = sceneShapes.filter((s) => s.operation === "cover");
   const revealShapes = sceneShapes.filter((s) => s.operation === "reveal");
@@ -337,6 +348,7 @@ export default function FogLayer({
               shape_kind: s.shape_kind,
               data: (s.data ?? {}) as FogShapeData,
               fogColor,
+              backingOpacity,
               isGm,
               smokeDense: smokeTextures?.dense ?? null,
               smokeWisps: smokeTextures?.wisps ?? null,
@@ -349,6 +361,7 @@ export default function FogLayer({
               shape_kind: s.shape_kind,
               data: (s.data ?? {}) as FogShapeData,
               fogColor,
+              backingOpacity,
               isGm,
               smokeDense: smokeTextures?.dense ?? null,
               smokeWisps: smokeTextures?.wisps ?? null,

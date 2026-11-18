@@ -28,6 +28,7 @@ import {
   updateSceneEnvironmentAction,
 } from "@/actions/lighting";
 import { createTokenAction } from "@/actions/tokens";
+import { formatFogColor, parseFogColor } from "@/lib/board/fogColor";
 import {
   rectToFlatPolygon,
   slicePolygonByLine,
@@ -147,6 +148,8 @@ export default function BoardCanvas({
     elements,
     fogShapes,
     fogToolConfig,
+    gmFogOpacity,
+    setGmFogOpacity,
     walls,
     wallToolType,
     gmPreviewVision,
@@ -954,6 +957,61 @@ export default function BoardCanvas({
     });
   };
 
+  const { hex: fogHex, opacity: sceneFogOpacity } = parseFogColor(
+    scene.fog_color
+  );
+  const fogSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const envSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (role !== "gm") return;
+    try {
+      const saved = window.localStorage.getItem("buddyrpg:gmFogOpacity");
+      if (saved !== null) {
+        const num = Number(saved);
+        if (Number.isFinite(num)) setGmFogOpacity(num);
+      }
+    } catch {
+      // ignora erro de acesso ao localStorage
+    }
+  }, [role, setGmFogOpacity]);
+
+  useEffect(() => {
+    if (role !== "gm") return;
+    try {
+      window.localStorage.setItem("buddyrpg:gmFogOpacity", String(gmFogOpacity));
+    } catch {
+      // ignora erro de acesso ao localStorage
+    }
+  }, [role, gmFogOpacity]);
+
+  useEffect(() => {
+    return () => {
+      if (fogSaveTimerRef.current) clearTimeout(fogSaveTimerRef.current);
+      if (envSaveTimerRef.current) clearTimeout(envSaveTimerRef.current);
+    };
+  }, []);
+
+  const handleChangeFogIntensity = (opacity: number) => {
+    if (role !== "gm") return;
+    const nextFogColor = formatFogColor(fogHex, opacity);
+    upsertScene({ ...scene, fog_color: nextFogColor });
+    if (fogSaveTimerRef.current) clearTimeout(fogSaveTimerRef.current);
+    const targetSceneId = scene.id;
+    const targetCampaignId = scene.campaign_id;
+    const targetFogEnabled = scene.fog_enabled;
+    const targetFogMode = scene.fog_mode;
+    fogSaveTimerRef.current = setTimeout(() => {
+      void updateSceneFogSettingsAction({
+        sceneId: targetSceneId,
+        campaignId: targetCampaignId,
+        fogEnabled: targetFogEnabled,
+        fogMode: targetFogMode,
+        fogColor: nextFogColor,
+      });
+    }, 220);
+  };
+
   const handleCoverAllFog = () => {
     if (role !== "gm") return;
     const existingIds = fogShapes
@@ -1077,9 +1135,11 @@ export default function BoardCanvas({
             scene={scene}
             isGm={role === "gm"}
             polygonPointCount={fogPolygonPoints.length}
+            fogIntensity={sceneFogOpacity}
             onFinishPolygon={finishFogPolygon}
             onToggleFogEnabled={handleToggleFogEnabled}
             onChangeFogMode={handleChangeFogMode}
+            onChangeFogIntensity={handleChangeFogIntensity}
             onCoverAll={handleCoverAllFog}
             onClearAll={handleClearAllFog}
           />
@@ -1103,11 +1163,16 @@ export default function BoardCanvas({
                   ? { weather_intensity: patch.weatherIntensity }
                   : {}),
               });
-              void updateSceneEnvironmentAction({
-                sceneId: scene.id,
-                campaignId: scene.campaign_id,
-                ...patch,
-              });
+              if (envSaveTimerRef.current) clearTimeout(envSaveTimerRef.current);
+              const targetSceneId = scene.id;
+              const targetCampaignId = scene.campaign_id;
+              envSaveTimerRef.current = setTimeout(() => {
+                void updateSceneEnvironmentAction({
+                  sceneId: targetSceneId,
+                  campaignId: targetCampaignId,
+                  ...patch,
+                });
+              }, 200);
             }}
           />
         </>
@@ -1265,7 +1330,14 @@ export default function BoardCanvas({
         </Layer>
 
         {/* Camada 4B: Névoa de Guerra Estática (sobrepõe iluminação em modo híbrido) */}
-        <Layer opacity={role === "gm" ? 0.62 : 1} listening={false}>
+        <Layer
+          opacity={
+            role === "gm"
+              ? Math.max(0.05, Math.min(1, sceneFogOpacity * gmFogOpacity))
+              : sceneFogOpacity
+          }
+          listening={false}
+        >
           <FogLayer
             scene={scene}
             fogShapes={fogShapes}

@@ -108,6 +108,27 @@ export default function WallEnvSubToolbar({
           <option value="embers">🔥 Brasas (Embers)</option>
           <option value="ash">🌋 Cinzas</option>
         </select>
+        {scene.weather_preset && scene.weather_preset !== "none" && (
+          <>
+            <input
+              type="range"
+              min={0.05}
+              max={1}
+              step={0.05}
+              value={scene.weather_intensity ?? 0.5}
+              onChange={(e) =>
+                onUpdateEnvironment({
+                  weatherIntensity: Number(e.target.value),
+                })
+              }
+              title="Intensidade do Clima"
+              className="w-16 accent-sky-400"
+            />
+            <span className="w-8 font-mono text-[10px] text-sky-200">
+              {Math.round((scene.weather_intensity ?? 0.5) * 100)}%
+            </span>
+          </>
+        )}
       </div>
 
       <button

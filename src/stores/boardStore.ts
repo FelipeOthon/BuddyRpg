@@ -104,6 +104,7 @@ interface BoardState {
   elements: SceneElement[];
   fogShapes: SceneFogShape[];
   fogToolConfig: FogToolConfig;
+  gmFogOpacity: number;
   walls: SceneWall[];
   wallToolType: WallType;
   gmPreviewVision: boolean;
@@ -145,6 +146,7 @@ interface BoardState {
   removeFogShape: (shapeId: string) => void;
   clearFogForScene: (sceneId: string) => void;
   setFogToolConfig: (patch: Partial<FogToolConfig>) => void;
+  setGmFogOpacity: (opacity: number) => void;
   upsertWall: (wall: SceneWall) => void;
   removeWall: (wallId: string) => void;
   clearWallsForScene: (sceneId: string) => void;
@@ -183,6 +185,7 @@ export const useBoardStore = create<BoardState>((set) => ({
     operation: "cover",
     mode: "rect",
   },
+  gmFogOpacity: 0.62,
   walls: [],
   wallToolType: "wall",
   gmPreviewVision: false,
@@ -388,6 +391,10 @@ export const useBoardStore = create<BoardState>((set) => ({
     set((state) => ({
       fogToolConfig: { ...state.fogToolConfig, ...patch },
     })),
+  setGmFogOpacity: (opacity) =>
+    set({
+      gmFogOpacity: Math.min(Math.max(Math.round(opacity * 100) / 100, 0.05), 1),
+    }),
   upsertWall: (wall) =>
     set((state) => {
       const exists = state.walls.some((w) => w.id === wall.id);

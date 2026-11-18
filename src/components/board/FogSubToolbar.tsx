@@ -17,22 +17,32 @@ export default function FogSubToolbar({
   scene,
   isGm,
   polygonPointCount,
+  fogIntensity,
   onFinishPolygon,
   onToggleFogEnabled,
   onChangeFogMode,
+  onChangeFogIntensity,
   onCoverAll,
   onClearAll,
 }: {
   scene: Scene;
   isGm: boolean;
   polygonPointCount: number;
+  fogIntensity: number;
   onFinishPolygon: () => void;
   onToggleFogEnabled: (enabled: boolean) => void;
   onChangeFogMode: (mode: FogMode) => void;
+  onChangeFogIntensity: (opacity: number) => void;
   onCoverAll: () => void;
   onClearAll: () => void;
 }) {
-  const { tool, fogToolConfig, setFogToolConfig } = useBoardStore();
+  const {
+    tool,
+    fogToolConfig,
+    setFogToolConfig,
+    gmFogOpacity,
+    setGmFogOpacity,
+  } = useBoardStore();
 
   if (!isGm || tool !== "fog") {
     return null;
@@ -150,6 +160,46 @@ export default function FogSubToolbar({
         <Eraser className="h-3.5 w-3.5" />
         Limpar Névoa
       </button>
+
+      <div className="mx-0.5 h-4 w-px bg-zinc-800" />
+
+      <div
+        className="flex items-center gap-1.5"
+        title="Intensidade da Névoa para toda a mesa (5% quase invisível · 100% fechada)"
+      >
+        <span className="text-[11px] text-zinc-400">Intensidade:</span>
+        <input
+          type="range"
+          min={0.05}
+          max={1}
+          step={0.05}
+          value={fogIntensity}
+          onChange={(e) => onChangeFogIntensity(Number(e.target.value))}
+          className="w-20 accent-amber-400"
+        />
+        <span className="w-8 font-mono text-[10px] text-amber-200">
+          {Math.round(fogIntensity * 100)}%
+        </span>
+      </div>
+
+      <div
+        className="flex items-center gap-1.5"
+        title="Visibilidade da Névoa só para você (Mestre): 5% quase invisível · 100% igual jogador"
+      >
+        <span className="text-[11px] text-zinc-400">Visão GM:</span>
+        <input
+          type="range"
+          min={0.05}
+          max={1}
+          step={0.05}
+          value={gmFogOpacity}
+          onChange={(e) => setGmFogOpacity(Number(e.target.value))}
+          className="w-16 accent-sky-400"
+        />
+        <span className="w-8 font-mono text-[10px] text-sky-200">
+          {Math.round(gmFogOpacity * 100)}%
+        </span>
+      </div>
     </div>
   );
 }
