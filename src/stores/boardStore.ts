@@ -23,6 +23,19 @@ export interface ActiveDice3DRoll {
   ts: number;
 }
 
+export interface CombatantEntry {
+  tokenId: string;
+  name: string;
+  initiative: number;
+}
+
+export interface CombatStatePayload {
+  active: boolean;
+  round: number;
+  turnIndex: number;
+  combatants: CombatantEntry[];
+}
+
 interface BoardState {
   tool: BoardTool;
   viewport: ViewportTransform;
@@ -35,6 +48,7 @@ interface BoardState {
   remoteRulers: Record<string, RulerBroadcastPayload>;
   dice3dEnabled: boolean;
   activeDice3dRoll: ActiveDice3DRoll | null;
+  combat: CombatStatePayload;
 
   setTool: (tool: BoardTool) => void;
   setViewport: (viewport: ViewportTransform) => void;
@@ -52,6 +66,7 @@ interface BoardState {
   setRemoteRuler: (payload: RulerBroadcastPayload) => void;
   setDice3dEnabled: (enabled: boolean) => void;
   triggerDice3dRoll: (roll: ActiveDice3DRoll | null) => void;
+  setCombatState: (combat: CombatStatePayload) => void;
 }
 
 export const useBoardStore = create<BoardState>((set) => ({
@@ -66,6 +81,12 @@ export const useBoardStore = create<BoardState>((set) => ({
   remoteRulers: {},
   dice3dEnabled: true,
   activeDice3dRoll: null,
+  combat: {
+    active: false,
+    round: 1,
+    turnIndex: 0,
+    combatants: [],
+  },
 
   setTool: (tool) => set({ tool }),
   setViewport: (viewport) => set({ viewport }),
@@ -198,4 +219,5 @@ export const useBoardStore = create<BoardState>((set) => ({
 
   setDice3dEnabled: (enabled) => set({ dice3dEnabled: enabled }),
   triggerDice3dRoll: (roll) => set({ activeDice3dRoll: roll }),
+  setCombatState: (combat) => set({ combat }),
 }));

@@ -258,6 +258,9 @@ export default function MapStudioModal({
                     <option value="waterdeep_tavern">
                       🍺 Taverna de Águas Profundas (Waterdeep)
                     </option>
+                    <option value="dragon_lair">
+                      🌋 Covil do Dragão Vermelho (Magma &amp; Tesouro)
+                    </option>
                   </select>
                 </div>
 

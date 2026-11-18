@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import BoardClient from "@/components/board/BoardClient";
 import Dice3DOverlay from "@/components/board/Dice3DOverlay";
+import InitiativeTrackerBar from "@/components/board/InitiativeTrackerBar";
 import ChatPanel from "@/components/chat/ChatPanel";
 import SceneManager from "@/components/scenes/SceneManager";
 import CharacterSheetModal from "@/components/sheets/CharacterSheetModal";
@@ -179,7 +180,12 @@ export default function CampaignWorkspaceShell({
     [members]
   );
 
-  const { status, broadcastTokenDrag, broadcastRuler } = useCampaignRealtime({
+  const {
+    status,
+    broadcastTokenDrag,
+    broadcastRuler,
+    broadcastCombatState,
+  } = useCampaignRealtime({
     campaignId: campaign.id,
     currentUserId,
     currentUsername,
@@ -383,6 +389,11 @@ export default function CampaignWorkspaceShell({
                 onTokenDragBroadcast={handleTokenDragBroadcast}
                 onTokenDragCommit={handleTokenDragCommit}
                 onRulerBroadcast={handleRulerBroadcast}
+              />
+              <InitiativeTrackerBar
+                scene={viewedScene}
+                role={role}
+                onBroadcastCombat={broadcastCombatState}
               />
               <Dice3DOverlay />
               <SelectedTokenHud

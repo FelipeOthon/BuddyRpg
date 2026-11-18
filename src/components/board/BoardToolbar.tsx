@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import {
   Dices,
   Grid,
@@ -9,10 +9,17 @@ import {
   MousePointer,
   RotateCcw,
   Ruler,
+  Volume2,
+  VolumeX,
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
 import { clamp } from "@/lib/board/geometry";
+import {
+  setAmbientSoundscape,
+  setSoundEnabled,
+  type AmbiencePreset,
+} from "@/lib/audio/soundEngine";
 import { useBoardStore, type BoardTool } from "@/stores/boardStore";
 import type { Scene } from "@/types/domain";
 
@@ -32,6 +39,8 @@ export default function BoardToolbar({
     dice3dEnabled,
     setDice3dEnabled,
   } = useBoardStore();
+  const [audioOn, setAudioOn] = useState(true);
+  const [ambience, setAmbience] = useState<AmbiencePreset>("none");
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -143,6 +152,43 @@ export default function BoardToolbar({
             3D {dice3dEnabled ? "ON" : "OFF"}
           </span>
         </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            const next = !audioOn;
+            setAudioOn(next);
+            setSoundEnabled(next);
+          }}
+          title="Ativar/Desativar efeitos sonoros dos dados e ambiência"
+          className={`flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs font-semibold transition ${
+            audioOn
+              ? "text-emerald-300 hover:bg-zinc-800"
+              : "text-zinc-500 hover:bg-zinc-800"
+          }`}
+        >
+          {audioOn ? (
+            <Volume2 className="h-3.5 w-3.5" />
+          ) : (
+            <VolumeX className="h-3.5 w-3.5" />
+          )}
+        </button>
+
+        <select
+          value={ambience}
+          onChange={(e) => {
+            const val = e.target.value as AmbiencePreset;
+            setAmbience(val);
+            setAmbientSoundscape(val);
+          }}
+          title="Som Ambiente da Mesa"
+          className="hidden rounded-lg border border-zinc-800 bg-zinc-900 px-2 py-1 text-[11px] font-medium text-amber-200 lg:block"
+        >
+          <option value="none">🎵 Ambiência: Silêncio</option>
+          <option value="tavern_fire">🍺 Taverna (Lareira)</option>
+          <option value="sword_coast_rain">🌧️ Chuva na Costa da Espada</option>
+          <option value="undermountain_dungeon">🕯️ Masmorra Profunda</option>
+        </select>
       </div>
 
       {/* Informações da Cena */}

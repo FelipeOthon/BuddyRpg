@@ -6,12 +6,13 @@ import {
 } from "./mapGenerator";
 
 describe("procedural map generator (Forgotten Realms biomes)", () => {
-  it("generates deterministic layouts for the same seed across all 4 biomes", () => {
+  it("generates deterministic layouts for the same seed across all 5 biomes", () => {
     const biomes = [
       "undermountain",
       "underdark",
       "cormyr_forest",
       "waterdeep_tavern",
+      "dragon_lair",
     ] as const;
 
     for (const biome of biomes) {
@@ -35,8 +36,8 @@ describe("procedural map generator (Forgotten Realms biomes)", () => {
     }
   });
 
-  it("includes 4 Forgotten Realms classic presets and builds AI top-down URLs", () => {
-    expect(FORGOTTEN_REALMS_PRESETS).toHaveLength(4);
+  it("includes 5 Forgotten Realms classic presets and builds AI top-down URLs", () => {
+    expect(FORGOTTEN_REALMS_PRESETS).toHaveLength(5);
     const url = buildAiBattlemapUrl(
       "templo élfico na floresta",
       1400,

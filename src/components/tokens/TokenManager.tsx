@@ -4,15 +4,24 @@ import { useState, useTransition } from "react";
 import {
   AlertCircle,
   Crosshair,
+  Flame,
   Heart,
   ImagePlus,
   Loader2,
   Plus,
+  Skull,
+  Sparkles,
+  Swords,
   Trash2,
   User,
 } from "lucide-react";
 import { createTokenAction, deleteTokenAction } from "@/actions/tokens";
 import type { CampaignMemberInfo } from "@/components/campaign/CampaignWorkspaceShell";
+import {
+  FORGOTTEN_REALMS_BESTIARY,
+  type BestiaryCategory,
+  type BestiaryEntry,
+} from "@/lib/assets/bestiary";
 import { snapToGrid } from "@/lib/board/geometry";
 import { uploadCampaignImage } from "@/lib/utils/storage";
 import { useBoardStore } from "@/stores/boardStore";
@@ -44,6 +53,11 @@ export default function TokenManager({
     setViewport,
   } = useBoardStore();
 
+  const [mode, setMode] = useState<"bestiary" | "custom">("bestiary");
+  const [cat, setCat] = useState<BestiaryCategory>(
+    isGm ? "monsters" : "heroes"
+  );
+
   const [name, setName] = useState("");
   const [size, setSize] = useState(1);
   const [hpCurrent, setHpCurrent] = useState(20);
@@ -56,6 +70,44 @@ export default function TokenManager({
   const [isPending, startTransition] = useTransition();
 
   const sceneTokens = tokens.filter((t) => t.scene_id === scene.id);
+
+  const computeNextSpawnPos = () =>
+    snapToGrid(
+      {
+        x: scene.grid_size * (2 + (sceneTokens.length % 6)),
+        y: scene.grid_size * (2 + Math.floor(sceneTokens.length / 6)),
+      },
+      scene.grid_size,
+      scene.snap_to_grid
+    );
+
+  const handleSpawnBestiaryEntry = (entry: BestiaryEntry) => {
+    setError(null);
+    const spawnPos = computeNextSpawnPos();
+
+    startTransition(async () => {
+      const res = await createTokenAction({
+        sceneId: scene.id,
+        campaignId,
+        name: entry.name,
+        imageUrl: entry.avatarUrl,
+        size: entry.size,
+        hpCurrent: entry.hpMax,
+        hpMax: entry.hpMax,
+        ownerId: isGm ? ownerId : currentUserId,
+        posX: spawnPos.x,
+        posY: spawnPos.y,
+      });
+
+      if (!res.ok || !res.token) {
+        setError(res.error ?? "Erro ao invocar token.");
+        return;
+      }
+
+      upsertToken(res.token);
+      setSelectedTokenId(res.token.id);
+    });
+  };
 
   const handleAvatarUpload = async (
     e: React.ChangeEvent<HTMLInputElement>
@@ -82,19 +134,12 @@ export default function TokenManager({
     }
   };
 
-  const handleCreateToken = (e: React.FormEvent) => {
+  const handleCreateCustomToken = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
     setError(null);
 
-    const spawnPos = snapToGrid(
-      {
-        x: scene.grid_size * (2 + (sceneTokens.length % 5)),
-        y: scene.grid_size * (2 + Math.floor(sceneTokens.length / 5)),
-      },
-      scene.grid_size,
-      scene.snap_to_grid
-    );
+    const spawnPos = computeNextSpawnPos();
 
     startTransition(async () => {
       const res = await createTokenAction({
@@ -149,6 +194,10 @@ export default function TokenManager({
     });
   };
 
+  const filteredBestiary = FORGOTTEN_REALMS_BESTIARY.filter(
+    (b) => b.category === cat
+  );
+
   return (
     <div className="space-y-4">
       {error && (
@@ -158,161 +207,272 @@ export default function TokenManager({
         </div>
       )}
 
-      {/* Formulário para Criar Novo Token */}
-      <form
-        onSubmit={handleCreateToken}
-        className="space-y-3 rounded-2xl border border-zinc-800 bg-zinc-950/80 p-3.5"
-      >
-        <h4 className="text-xs font-bold uppercase tracking-wider text-amber-400">
-          Adicionar Token em {scene.name}
-        </h4>
-
-        <div>
-          <label className="mb-1 block text-[11px] text-zinc-400">
-            Nome do Token / Criatura
-          </label>
-          <input
-            type="text"
-            required
-            maxLength={80}
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Ex: Guerreiro Thorin / Goblin Arqueiro"
-            className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2 text-xs text-white placeholder-zinc-500 outline-none focus:border-amber-500"
-          />
-        </div>
-
-        <div className="grid grid-cols-3 gap-2">
-          <div>
-            <label className="mb-1 block text-[11px] text-zinc-400">
-              Tamanho
-            </label>
-            <select
-              value={size}
-              onChange={(e) => setSize(Number(e.target.value))}
-              className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-2 py-1.5 text-xs text-white"
-            >
-              <option value={1}>1x1 (Médio)</option>
-              <option value={2}>2x2 (Grande)</option>
-              <option value={3}>3x3 (Enorme)</option>
-              <option value={4}>4x4 (Imenso)</option>
-            </select>
-          </div>
-          <div>
-            <label className="mb-1 block text-[11px] text-zinc-400">
-              HP Atual
-            </label>
-            <input
-              type="number"
-              min={0}
-              max={9999}
-              value={hpCurrent}
-              onChange={(e) => setHpCurrent(Number(e.target.value))}
-              className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-2.5 py-1.5 text-xs text-white"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-[11px] text-zinc-400">
-              HP Máximo
-            </label>
-            <input
-              type="number"
-              min={1}
-              max={9999}
-              value={hpMax}
-              onChange={(e) => {
-                const v = Number(e.target.value);
-                setHpMax(v);
-                if (hpCurrent > v) setHpCurrent(v);
-              }}
-              className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-2.5 py-1.5 text-xs text-white"
-            />
-          </div>
-        </div>
-
-        {characters.length > 0 && (
-          <div>
-            <label className="mb-1 block text-[11px] text-zinc-400">
-              Vincular Ficha de Personagem (Opcional)
-            </label>
-            <select
-              value={characterId}
-              onChange={(e) => {
-                const cid = e.target.value;
-                setCharacterId(cid);
-                const found = characters.find((c) => c.id === cid);
-                if (found) {
-                  if (!name.trim()) setName(found.name);
-                  if (isGm && found.owner_id) setOwnerId(found.owner_id);
-                }
-              }}
-              className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-2.5 py-1.5 text-xs text-white"
-            >
-              <option value="">Sem ficha vinculada</option>
-              {characters.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
-
-        {isGm && (
-          <div>
-            <label className="mb-1 block text-[11px] text-zinc-400">
-              Controlado por (Dono do Token)
-            </label>
-            <select
-              value={ownerId}
-              onChange={(e) => setOwnerId(e.target.value)}
-              className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-2.5 py-1.5 text-xs text-white"
-            >
-              {members.map((m) => (
-                <option key={m.userId} value={m.userId}>
-                  {m.username} ({m.role === "gm" ? "Mestre" : "Jogador"})
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
-
-        <div className="flex items-center gap-2">
-          <label className="flex flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-xl border border-dashed border-zinc-700 bg-zinc-900/70 px-3 py-2 text-xs font-medium text-zinc-300 transition hover:border-amber-500 hover:text-amber-300">
-            {isUploading ? (
-              <>
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                Enviando...
-              </>
-            ) : (
-              <>
-                <ImagePlus className="h-3.5 w-3.5 text-amber-400" />
-                {imageUrl ? "Avatar Pronto (Trocar)" : "Avatar Opcional (Max 2MB)"}
-              </>
-            )}
-            <input
-              type="file"
-              accept="image/png,image/jpeg,image/webp"
-              onChange={handleAvatarUpload}
-              disabled={isUploading}
-              className="hidden"
-            />
-          </label>
-        </div>
-
+      {/* Alternador: Catálogo Ilustrado vs Criar Customizado */}
+      <div className="grid grid-cols-2 rounded-xl border border-amber-500/25 bg-zinc-950 p-1">
         <button
-          type="submit"
-          disabled={isPending || isUploading}
-          className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-amber-500 px-4 py-2 text-xs font-semibold text-zinc-950 transition hover:bg-amber-400 disabled:opacity-60"
+          type="button"
+          onClick={() => setMode("bestiary")}
+          className={`flex items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs font-bold transition ${
+            mode === "bestiary"
+              ? "bg-amber-500 text-zinc-950 shadow"
+              : "text-zinc-400 hover:text-amber-200"
+          }`}
         >
-          {isPending ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <Plus className="h-3.5 w-3.5" />
-          )}
-          Colocar Token no Tabuleiro
+          <Sparkles className="h-3.5 w-3.5" />
+          Bestiário &amp; Assets
         </button>
-      </form>
+        <button
+          type="button"
+          onClick={() => setMode("custom")}
+          className={`flex items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs font-bold transition ${
+            mode === "custom"
+              ? "bg-amber-500 text-zinc-950 shadow"
+              : "text-zinc-400 hover:text-amber-200"
+          }`}
+        >
+          <Plus className="h-3.5 w-3.5" />
+          Token Customizado
+        </button>
+      </div>
+
+      {/* MODO 1: BESTIÁRIO & GALERIA DE ASSETS EM 1 CLIQUE */}
+      {mode === "bestiary" && (
+        <div className="fr-card space-y-3 rounded-2xl p-3.5">
+          <div className="grid grid-cols-3 gap-1 rounded-xl border border-zinc-800 bg-zinc-950 p-1">
+            <button
+              type="button"
+              onClick={() => setCat("heroes")}
+              className={`flex items-center justify-center gap-1 rounded-lg py-1.5 text-[11px] font-bold transition ${
+                cat === "heroes"
+                  ? "bg-zinc-800 text-amber-300"
+                  : "text-zinc-400 hover:text-white"
+              }`}
+            >
+              <Swords className="h-3 w-3" />
+              Heróis
+            </button>
+            <button
+              type="button"
+              onClick={() => setCat("monsters")}
+              className={`flex items-center justify-center gap-1 rounded-lg py-1.5 text-[11px] font-bold transition ${
+                cat === "monsters"
+                  ? "bg-zinc-800 text-rose-300"
+                  : "text-zinc-400 hover:text-white"
+              }`}
+            >
+              <Skull className="h-3 w-3" />
+              Monstros
+            </button>
+            <button
+              type="button"
+              onClick={() => setCat("spells_props")}
+              className={`flex items-center justify-center gap-1 rounded-lg py-1.5 text-[11px] font-bold transition ${
+                cat === "spells_props"
+                  ? "bg-zinc-800 text-sky-300"
+                  : "text-zinc-400 hover:text-white"
+              }`}
+            >
+              <Flame className="h-3 w-3" />
+              Magias/Props
+            </button>
+          </div>
+
+          <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
+            {filteredBestiary.map((entry) => (
+              <div
+                key={entry.id}
+                className="flex items-center justify-between gap-2 rounded-xl border border-zinc-800/90 bg-zinc-950/85 p-2 transition hover:border-amber-500/40"
+              >
+                <div className="flex min-w-0 items-center gap-2.5">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={entry.avatarUrl}
+                    alt={entry.name}
+                    className="h-10 w-10 shrink-0 rounded-full object-cover shadow"
+                  />
+                  <div className="min-w-0">
+                    <p className="truncate text-xs font-bold text-amber-100">
+                      {entry.name}
+                    </p>
+                    <p className="truncate text-[10px] text-zinc-400">
+                      {entry.subtitle}
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  disabled={isPending}
+                  onClick={() => handleSpawnBestiaryEntry(entry)}
+                  className="shrink-0 rounded-xl bg-amber-500 px-2.5 py-1.5 text-[11px] font-bold text-zinc-950 transition hover:bg-amber-400 disabled:opacity-50"
+                >
+                  + Invocar
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* MODO 2: FORMULÁRIO DE TOKEN CUSTOMIZADO */}
+      {mode === "custom" && (
+        <form
+          onSubmit={handleCreateCustomToken}
+          className="fr-card space-y-3 rounded-2xl p-3.5"
+        >
+          <h4 className="font-display text-xs font-bold uppercase tracking-wider text-amber-300">
+            Criar Token em {scene.name}
+          </h4>
+
+          <div>
+            <label className="mb-1 block text-[11px] text-zinc-400">
+              Nome do Token / Criatura
+            </label>
+            <input
+              type="text"
+              required
+              maxLength={80}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Ex: Drizzt Do'Urden / Guarda de Waterdeep"
+              className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2 text-xs text-white placeholder-zinc-500 outline-none focus:border-amber-500"
+            />
+          </div>
+
+          <div className="grid grid-cols-3 gap-2">
+            <div>
+              <label className="mb-1 block text-[11px] text-zinc-400">
+                Tamanho
+              </label>
+              <select
+                value={size}
+                onChange={(e) => setSize(Number(e.target.value))}
+                className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-2 py-1.5 text-xs text-white"
+              >
+                <option value={1}>1x1 (Médio)</option>
+                <option value={2}>2x2 (Grande)</option>
+                <option value={3}>3x3 (Enorme)</option>
+                <option value={4}>4x4 (Imenso)</option>
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-[11px] text-zinc-400">
+                HP Atual
+              </label>
+              <input
+                type="number"
+                min={0}
+                max={9999}
+                value={hpCurrent}
+                onChange={(e) => setHpCurrent(Number(e.target.value))}
+                className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-2.5 py-1.5 text-xs text-white"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-[11px] text-zinc-400">
+                HP Máximo
+              </label>
+              <input
+                type="number"
+                min={1}
+                max={9999}
+                value={hpMax}
+                onChange={(e) => {
+                  const v = Number(e.target.value);
+                  setHpMax(v);
+                  if (hpCurrent > v) setHpCurrent(v);
+                }}
+                className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-2.5 py-1.5 text-xs text-white"
+              />
+            </div>
+          </div>
+
+          {characters.length > 0 && (
+            <div>
+              <label className="mb-1 block text-[11px] text-zinc-400">
+                Vincular Ficha de Personagem (Opcional)
+              </label>
+              <select
+                value={characterId}
+                onChange={(e) => {
+                  const cid = e.target.value;
+                  setCharacterId(cid);
+                  const found = characters.find((c) => c.id === cid);
+                  if (found) {
+                    if (!name.trim()) setName(found.name);
+                    if (isGm && found.owner_id) setOwnerId(found.owner_id);
+                  }
+                }}
+                className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-2.5 py-1.5 text-xs text-white"
+              >
+                <option value="">Sem ficha vinculada</option>
+                {characters.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {isGm && (
+            <div>
+              <label className="mb-1 block text-[11px] text-zinc-400">
+                Controlado por (Dono do Token)
+              </label>
+              <select
+                value={ownerId}
+                onChange={(e) => setOwnerId(e.target.value)}
+                className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-2.5 py-1.5 text-xs text-white"
+              >
+                {members.map((m) => (
+                  <option key={m.userId} value={m.userId}>
+                    {m.username} ({m.role === "gm" ? "Mestre" : "Jogador"})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          <div className="flex items-center gap-2">
+            <label className="flex flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-xl border border-dashed border-zinc-700 bg-zinc-900/70 px-3 py-2 text-xs font-medium text-zinc-300 transition hover:border-amber-500 hover:text-amber-300">
+              {isUploading ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  Enviando...
+                </>
+              ) : (
+                <>
+                  <ImagePlus className="h-3.5 w-3.5 text-amber-400" />
+                  {imageUrl
+                    ? "Avatar Pronto (Trocar)"
+                    : "Enviar Avatar do PC (Max 2MB)"}
+                </>
+              )}
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                onChange={handleAvatarUpload}
+                disabled={isUploading}
+                className="hidden"
+              />
+            </label>
+          </div>
+
+          <button
+            type="submit"
+            disabled={isPending || isUploading}
+            className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-amber-500 px-4 py-2 text-xs font-bold text-zinc-950 transition hover:bg-amber-400 disabled:opacity-60"
+          >
+            {isPending ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Plus className="h-3.5 w-3.5" />
+            )}
+            Colocar Token no Tabuleiro
+          </button>
+        </form>
+      )}
 
       {/* Lista de Tokens na Cena */}
       <div className="space-y-2">
@@ -321,8 +481,8 @@ export default function TokenManager({
         </h4>
         {sceneTokens.length === 0 ? (
           <p className="rounded-xl border border-dashed border-zinc-800 p-4 text-center text-xs text-zinc-500">
-            Nenhum token criado ainda (o tabuleiro exibe um token de
-            demonstração local até você criar o primeiro token).
+            Nenhum token criado ainda (escolha um Herói ou Monstro acima para
+            invocar no mapa!).
           </p>
         ) : (
           <ul className="space-y-1.5">

@@ -2,7 +2,8 @@ export type MapBiome =
   | "undermountain"
   | "underdark"
   | "cormyr_forest"
-  | "waterdeep_tavern";
+  | "waterdeep_tavern"
+  | "dragon_lair";
 
 export type TileType =
   | "wall"
@@ -87,6 +88,15 @@ export const FORGOTTEN_REALMS_PRESETS: MapPreset[] = [
     cols: 26,
     rows: 18,
     seed: "menzoberranzan-cavern-04",
+  },
+  {
+    id: "red_dragon_hoard",
+    title: "Covil do Dragão Vermelho (Montanha da Espada)",
+    subtitle: "Salão vulcânico cercado por rios de magma, pilares de obsidiana e tesouro",
+    biome: "dragon_lair",
+    cols: 26,
+    rows: 18,
+    seed: "klauth-red-dragon-lair-05",
   },
 ];
 
@@ -381,6 +391,60 @@ function generateWaterdeepTavern(
   return { tiles, props };
 }
 
+function generateDragonLair(
+  cols: number,
+  rows: number,
+  rng: () => number
+): { tiles: TileType[][]; props: MapProp[] } {
+  const tiles = createGrid(cols, rows, "lava");
+  const props: MapProp[] = [];
+
+  // Bordas de parede vulcânica
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
+      if (y === 0 || y === rows - 1 || x === 0 || x === cols - 1) {
+        tiles[y]![x] = "wall";
+      }
+    }
+  }
+
+  // Plataforma central do covil + passarela de entrada
+  const cx = Math.floor(cols / 2);
+  const cy = Math.floor(rows / 2);
+  for (let y = 2; y < rows - 2; y++) {
+    for (let x = 2; x < cols - 2; x++) {
+      const dist = Math.hypot((x - cx) * 0.8, y - cy);
+      if (dist < Math.min(cols, rows) * 0.36 || Math.abs(x - cx) <= 1) {
+        tiles[y]![x] = "floor";
+      }
+    }
+  }
+
+  // Tesouro e altar central do Dragão + pilares e braseiros
+  props.push({ x: cx, y: cy, type: "altar" });
+  props.push({ x: cx - 1, y: cy, type: "chest" });
+  props.push({ x: cx + 1, y: cy, type: "chest" });
+  props.push({ x: cx, y: cy - 1, type: "chest" });
+
+  props.push({ x: cx - 4, y: cy - 3, type: "pillar" });
+  props.push({ x: cx + 4, y: cy - 3, type: "pillar" });
+  props.push({ x: cx - 4, y: cy + 3, type: "pillar" });
+  props.push({ x: cx + 4, y: cy + 3, type: "pillar" });
+
+  props.push({ x: cx - 3, y: cy - 2, type: "campfire" });
+  props.push({ x: cx + 3, y: cy - 2, type: "campfire" });
+
+  for (let y = 2; y < rows - 2; y++) {
+    for (let x = 2; x < cols - 2; x++) {
+      if (tiles[y]![x] === "floor" && rng() < 0.04) {
+        props.push({ x, y, type: "rock" });
+      }
+    }
+  }
+
+  return { tiles, props };
+}
+
 export function generateProceduralMap(params: {
   biome: MapBiome;
   cols: number;
@@ -398,6 +462,8 @@ export function generateProceduralMap(params: {
     built = generateCormyrForest(cols, rows, rng);
   } else if (params.biome === "waterdeep_tavern") {
     built = generateWaterdeepTavern(cols, rows, rng);
+  } else if (params.biome === "dragon_lair") {
+    built = generateDragonLair(cols, rows, rng);
   } else {
     built = generateUndermountain(cols, rows, rng);
   }

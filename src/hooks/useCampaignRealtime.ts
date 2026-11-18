@@ -4,7 +4,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import type { Point2D } from "@/lib/board/geometry";
-import { useBoardStore } from "@/stores/boardStore";
+import {
+  useBoardStore,
+  type CombatStatePayload,
+} from "@/stores/boardStore";
 import type {
   CampaignRole,
   CharacterRow,
@@ -94,6 +97,7 @@ export function useCampaignRealtime(params: {
     removeToken,
     setRemoteTokenDrag,
     setRemoteRuler,
+    setCombatState,
   } = useBoardStore();
 
   useEffect(() => {
@@ -206,6 +210,11 @@ export function useCampaignRealtime(params: {
         if (!p || !p.userId || p.userId === currentUserId) return;
         setRemoteRuler(p);
       })
+      .on("broadcast", { event: "combat:state" }, (msg) => {
+        const p = msg.payload as CombatStatePayload | undefined;
+        if (!p) return;
+        setCombatState(p);
+      })
       .subscribe((st) => {
         if (isUnmounted) return;
         if (st === "SUBSCRIBED") setStatus("connected");
@@ -257,6 +266,7 @@ export function useCampaignRealtime(params: {
     removeToken,
     setRemoteTokenDrag,
     setRemoteRuler,
+    setCombatState,
   ]);
 
   const lastDragSentRef = useRef(0);
@@ -311,9 +321,18 @@ export function useCampaignRealtime(params: {
     [currentUserId, currentUsername]
   );
 
+  const broadcastCombatState = useCallback((combat: CombatStatePayload) => {
+    mainChannelRef.current?.send({
+      type: "broadcast",
+      event: "combat:state",
+      payload: combat,
+    });
+  }, []);
+
   return {
     status,
     broadcastTokenDrag,
     broadcastRuler,
+    broadcastCombatState,
   };
 }

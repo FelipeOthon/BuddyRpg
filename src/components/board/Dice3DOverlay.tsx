@@ -8,6 +8,7 @@ import {
   stepDiceSimulation,
   type SimulatedDie3D,
 } from "@/lib/dice/dice3dEngine";
+import { playDiceRollSound } from "@/lib/audio/soundEngine";
 import { useBoardStore } from "@/stores/boardStore";
 
 function drawSingleDie3D(ctx: CanvasRenderingContext2D, d: SimulatedDie3D) {
@@ -149,6 +150,22 @@ export default function Dice3DOverlay() {
       width,
       height
     );
+
+    let soundNat20 = false;
+    let soundNat1 = false;
+    for (const t of activeDice3dRoll.roll.terms) {
+      if (t.type === "dice" && t.sides === 20) {
+        for (const r of t.rolls) {
+          if (r.kept && r.v === 20) soundNat20 = true;
+          if (r.kept && r.v === 1) soundNat1 = true;
+        }
+      }
+    }
+    playDiceRollSound({
+      diceCount: dice.length,
+      hasNat20: soundNat20,
+      hasNat1: soundNat1,
+    });
 
     let rafId = 0;
     const startTime = performance.now();
