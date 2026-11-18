@@ -28,6 +28,14 @@ export type SceneElementKind =
 export type FogMode = "static" | "dynamic" | "hybrid";
 export type FogOperation = "cover" | "reveal";
 export type FogShapeKind = "rect" | "circle" | "polygon";
+export type WeatherPreset =
+  | "none"
+  | "rain"
+  | "snow"
+  | "fog_mist"
+  | "embers"
+  | "ash";
+export type WallType = "wall" | "door" | "window";
 
 export interface Database {
   public: {
@@ -142,6 +150,9 @@ export interface Database {
           fog_enabled: boolean;
           fog_mode: FogMode;
           fog_color: string;
+          ambient_light: number;
+          weather_preset: WeatherPreset;
+          weather_intensity: number;
           created_at: string;
         };
         Insert: {
@@ -164,6 +175,9 @@ export interface Database {
           fog_enabled?: boolean;
           fog_mode?: FogMode;
           fog_color?: string;
+          ambient_light?: number;
+          weather_preset?: WeatherPreset;
+          weather_intensity?: number;
           created_at?: string;
         };
         Update: {
@@ -186,6 +200,9 @@ export interface Database {
           fog_enabled?: boolean;
           fog_mode?: FogMode;
           fog_color?: string;
+          ambient_light?: number;
+          weather_preset?: WeatherPreset;
+          weather_intensity?: number;
           created_at?: string;
         };
         Relationships: [
@@ -236,6 +253,60 @@ export interface Database {
           },
           {
             foreignKeyName: "scene_fog_shapes_campaign_id_fkey";
+            columns: ["campaign_id"];
+            isOneToOne: false;
+            referencedRelation: "campaigns";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      scene_walls: {
+        Row: {
+          id: string;
+          scene_id: string;
+          campaign_id: string;
+          x1: number;
+          y1: number;
+          x2: number;
+          y2: number;
+          wall_type: WallType;
+          is_open: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          scene_id: string;
+          campaign_id: string;
+          x1: number;
+          y1: number;
+          x2: number;
+          y2: number;
+          wall_type?: WallType;
+          is_open?: boolean;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          scene_id?: string;
+          campaign_id?: string;
+          x1?: number;
+          y1?: number;
+          x2?: number;
+          y2?: number;
+          wall_type?: WallType;
+          is_open?: boolean;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "scene_walls_scene_id_fkey";
+            columns: ["scene_id"];
+            isOneToOne: false;
+            referencedRelation: "scenes";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "scene_walls_campaign_id_fkey";
             columns: ["campaign_id"];
             isOneToOne: false;
             referencedRelation: "campaigns";
@@ -385,6 +456,9 @@ export interface Database {
           conditions: string[];
           ring_color: string | null;
           is_locked: boolean;
+          vision_range: number;
+          light_radius: number;
+          light_color: string;
           updated_at: string;
         };
         Insert: {
@@ -404,6 +478,9 @@ export interface Database {
           conditions?: string[];
           ring_color?: string | null;
           is_locked?: boolean;
+          vision_range?: number;
+          light_radius?: number;
+          light_color?: string;
           updated_at?: string;
         };
         Update: {
@@ -423,6 +500,9 @@ export interface Database {
           conditions?: string[];
           ring_color?: string | null;
           is_locked?: boolean;
+          vision_range?: number;
+          light_radius?: number;
+          light_color?: string;
           updated_at?: string;
         };
         Relationships: [

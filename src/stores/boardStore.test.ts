@@ -23,6 +23,9 @@ function makeScene(overrides: Partial<Scene> = {}): Scene {
     fog_enabled: false,
     fog_mode: "static",
     fog_color: "#09090b",
+    ambient_light: 1,
+    weather_preset: "none",
+    weather_intensity: 0.5,
     created_at: "2026-01-01T00:00:00.000Z",
     ...overrides,
   };
@@ -46,6 +49,9 @@ function makeToken(overrides: Partial<Token> = {}): Token {
     conditions: [],
     ring_color: null,
     is_locked: false,
+    vision_range: 18,
+    light_radius: 0,
+    light_color: "#fbbf24",
     updated_at: "2026-01-01T00:00:10.000Z",
     ...overrides,
   };
@@ -61,6 +67,8 @@ describe("useBoardStore", () => {
       tokens: [],
       elements: [],
       fogShapes: [],
+      walls: [],
+      fxBursts: [],
       selectedTokenId: null,
       selectedElementId: null,
       remoteDrawPreviews: {},

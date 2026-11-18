@@ -39,12 +39,14 @@ import type {
   CampaignRole,
   CharacterRow,
   DrawPreviewPayload,
+  FxBurstPreset,
   MessageRow,
   PinnedRuler,
   RollResult,
   Scene,
   SceneElement,
   SceneFogShape,
+  SceneWall,
   Token,
 } from "@/types/domain";
 
@@ -64,6 +66,7 @@ export default function CampaignWorkspaceShell({
   initialTokens,
   initialElements = [],
   initialFogShapes = [],
+  initialWalls = [],
   initialMessages,
   initialCharacters,
   members,
@@ -75,6 +78,7 @@ export default function CampaignWorkspaceShell({
   initialTokens: Token[];
   initialElements?: SceneElement[];
   initialFogShapes?: SceneFogShape[];
+  initialWalls?: SceneWall[];
   initialMessages: MessageRow[];
   initialCharacters: CharacterRow[];
   members: CampaignMemberInfo[];
@@ -136,8 +140,16 @@ export default function CampaignWorkspaceShell({
       tokens: initialTokens,
       elements: initialElements,
       fogShapes: initialFogShapes,
+      walls: initialWalls,
     });
-  }, [initialScenes, initialTokens, initialElements, initialFogShapes, hydrateBoard]);
+  }, [
+    initialScenes,
+    initialTokens,
+    initialElements,
+    initialFogShapes,
+    initialWalls,
+    hydrateBoard,
+  ]);
 
   const showError = useCallback((msg: string) => {
     setToastError(msg);
@@ -270,6 +282,7 @@ export default function CampaignWorkspaceShell({
     broadcastPointer,
     broadcastViewportSync,
     broadcastDrawPreview,
+    broadcastFxBurst,
     broadcastCombatState,
   } = useCampaignRealtime({
     campaignId: campaign.id,
@@ -389,6 +402,14 @@ export default function CampaignWorkspaceShell({
       broadcastDrawPreview(viewedScene.id, preview);
     },
     [viewedScene, broadcastDrawPreview]
+  );
+
+  const handleFxBurst = useCallback(
+    (x: number, y: number, preset: FxBurstPreset, radius?: number) => {
+      if (!viewedScene) return;
+      broadcastFxBurst(viewedScene.id, x, y, preset, radius);
+    },
+    [viewedScene, broadcastFxBurst]
   );
 
   const toggleSidebar = () => {
@@ -597,6 +618,7 @@ export default function CampaignWorkspaceShell({
                   role={role}
                   characters={characters}
                   onOpenCharacter={(c) => setOpenCharacterId(c.id)}
+                  onFxBurst={handleFxBurst}
                   onError={showError}
                 />
               )}

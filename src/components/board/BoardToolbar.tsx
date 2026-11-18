@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import {
+  BrickWall,
   CloudFog,
   Crosshair,
   Dices,
@@ -103,6 +104,7 @@ export default function BoardToolbar({
       else if (key === "d") setTool("draw");
       else if (key === "t") setTool("text");
       else if (key === "f" && isGm) setTool("fog");
+      else if (key === "p" && isGm) setTool("wall");
       else if (key === "0") resetViewport();
     };
 
@@ -168,6 +170,12 @@ export default function BoardToolbar({
             label: "Névoa de Guerra",
             shortcut: "F",
             icon: CloudFog,
+          },
+          {
+            id: "wall" as BoardTool,
+            label: "Paredes & Clima",
+            shortcut: "P",
+            icon: BrickWall,
           },
         ]
       : []),

@@ -12,6 +12,8 @@ import type {
   CampaignRole,
   CharacterRow,
   DrawPreviewPayload,
+  FxBurstPayload,
+  FxBurstPreset,
   MessageRow,
   PinnedRuler,
   PinnedRulerBroadcastPayload,
@@ -20,6 +22,7 @@ import type {
   Scene,
   SceneElement,
   SceneFogShape,
+  SceneWall,
   Token,
   TokenDragPayload,
   ViewportSyncPayload,
@@ -34,6 +37,7 @@ export interface DatabaseBroadcastPayload {
     | "scenes"
     | "scene_elements"
     | "scene_fog_shapes"
+    | "scene_walls"
     | "messages"
     | "characters";
   type: "INSERT" | "UPDATE" | "DELETE";
@@ -112,6 +116,9 @@ export function useCampaignRealtime(params: {
     removeElement,
     upsertFogShape,
     removeFogShape,
+    upsertWall,
+    removeWall,
+    triggerFxBurst,
     setRemoteTokenDrag,
     setRemoteRuler,
     addPinnedRuler,
@@ -170,6 +177,7 @@ export function useCampaignRealtime(params: {
               { data: sceneTokens },
               { data: sceneEls },
               { data: sceneFog },
+              { data: sceneWalls },
             ] = await Promise.all([
               supabase.from("tokens").select("*").eq("scene_id", scene.id),
               supabase
@@ -178,6 +186,10 @@ export function useCampaignRealtime(params: {
                 .eq("scene_id", scene.id),
               supabase
                 .from("scene_fog_shapes")
+                .select("*")
+                .eq("scene_id", scene.id),
+              supabase
+                .from("scene_walls")
                 .select("*")
                 .eq("scene_id", scene.id),
             ]);
@@ -189,6 +201,9 @@ export function useCampaignRealtime(params: {
             }
             if (!isUnmounted && sceneFog) {
               sceneFog.forEach((f) => upsertFogShape(f));
+            }
+            if (!isUnmounted && sceneWalls) {
+              sceneWalls.forEach((w) => upsertWall(w));
             }
           }
         }
@@ -205,6 +220,13 @@ export function useCampaignRealtime(params: {
           if (oldId) removeFogShape(oldId);
         } else if (data.record) {
           upsertFogShape(data.record as unknown as SceneFogShape);
+        }
+      } else if (data.table === "scene_walls") {
+        if (data.type === "DELETE") {
+          const oldId = data.old_record?.id as string | undefined;
+          if (oldId) removeWall(oldId);
+        } else if (data.record) {
+          upsertWall(data.record as unknown as SceneWall);
         }
       } else if (data.table === "messages") {
         onMessageRef.current?.(
@@ -291,6 +313,11 @@ export function useCampaignRealtime(params: {
         if (!p || !p.userId || p.userId === currentUserId) return;
         setRemoteDrawPreview(p);
       })
+      .on("broadcast", { event: "fx:burst" }, (msg) => {
+        const p = msg.payload as FxBurstPayload | undefined;
+        if (!p || !p.id || p.userId === currentUserId) return;
+        triggerFxBurst(p);
+      })
       .on("broadcast", { event: "combat:state" }, (msg) => {
         const p = msg.payload as
           | (CombatStatePayload & { userId?: string })
@@ -363,6 +390,9 @@ export function useCampaignRealtime(params: {
     removeElement,
     upsertFogShape,
     removeFogShape,
+    upsertWall,
+    removeWall,
+    triggerFxBurst,
     setViewport,
     setCombatState,
   ]);
@@ -531,6 +561,28 @@ export function useCampaignRealtime(params: {
     [currentUserId]
   );
 
+  const broadcastFxBurst = useCallback(
+    (sceneId: string, x: number, y: number, preset: FxBurstPreset, radius = 140) => {
+      const payload: FxBurstPayload = {
+        id: `fx-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        userId: currentUserId,
+        sceneId,
+        x,
+        y,
+        preset,
+        radius,
+        ts: Date.now(),
+      };
+      triggerFxBurst(payload);
+      mainChannelRef.current?.send({
+        type: "broadcast",
+        event: "fx:burst",
+        payload,
+      });
+    },
+    [currentUserId, triggerFxBurst]
+  );
+
   return {
     status,
     broadcastTokenDrag,
@@ -539,6 +591,7 @@ export function useCampaignRealtime(params: {
     broadcastPointer,
     broadcastViewportSync,
     broadcastDrawPreview,
+    broadcastFxBurst,
     broadcastCombatState,
   };
 }

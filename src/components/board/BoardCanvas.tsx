@@ -20,6 +20,13 @@ import {
   replaceFogShapesAction,
   updateSceneFogSettingsAction,
 } from "@/actions/fog";
+import {
+  clearSceneWallsAction,
+  createSceneWallAction,
+  deleteSceneWallAction,
+  toggleDoorAction,
+  updateSceneEnvironmentAction,
+} from "@/actions/lighting";
 import { createTokenAction } from "@/actions/tokens";
 import {
   rectToFlatPolygon,
@@ -40,6 +47,10 @@ import ElementsLayer, { type LocalDrawState } from "./ElementsLayer";
 import DrawingSubToolbar from "./DrawingSubToolbar";
 import FogLayer, { type LocalFogPreview } from "./FogLayer";
 import FogSubToolbar from "./FogSubToolbar";
+import LightingLayer from "./LightingLayer";
+import WallsLayer, { type LocalWallPreview } from "./WallsLayer";
+import WallEnvSubToolbar from "./WallEnvSubToolbar";
+import WeatherOverlay from "./WeatherOverlay";
 import TokenNode from "./TokenNode";
 import RulerLayer, { type LocalRulerState } from "./RulerLayer";
 import PointerLayer from "./PointerLayer";
@@ -101,6 +112,7 @@ export default function BoardCanvas({
   const [localFogPreview, setLocalFogPreview] =
     useState<LocalFogPreview | null>(null);
   const [fogPolygonPoints, setFogPolygonPoints] = useState<number[]>([]);
+  const [localWall, setLocalWall] = useState<LocalWallPreview | null>(null);
   const [textDraft, setTextDraft] = useState<{
     world: Point2D;
     screen: Point2D;
@@ -135,6 +147,9 @@ export default function BoardCanvas({
     elements,
     fogShapes,
     fogToolConfig,
+    walls,
+    wallToolType,
+    gmPreviewVision,
     selectedTokenId,
     selectedElementId,
     drawConfig,
@@ -147,6 +162,9 @@ export default function BoardCanvas({
     upsertFogShape,
     removeFogShape,
     clearFogForScene,
+    upsertWall,
+    removeWall,
+    clearWallsForScene,
     upsertScene,
     setDraggingLocalTokenId,
     remoteTokenDrags,
@@ -201,6 +219,9 @@ export default function BoardCanvas({
     conditions: [],
     ring_color: null,
     is_locked: false,
+    vision_range: 18,
+    light_radius: 0,
+    light_color: "#fbbf24",
     updated_at: new Date().toISOString(),
   };
 
@@ -342,6 +363,20 @@ export default function BoardCanvas({
       return;
     }
 
+    if (isLeftClick && tool === "wall" && role === "gm") {
+      const pointer = stage.getPointerPosition();
+      if (!pointer) return;
+      const worldPt = screenToWorld(pointer, viewport);
+      setLocalWall({
+        x1: worldPt.x,
+        y1: worldPt.y,
+        x2: worldPt.x,
+        y2: worldPt.y,
+        wallType: wallToolType,
+      });
+      return;
+    }
+
     if (e.target === stage) {
       setSelectedTokenId(null);
       setSelectedElementId(null);
@@ -378,6 +413,18 @@ export default function BoardCanvas({
       if (!pointer) return;
       const worldPt = screenToWorld(pointer, viewport);
       setLocalFogPreview((prev) => (prev ? { ...prev, end: worldPt } : null));
+      return;
+    }
+
+    if (localWall) {
+      const stage = stageRef.current;
+      if (!stage) return;
+      const pointer = stage.getPointerPosition();
+      if (!pointer) return;
+      const worldPt = screenToWorld(pointer, viewport);
+      setLocalWall((prev) =>
+        prev ? { ...prev, x2: worldPt.x, y2: worldPt.y } : null
+      );
       return;
     }
 
@@ -447,6 +494,30 @@ export default function BoardCanvas({
     if (localPointer) {
       onPointerBroadcast?.(localPointer, false);
       setLocalPointer(null);
+    }
+    if (localWall) {
+      const finishedWall = localWall;
+      setLocalWall(null);
+      if (
+        Math.hypot(
+          finishedWall.x2 - finishedWall.x1,
+          finishedWall.y2 - finishedWall.y1
+        ) > 10
+      ) {
+        void createSceneWallAction({
+          sceneId: scene.id,
+          campaignId: scene.campaign_id,
+          x1: finishedWall.x1,
+          y1: finishedWall.y1,
+          x2: finishedWall.x2,
+          y2: finishedWall.y2,
+          wallType: finishedWall.wallType,
+        }).then((res) => {
+          if (res.ok && res.wall) {
+            upsertWall(res.wall);
+          }
+        });
+      }
     }
     if (localFogPreview && localFogPreview.mode !== "polygon") {
       const finishedFog = localFogPreview;
@@ -938,7 +1009,8 @@ export default function BoardCanvas({
             tool === "pointer" ||
             tool === "draw" ||
             tool === "text" ||
-            tool === "fog"
+            tool === "fog" ||
+            tool === "wall"
           ? "cursor-crosshair"
           : "cursor-default";
 
@@ -1010,6 +1082,33 @@ export default function BoardCanvas({
             onChangeFogMode={handleChangeFogMode}
             onCoverAll={handleCoverAllFog}
             onClearAll={handleClearAllFog}
+          />
+          <WallEnvSubToolbar
+            scene={scene}
+            isGm={role === "gm"}
+            onClearWalls={() => {
+              clearWallsForScene(scene.id);
+              void clearSceneWallsAction({ sceneId: scene.id });
+            }}
+            onUpdateEnvironment={(patch) => {
+              upsertScene({
+                ...scene,
+                ...(patch.ambientLight !== undefined
+                  ? { ambient_light: patch.ambientLight }
+                  : {}),
+                ...(patch.weatherPreset !== undefined
+                  ? { weather_preset: patch.weatherPreset }
+                  : {}),
+                ...(patch.weatherIntensity !== undefined
+                  ? { weather_intensity: patch.weatherIntensity }
+                  : {}),
+              });
+              void updateSceneEnvironmentAction({
+                sceneId: scene.id,
+                campaignId: scene.campaign_id,
+                ...patch,
+              });
+            }}
           />
         </>
       ) : (
@@ -1150,7 +1249,22 @@ export default function BoardCanvas({
           })}
         </Layer>
 
-        {/* Camada 4: Névoa de Guerra (opaca p/ jogadores, 48% translúcida p/ GM) */}
+        {/* Camada 4A: Iluminação Dinâmica & Linha de Visão (Raycasting 2D) */}
+        <Layer listening={false}>
+          <LightingLayer
+            scene={scene}
+            tokens={renderedTokens}
+            walls={walls}
+            remoteTokenDrags={remoteTokenDrags}
+            localTokenDragPos={localTokenDragPos}
+            currentUserId={currentUserId}
+            selectedTokenId={selectedTokenId}
+            isGm={role === "gm"}
+            gmPreviewVision={gmPreviewVision}
+          />
+        </Layer>
+
+        {/* Camada 4B: Névoa de Guerra Estática (sobrepõe iluminação em modo híbrido) */}
         <Layer opacity={role === "gm" ? 0.48 : 1} listening={false}>
           <FogLayer
             scene={scene}
@@ -1159,6 +1273,28 @@ export default function BoardCanvas({
             isGm={role === "gm"}
           />
         </Layer>
+
+        {/* Camada 4C: Paredes e Portas Interativas (Apenas GM) */}
+        {role === "gm" && (
+          <Layer>
+            <WallsLayer
+              walls={walls}
+              localWall={localWall}
+              sceneId={scene.id}
+              isGm={role === "gm"}
+              isWallToolActive={tool === "wall"}
+              onToggleDoor={(w) => {
+                const nextOpen = !w.is_open;
+                upsertWall({ ...w, is_open: nextOpen });
+                void toggleDoorAction({ wallId: w.id, isOpen: nextOpen });
+              }}
+              onDeleteWall={(wId) => {
+                removeWall(wId);
+                void deleteSceneWallAction({ wallId: wId });
+              }}
+            />
+          </Layer>
+        )}
 
         {/* Camada 5: Régua de Medição e Pointer Laser */}
         <Layer>
@@ -1184,6 +1320,15 @@ export default function BoardCanvas({
           />
         </Layer>
       </Stage>
+
+      {/* Camada VFX 60fps: Clima (Chuva/Neve/Neblina/Brasas) & Explosões de Magia */}
+      <WeatherOverlay
+        sceneId={scene.id}
+        preset={scene.weather_preset ?? "none"}
+        intensity={scene.weather_intensity ?? 0.5}
+        width={size.width}
+        height={size.height}
+      />
 
       {/* Dica de controles no rodapé do tabuleiro */}
       {!uiHidden && (

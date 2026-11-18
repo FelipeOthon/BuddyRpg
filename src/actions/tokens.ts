@@ -107,6 +107,9 @@ export async function updateTokenStatsAction(input: {
   conditions?: string[];
   ringColor?: string | null;
   isLocked?: boolean;
+  visionRange?: number;
+  lightRadius?: number;
+  lightColor?: string;
 }): Promise<TokenActionResult> {
   const parsed = updateTokenStatsSchema.safeParse(input);
   if (!parsed.success) {
@@ -135,6 +138,9 @@ export async function updateTokenStatsAction(input: {
   if (v.characterId !== undefined) patch.character_id = v.characterId;
   if (v.conditions !== undefined) patch.conditions = v.conditions;
   if (v.ringColor !== undefined) patch.ring_color = v.ringColor;
+  if (v.visionRange !== undefined) patch.vision_range = v.visionRange;
+  if (v.lightRadius !== undefined) patch.light_radius = v.lightRadius;
+  if (v.lightColor !== undefined) patch.light_color = v.lightColor;
   if (v.isHidden !== undefined || v.isLocked !== undefined) {
     const { data: membership } = await supabase
       .from("campaign_members")

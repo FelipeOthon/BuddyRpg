@@ -8,6 +8,8 @@ import type {
   GridType,
   SceneElementKind,
   SceneElementLayer,
+  WallType,
+  WeatherPreset,
 } from "./database.types";
 
 export type {
@@ -19,6 +21,8 @@ export type {
   GridType,
   SceneElementKind,
   SceneElementLayer,
+  WallType,
+  WeatherPreset,
 };
 
 export type Profile = Database["public"]["Tables"]["profiles"]["Row"];
@@ -30,6 +34,7 @@ export type SceneElement =
   Database["public"]["Tables"]["scene_elements"]["Row"];
 export type SceneFogShape =
   Database["public"]["Tables"]["scene_fog_shapes"]["Row"];
+export type SceneWall = Database["public"]["Tables"]["scene_walls"]["Row"];
 export type Token = Database["public"]["Tables"]["tokens"]["Row"];
 export type CharacterRow = Database["public"]["Tables"]["characters"]["Row"];
 export type MessageRow = Database["public"]["Tables"]["messages"]["Row"];
@@ -247,4 +252,17 @@ export interface FogShapeData {
   height?: number;
   radius?: number;
   points?: number[];
+}
+
+export type FxBurstPreset = "fire" | "ice" | "arcane" | "heal";
+
+export interface FxBurstPayload {
+  id: string;
+  userId: string;
+  sceneId: string;
+  x: number;
+  y: number;
+  preset: FxBurstPreset;
+  radius: number;
+  ts: number;
 }

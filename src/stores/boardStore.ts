@@ -3,6 +3,7 @@ import type { ViewportTransform } from "@/lib/board/geometry";
 import type {
   DrawPreviewPayload,
   FogOperation,
+  FxBurstPayload,
   PinnedRuler,
   PointerBroadcastPayload,
   RollResult,
@@ -11,7 +12,9 @@ import type {
   SceneElement,
   SceneElementKind,
   SceneFogShape,
+  SceneWall,
   Token,
+  WallType,
 } from "@/types/domain";
 
 export type BoardTool =
@@ -21,7 +24,8 @@ export type BoardTool =
   | "pointer"
   | "draw"
   | "text"
-  | "fog";
+  | "fog"
+  | "wall";
 
 export interface FogToolConfig {
   operation: FogOperation;
@@ -100,6 +104,10 @@ interface BoardState {
   elements: SceneElement[];
   fogShapes: SceneFogShape[];
   fogToolConfig: FogToolConfig;
+  walls: SceneWall[];
+  wallToolType: WallType;
+  gmPreviewVision: boolean;
+  fxBursts: FxBurstPayload[];
   selectedTokenId: string | null;
   selectedElementId: string | null;
   drawConfig: DrawConfig;
@@ -123,6 +131,7 @@ interface BoardState {
     tokens: Token[];
     elements?: SceneElement[];
     fogShapes?: SceneFogShape[];
+    walls?: SceneWall[];
   }) => void;
   setViewedSceneId: (sceneId: string) => void;
   upsertScene: (scene: Scene) => void;
@@ -136,6 +145,13 @@ interface BoardState {
   removeFogShape: (shapeId: string) => void;
   clearFogForScene: (sceneId: string) => void;
   setFogToolConfig: (patch: Partial<FogToolConfig>) => void;
+  upsertWall: (wall: SceneWall) => void;
+  removeWall: (wallId: string) => void;
+  clearWallsForScene: (sceneId: string) => void;
+  setWallToolType: (wallType: WallType) => void;
+  setGmPreviewVision: (preview: boolean) => void;
+  triggerFxBurst: (burst: FxBurstPayload) => void;
+  pruneFxBursts: (nowTs: number) => void;
   setSelectedTokenId: (tokenId: string | null) => void;
   setSelectedElementId: (elementId: string | null) => void;
   setDrawConfig: (patch: Partial<DrawConfig>) => void;
@@ -167,6 +183,10 @@ export const useBoardStore = create<BoardState>((set) => ({
     operation: "cover",
     mode: "rect",
   },
+  walls: [],
+  wallToolType: "wall",
+  gmPreviewVision: false,
+  fxBursts: [],
   selectedTokenId: null,
   selectedElementId: null,
   drawConfig: {
@@ -192,7 +212,7 @@ export const useBoardStore = create<BoardState>((set) => ({
   setViewport: (viewport) => set({ viewport }),
   resetViewport: () => set({ viewport: { x: 40, y: 40, scale: 1 } }),
 
-  hydrateBoard: ({ scenes, tokens, elements, fogShapes }) =>
+  hydrateBoard: ({ scenes, tokens, elements, fogShapes, walls }) =>
     set((state) => {
       const activeScene =
         scenes.find((s) => s.is_active) ?? scenes[0] ?? null;
@@ -211,6 +231,7 @@ export const useBoardStore = create<BoardState>((set) => ({
         tokens,
         ...(elements !== undefined ? { elements } : {}),
         ...(fogShapes !== undefined ? { fogShapes } : {}),
+        ...(walls !== undefined ? { walls } : {}),
         combat: viewedScene
           ? extractCombatState(viewedScene)
           : DEFAULT_COMBAT_STATE,
@@ -366,6 +387,33 @@ export const useBoardStore = create<BoardState>((set) => ({
   setFogToolConfig: (patch) =>
     set((state) => ({
       fogToolConfig: { ...state.fogToolConfig, ...patch },
+    })),
+  upsertWall: (wall) =>
+    set((state) => {
+      const exists = state.walls.some((w) => w.id === wall.id);
+      return {
+        walls: exists
+          ? state.walls.map((w) => (w.id === wall.id ? wall : w))
+          : [...state.walls, wall],
+      };
+    }),
+  removeWall: (wallId) =>
+    set((state) => ({
+      walls: state.walls.filter((w) => w.id !== wallId),
+    })),
+  clearWallsForScene: (sceneId) =>
+    set((state) => ({
+      walls: state.walls.filter((w) => w.scene_id !== sceneId),
+    })),
+  setWallToolType: (wallToolType) => set({ wallToolType }),
+  setGmPreviewVision: (gmPreviewVision) => set({ gmPreviewVision }),
+  triggerFxBurst: (burst) =>
+    set((state) => ({
+      fxBursts: [...state.fxBursts.slice(-12), burst],
+    })),
+  pruneFxBursts: (nowTs) =>
+    set((state) => ({
+      fxBursts: state.fxBursts.filter((b) => nowTs - b.ts < 2200),
     })),
   setDraggingLocalTokenId: (tokenId) => set({ draggingLocalTokenId: tokenId }),
 

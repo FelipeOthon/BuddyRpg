@@ -111,6 +111,21 @@ export const updateTokenStatsSchema = z.object({
     .nullable()
     .optional(),
   isLocked: z.boolean().optional(),
+  visionRange: z
+    .number()
+    .finite()
+    .transform((v) => Math.min(Math.max(v, 0), 120))
+    .optional(),
+  lightRadius: z
+    .number()
+    .finite()
+    .transform((v) => Math.min(Math.max(v, 0), 120))
+    .optional(),
+  lightColor: z
+    .string()
+    .trim()
+    .regex(/^#[0-9a-fA-F]{6}$/, "Cor de luz inválida.")
+    .optional(),
 });
 
 export const createSceneSchema = z.object({
@@ -246,6 +261,34 @@ export const createFogShapeSchema = z.object({
     radius: z.number().finite().optional(),
     points: z.array(z.number().finite()).max(1000).optional(),
   }),
+});
+
+export const updateSceneEnvironmentSchema = z.object({
+  sceneId: z.string().uuid("Cena inválida."),
+  campaignId: z.string().uuid("Campanha inválida."),
+  ambientLight: z
+    .number()
+    .finite()
+    .transform((v) => Math.min(Math.max(v, 0), 1))
+    .optional(),
+  weatherPreset: z
+    .enum(["none", "rain", "snow", "fog_mist", "embers", "ash"])
+    .optional(),
+  weatherIntensity: z
+    .number()
+    .finite()
+    .transform((v) => Math.min(Math.max(v, 0), 1))
+    .optional(),
+});
+
+export const createSceneWallSchema = z.object({
+  sceneId: z.string().uuid("Cena inválida."),
+  campaignId: z.string().uuid("Campanha inválida."),
+  x1: z.number().finite(),
+  y1: z.number().finite(),
+  x2: z.number().finite(),
+  y2: z.number().finite(),
+  wallType: z.enum(["wall", "door", "window"]).optional(),
 });
 
 export const combatStateSchema = z.object({

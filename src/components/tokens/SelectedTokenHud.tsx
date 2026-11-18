@@ -4,12 +4,14 @@ import { useCallback, useEffect, useTransition } from "react";
 import {
   Eye,
   EyeOff,
+  Flame,
   Heart,
   Loader2,
   Lock,
   Minus,
   Plus,
   ScrollText,
+  Sparkles,
   Trash2,
   Unlock,
   X,
@@ -34,7 +36,12 @@ const QUICK_CONDITIONS = [
 ] as const;
 import { deleteTokenAction, updateTokenStatsAction } from "@/actions/tokens";
 import { useBoardStore } from "@/stores/boardStore";
-import type { CampaignRole, CharacterRow, Token } from "@/types/domain";
+import type {
+  CampaignRole,
+  CharacterRow,
+  FxBurstPreset,
+  Token,
+} from "@/types/domain";
 
 export default function SelectedTokenHud({
   campaignId,
@@ -42,6 +49,7 @@ export default function SelectedTokenHud({
   role,
   characters = [],
   onOpenCharacter,
+  onFxBurst,
   onError,
 }: {
   campaignId: string;
@@ -49,6 +57,7 @@ export default function SelectedTokenHud({
   role: CampaignRole;
   characters?: CharacterRow[];
   onOpenCharacter?: (char: CharacterRow) => void;
+  onFxBurst?: (x: number, y: number, preset: FxBurstPreset, radius?: number) => void;
   onError?: (msg: string) => void;
 }) {
   const {
@@ -263,6 +272,32 @@ export default function SelectedTokenHud({
     });
   };
 
+  const toggleTorchLight = () => {
+    if (!canEdit) return;
+    const nextLight = (token.light_radius ?? 0) > 0 ? 0 : 12;
+    const prevToken = token;
+
+    upsertToken({
+      ...token,
+      light_radius: nextLight,
+      updated_at: new Date().toISOString(),
+    });
+
+    startTransition(async () => {
+      const res = await updateTokenStatsAction({
+        tokenId: token.id,
+        campaignId,
+        lightRadius: nextLight,
+      });
+      if (!res.ok) {
+        upsertToken(prevToken);
+        onError?.(res.error ?? "Erro ao alternar tocha/luz.");
+      } else if (res.token) {
+        upsertToken(res.token);
+      }
+    });
+  };
+
   return (
     <div className="pointer-events-auto absolute bottom-3 left-1/2 z-20 flex max-w-[94vw] -translate-x-1/2 flex-wrap items-center justify-center gap-2 rounded-2xl border border-zinc-700/80 bg-zinc-900/95 px-3 py-2 shadow-2xl backdrop-blur sm:bottom-4 sm:gap-3 sm:px-4 sm:py-2.5">
       <div className="flex items-center gap-2">
@@ -415,6 +450,42 @@ export default function SelectedTokenHud({
               );
             })}
           </div>
+
+          <div className="h-6 w-px bg-zinc-800" />
+          <button
+            type="button"
+            disabled={isPending}
+            onClick={toggleTorchLight}
+            title="Acender/Apagar Tocha (12m de luz dinâmica)"
+            className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-xs font-semibold transition ${
+              (token.light_radius ?? 0) > 0
+                ? "border-amber-500/50 bg-amber-500/20 text-amber-300"
+                : "border-zinc-700 bg-zinc-800 text-zinc-400 hover:text-white"
+            }`}
+          >
+            <Flame className="h-3.5 w-3.5" />
+            {(token.light_radius ?? 0) > 0 ? "Tocha ON" : "Tocha"}
+          </button>
+
+          {onFxBurst && (
+            <button
+              type="button"
+              onClick={() => {
+                const centerOffset = (Math.min(Math.max(token.size || 1, 1), 4) * 70) / 2;
+                onFxBurst(
+                  token.pos_x + centerOffset,
+                  token.pos_y + centerOffset,
+                  "fire",
+                  160
+                );
+              }}
+              title="Disparar efeito mágico (explosão) neste token"
+              className="inline-flex items-center gap-1 rounded-lg border border-purple-500/40 bg-purple-500/15 px-2 py-1 text-xs font-semibold text-purple-200 transition hover:bg-purple-500/25"
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              VFX
+            </button>
+          )}
 
           <div className="h-6 w-px bg-zinc-800" />
           <div className="flex flex-wrap items-center gap-1">
