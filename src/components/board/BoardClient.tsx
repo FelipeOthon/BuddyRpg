@@ -18,7 +18,13 @@ export default function BoardClient(props: {
   currentUserId: string;
   role: CampaignRole;
   onTokenDragBroadcast?: (tokenId: string, x: number, y: number) => void;
-  onTokenDragCommit?: (tokenId: string, x: number, y: number) => void;
+  onTokenDragCommit?: (
+    tokenId: string,
+    x: number,
+    y: number,
+    prevX: number,
+    prevY: number
+  ) => void;
   onRulerBroadcast?: (start: Point2D, end: Point2D, active: boolean) => void;
 }) {
   return <BoardCanvas {...props} />;

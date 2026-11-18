@@ -26,7 +26,13 @@ export default function BoardCanvas({
   currentUserId: string;
   role: CampaignRole;
   onTokenDragBroadcast?: (tokenId: string, x: number, y: number) => void;
-  onTokenDragCommit?: (tokenId: string, x: number, y: number) => void;
+  onTokenDragCommit?: (
+    tokenId: string,
+    x: number,
+    y: number,
+    prevX: number,
+    prevY: number
+  ) => void;
   onRulerBroadcast?: (
     start: Point2D,
     end: Point2D,
@@ -218,6 +224,8 @@ export default function BoardCanvas({
     }
 
     const existing = tokens.find((t) => t.id === tokenId);
+    const prevX = existing?.pos_x ?? x;
+    const prevY = existing?.pos_y ?? y;
     if (existing) {
       upsertToken({
         ...existing,
@@ -226,7 +234,7 @@ export default function BoardCanvas({
         updated_at: new Date().toISOString(),
       });
     }
-    onTokenDragCommit?.(tokenId, x, y);
+    onTokenDragCommit?.(tokenId, x, y, prevX, prevY);
   };
 
   const cursorClass =

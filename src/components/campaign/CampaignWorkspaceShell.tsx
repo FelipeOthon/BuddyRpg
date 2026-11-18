@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
+  AlertCircle,
   ArrowLeft,
   Check,
   Copy,
@@ -12,11 +13,18 @@ import {
   Link2,
   MessageSquare,
   ScrollText,
+  Shield,
   UserCheck,
   Users,
+  Wifi,
 } from "lucide-react";
 import BoardClient from "@/components/board/BoardClient";
 import SceneManager from "@/components/scenes/SceneManager";
+import SelectedTokenHud from "@/components/tokens/SelectedTokenHud";
+import TokenManager from "@/components/tokens/TokenManager";
+import { useCampaignRealtime } from "@/hooks/useCampaignRealtime";
+import type { Point2D } from "@/lib/board/geometry";
+import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { useBoardStore } from "@/stores/boardStore";
 import type { Campaign, CampaignRole, Scene, Token } from "@/types/domain";
 
@@ -26,7 +34,7 @@ export interface CampaignMemberInfo {
   role: CampaignRole;
 }
 
-type SidebarTab = "chat" | "sheets" | "scenes" | "members";
+type SidebarTab = "tokens" | "chat" | "sheets" | "scenes" | "members";
 
 export default function CampaignWorkspaceShell({
   campaign,
@@ -44,12 +52,11 @@ export default function CampaignWorkspaceShell({
   members: CampaignMemberInfo[];
 }) {
   const isGm = role === "gm";
-  const [activeTab, setActiveTab] = useState<SidebarTab>(
-    isGm ? "scenes" : "members"
-  );
+  const [activeTab, setActiveTab] = useState<SidebarTab>("tokens");
   const [copied, setCopied] = useState<"code" | "link" | null>(null);
+  const [toastError, setToastError] = useState<string | null>(null);
 
-  const { scenes, viewedSceneId, hydrateBoard } = useBoardStore();
+  const { scenes, viewedSceneId, hydrateBoard, upsertToken } = useBoardStore();
 
   useEffect(() => {
     hydrateBoard({
@@ -57,6 +64,31 @@ export default function CampaignWorkspaceShell({
       tokens: initialTokens,
     });
   }, [initialScenes, initialTokens, hydrateBoard]);
+
+  const showError = useCallback((msg: string) => {
+    setToastError(msg);
+    setTimeout(() => setToastError(null), 4000);
+  }, []);
+
+  const currentUsername = useMemo(() => {
+    return (
+      members.find((m) => m.userId === currentUserId)?.username ??
+      "Aventureiro"
+    );
+  }, [members, currentUserId]);
+
+  const gmUserIds = useMemo(
+    () => members.filter((m) => m.role === "gm").map((m) => m.userId),
+    [members]
+  );
+
+  const { status, broadcastTokenDrag, broadcastRuler } = useCampaignRealtime({
+    campaignId: campaign.id,
+    currentUserId,
+    currentUsername,
+    role,
+    gmUserIds,
+  });
 
   const effectiveScenes = scenes.length > 0 ? scenes : initialScenes;
   const viewedScene =
@@ -66,6 +98,66 @@ export default function CampaignWorkspaceShell({
     effectiveScenes.find((s) => s.is_active) ??
     effectiveScenes[0] ??
     null;
+
+  const handleTokenDragBroadcast = useCallback(
+    (tokenId: string, x: number, y: number) => {
+      if (!viewedScene) return;
+      broadcastTokenDrag(tokenId, viewedScene.id, x, y);
+    },
+    [viewedScene, broadcastTokenDrag]
+  );
+
+  const handleTokenDragCommit = useCallback(
+    async (
+      tokenId: string,
+      x: number,
+      y: number,
+      prevX: number,
+      prevY: number
+    ) => {
+      const current = useBoardStore
+        .getState()
+        .tokens.find((t) => t.id === tokenId);
+      const supabase = createBrowserSupabaseClient();
+
+      const { data, error } = await supabase
+        .from("tokens")
+        .update({
+          pos_x: x,
+          pos_y: y,
+        })
+        .eq("id", tokenId)
+        .select("*")
+        .maybeSingle();
+
+      if (error || !data) {
+        if (current) {
+          upsertToken({
+            ...current,
+            pos_x: prevX,
+            pos_y: prevY,
+            updated_at: new Date().toISOString(),
+          });
+        }
+        showError(
+          error?.message ??
+            "Você não tem permissão para mover este token."
+        );
+        return;
+      }
+
+      upsertToken(data);
+    },
+    [upsertToken, showError]
+  );
+
+  const handleRulerBroadcast = useCallback(
+    (start: Point2D, end: Point2D, active: boolean) => {
+      if (!viewedScene) return;
+      broadcastRuler(viewedScene.id, start, end, active);
+    },
+    [viewedScene, broadcastRuler]
+  );
 
   const copyInvite = async (type: "code" | "link") => {
     const value =
@@ -114,7 +206,27 @@ export default function CampaignWorkspaceShell({
           </span>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2.5">
+          {/* Status do Canal Privado Realtime */}
+          <div
+            className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium ${
+              status === "connected"
+                ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+                : status === "error"
+                  ? "border-red-500/30 bg-red-500/10 text-red-300"
+                  : "border-zinc-700 bg-zinc-800 text-zinc-400"
+            }`}
+          >
+            <Wifi className="h-3 w-3" />
+            <span className="hidden sm:inline">
+              {status === "connected"
+                ? "Tempo Real Ativo"
+                : status === "error"
+                  ? "Realtime Offline"
+                  : "Conectando..."}
+            </span>
+          </div>
+
           <div className="hidden items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-950 px-2.5 py-1 text-xs sm:flex">
             <span className="text-zinc-400">Convite:</span>
             <code className="font-mono font-semibold text-amber-300">
@@ -151,12 +263,30 @@ export default function CampaignWorkspaceShell({
       {/* Corpo: Tabuleiro Konva à esquerda + Sidebar à direita */}
       <div className="flex flex-1 overflow-hidden">
         <section className="relative flex flex-1 overflow-hidden bg-zinc-950">
+          {toastError && (
+            <div className="pointer-events-auto absolute top-16 left-1/2 z-30 flex -translate-x-1/2 items-center gap-2 rounded-xl border border-red-500/40 bg-zinc-900/95 px-4 py-2.5 text-xs text-red-200 shadow-2xl">
+              <AlertCircle className="h-4 w-4 text-red-400" />
+              <span>{toastError}</span>
+            </div>
+          )}
+
           {viewedScene ? (
-            <BoardClient
-              scene={viewedScene}
-              currentUserId={currentUserId}
-              role={role}
-            />
+            <>
+              <BoardClient
+                scene={viewedScene}
+                currentUserId={currentUserId}
+                role={role}
+                onTokenDragBroadcast={handleTokenDragBroadcast}
+                onTokenDragCommit={handleTokenDragCommit}
+                onRulerBroadcast={handleRulerBroadcast}
+              />
+              <SelectedTokenHud
+                campaignId={campaign.id}
+                currentUserId={currentUserId}
+                role={role}
+                onError={showError}
+              />
+            </>
           ) : (
             <div className="flex flex-1 flex-col items-center justify-center p-6 text-center">
               <Grid className="h-8 w-8 text-zinc-600" />
@@ -176,9 +306,21 @@ export default function CampaignWorkspaceShell({
         <aside className="flex w-80 shrink-0 flex-col border-l border-zinc-800 bg-zinc-900/80 sm:w-96">
           <nav
             className={`grid ${
-              isGm ? "grid-cols-4" : "grid-cols-3"
+              isGm ? "grid-cols-5" : "grid-cols-4"
             } border-b border-zinc-800 bg-zinc-950/60 p-1`}
           >
+            <button
+              type="button"
+              onClick={() => setActiveTab("tokens")}
+              className={`flex flex-col items-center gap-1 rounded-lg py-2 text-[11px] font-medium transition ${
+                activeTab === "tokens"
+                  ? "bg-zinc-800 text-amber-400"
+                  : "text-zinc-400 hover:text-white"
+              }`}
+            >
+              <Shield className="h-4 w-4" />
+              Tokens
+            </button>
             <button
               type="button"
               onClick={() => setActiveTab("chat")}
@@ -227,11 +369,21 @@ export default function CampaignWorkspaceShell({
               }`}
             >
               <Users className="h-4 w-4" />
-              Membros ({members.length})
+              Mesa ({members.length})
             </button>
           </nav>
 
           <div className="flex-1 overflow-y-auto p-4">
+            {activeTab === "tokens" && viewedScene && (
+              <TokenManager
+                campaignId={campaign.id}
+                scene={viewedScene}
+                currentUserId={currentUserId}
+                role={role}
+                members={members}
+              />
+            )}
+
             {activeTab === "scenes" && isGm && (
               <SceneManager campaignId={campaign.id} />
             )}
