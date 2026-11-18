@@ -1,12 +1,27 @@
-import type { Database, DistanceRule, CampaignRole } from "./database.types";
+import type {
+  CampaignRole,
+  Database,
+  DistanceRule,
+  GridType,
+  SceneElementKind,
+  SceneElementLayer,
+} from "./database.types";
 
-export type { DistanceRule, CampaignRole };
+export type {
+  CampaignRole,
+  DistanceRule,
+  GridType,
+  SceneElementKind,
+  SceneElementLayer,
+};
 
 export type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 export type Campaign = Database["public"]["Tables"]["campaigns"]["Row"];
 export type CampaignMember =
   Database["public"]["Tables"]["campaign_members"]["Row"];
 export type Scene = Database["public"]["Tables"]["scenes"]["Row"];
+export type SceneElement =
+  Database["public"]["Tables"]["scene_elements"]["Row"];
 export type Token = Database["public"]["Tables"]["tokens"]["Row"];
 export type CharacterRow = Database["public"]["Tables"]["characters"]["Row"];
 export type MessageRow = Database["public"]["Tables"]["messages"]["Row"];
@@ -188,4 +203,31 @@ export interface ViewportSyncPayload {
   x: number;
   y: number;
   scale: number;
+}
+
+export interface SceneElementData {
+  points?: number[];
+  width?: number;
+  height?: number;
+  radius?: number;
+  angle?: number;
+  stroke?: string;
+  fill?: string;
+  strokeWidth?: number;
+  opacity?: number;
+  text?: string;
+  fontSize?: number;
+  imageUrl?: string;
+  label?: string;
+}
+
+export interface DrawPreviewPayload {
+  userId: string;
+  sceneId: string;
+  kind: SceneElementKind;
+  x: number;
+  y: number;
+  rotation: number;
+  data: SceneElementData;
+  active: boolean;
 }

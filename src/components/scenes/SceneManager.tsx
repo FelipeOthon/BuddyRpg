@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import {
   AlertCircle,
   Check,
+  Crosshair,
   Eye,
   ImagePlus,
   Loader2,
@@ -21,7 +22,8 @@ import {
 } from "@/actions/scenes";
 import { uploadCampaignImage } from "@/lib/utils/storage";
 import { useBoardStore } from "@/stores/boardStore";
-import type { DistanceRule, Scene } from "@/types/domain";
+import type { DistanceRule, GridType, Scene } from "@/types/domain";
+import MapAlignmentModal from "./MapAlignmentModal";
 import MapStudioModal from "./MapStudioModal";
 
 export default function SceneManager({
@@ -48,6 +50,7 @@ export default function SceneManager({
   const [savedNotice, setSavedNotice] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [isMapStudioOpen, setIsMapStudioOpen] = useState(false);
+  const [isAlignmentOpen, setIsAlignmentOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   // Estado local do formulário sincronizado com a cena selecionada
@@ -73,6 +76,15 @@ export default function SceneManager({
   const [distanceRule, setDistanceRule] = useState<DistanceRule>(
     currentScene?.distance_rule ?? "chebyshev"
   );
+  const [gridType, setGridType] = useState<GridType>(
+    currentScene?.grid_type ?? "square"
+  );
+  const [gridOffsetX, setGridOffsetX] = useState(
+    currentScene?.grid_offset_x ?? 0
+  );
+  const [gridOffsetY, setGridOffsetY] = useState(
+    currentScene?.grid_offset_y ?? 0
+  );
 
   const loadSceneIntoForm = (s: Scene) => {
     setDraftId(s.id);
@@ -85,6 +97,9 @@ export default function SceneManager({
     setSnapToGrid(s.snap_to_grid);
     setMetersPerCell(s.meters_per_cell);
     setDistanceRule(s.distance_rule);
+    setGridType(s.grid_type ?? "square");
+    setGridOffsetX(s.grid_offset_x ?? 0);
+    setGridOffsetY(s.grid_offset_y ?? 0);
   };
 
   if (currentScene && draftId !== currentScene.id) {
@@ -187,6 +202,9 @@ export default function SceneManager({
       map_height: mapHeight,
       grid_size: gridSize,
       grid_opacity: gridOpacity,
+      grid_type: gridType,
+      grid_offset_x: gridOffsetX,
+      grid_offset_y: gridOffsetY,
       snap_to_grid: snapToGrid,
       meters_per_cell: metersPerCell,
       distance_rule: distanceRule,
@@ -203,6 +221,9 @@ export default function SceneManager({
         map_height: mapHeight,
         grid_size: gridSize,
         grid_opacity: gridOpacity,
+        grid_type: gridType,
+        grid_offset_x: gridOffsetX,
+        grid_offset_y: gridOffsetY,
         snap_to_grid: snapToGrid,
         meters_per_cell: metersPerCell,
         distance_rule: distanceRule,
@@ -435,6 +456,17 @@ export default function SceneManager({
                 </button>
               )}
             </div>
+
+            {mapUrl && (
+              <button
+                type="button"
+                onClick={() => setIsAlignmentOpen(true)}
+                className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-xs font-semibold text-amber-300 transition hover:border-amber-500/50 hover:bg-zinc-800"
+              >
+                <Crosshair className="h-3.5 w-3.5" />
+                Alinhar Grade do Mapa (3 Passos / Hex)
+              </button>
+            )}
           </div>
 
           {/* Dimensões do Tabuleiro */}
@@ -600,6 +632,51 @@ export default function SceneManager({
               map_height: height,
               grid_size: gridSize,
               grid_opacity: gridOpacity,
+              snap_to_grid: snapToGrid,
+              meters_per_cell: metersPerCell,
+              distance_rule: distanceRule,
+            });
+            if (res.scene) {
+              upsertScene(res.scene);
+            }
+          }}
+        />
+      )}
+
+      {isAlignmentOpen && currentScene && (
+        <MapAlignmentModal
+          scene={{
+            ...currentScene,
+            map_url: mapUrl,
+            map_width: mapWidth,
+            map_height: mapHeight,
+            grid_size: gridSize,
+            grid_type: gridType,
+            grid_offset_x: gridOffsetX,
+            grid_offset_y: gridOffsetY,
+          }}
+          onClose={() => setIsAlignmentOpen(false)}
+          onApply={async (patch) => {
+            setGridSize(patch.grid_size);
+            setGridOffsetX(patch.grid_offset_x);
+            setGridOffsetY(patch.grid_offset_y);
+            setGridType(patch.grid_type);
+            upsertScene({
+              ...currentScene,
+              ...patch,
+            });
+            const res = await updateSceneSettingsAction({
+              sceneId: currentScene.id,
+              campaignId,
+              name,
+              map_url: mapUrl,
+              map_width: mapWidth,
+              map_height: mapHeight,
+              grid_size: patch.grid_size,
+              grid_opacity: gridOpacity,
+              grid_type: patch.grid_type,
+              grid_offset_x: patch.grid_offset_x,
+              grid_offset_y: patch.grid_offset_y,
               snap_to_grid: snapToGrid,
               meters_per_cell: metersPerCell,
               distance_rule: distanceRule,

@@ -38,10 +38,12 @@ import type {
   Campaign,
   CampaignRole,
   CharacterRow,
+  DrawPreviewPayload,
   MessageRow,
   PinnedRuler,
   RollResult,
   Scene,
+  SceneElement,
   Token,
 } from "@/types/domain";
 
@@ -59,6 +61,7 @@ export default function CampaignWorkspaceShell({
   role,
   initialScenes,
   initialTokens,
+  initialElements = [],
   initialMessages,
   initialCharacters,
   members,
@@ -68,6 +71,7 @@ export default function CampaignWorkspaceShell({
   role: CampaignRole;
   initialScenes: Scene[];
   initialTokens: Token[];
+  initialElements?: SceneElement[];
   initialMessages: MessageRow[];
   initialCharacters: CharacterRow[];
   members: CampaignMemberInfo[];
@@ -127,8 +131,9 @@ export default function CampaignWorkspaceShell({
     hydrateBoard({
       scenes: initialScenes,
       tokens: initialTokens,
+      elements: initialElements,
     });
-  }, [initialScenes, initialTokens, hydrateBoard]);
+  }, [initialScenes, initialTokens, initialElements, hydrateBoard]);
 
   const showError = useCallback((msg: string) => {
     setToastError(msg);
@@ -260,6 +265,7 @@ export default function CampaignWorkspaceShell({
     broadcastRulerPin,
     broadcastPointer,
     broadcastViewportSync,
+    broadcastDrawPreview,
     broadcastCombatState,
   } = useCampaignRealtime({
     campaignId: campaign.id,
@@ -371,6 +377,14 @@ export default function CampaignWorkspaceShell({
       broadcastViewportSync(viewedScene.id, x, y, scale);
     },
     [viewedScene, isGm, broadcastViewportSync]
+  );
+
+  const handleDrawPreviewBroadcast = useCallback(
+    (preview: Omit<DrawPreviewPayload, "userId" | "sceneId">) => {
+      if (!viewedScene) return;
+      broadcastDrawPreview(viewedScene.id, preview);
+    },
+    [viewedScene, broadcastDrawPreview]
   );
 
   const toggleSidebar = () => {
@@ -561,6 +575,7 @@ export default function CampaignWorkspaceShell({
                 onRulerBroadcast={handleRulerBroadcast}
                 onRulerPinBroadcast={handleRulerPinBroadcast}
                 onPointerBroadcast={handlePointerBroadcast}
+                onDrawPreviewBroadcast={handleDrawPreviewBroadcast}
                 onSyncView={handleSyncView}
               />
               {!uiHidden && (

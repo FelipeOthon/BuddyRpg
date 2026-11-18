@@ -9,11 +9,13 @@ import {
   Hand,
   Magnet,
   MousePointer,
+  Pencil,
   Pin,
   Radio,
   RotateCcw,
   Ruler,
   Trash2,
+  Type,
   Volume2,
   VolumeX,
   ZoomIn,
@@ -97,6 +99,8 @@ export default function BoardToolbar({
       else if (key === "h" || key === "w") setTool("pan");
       else if (key === "r" || key === "m") setTool("ruler");
       else if (key === "q") setTool("pointer");
+      else if (key === "d") setTool("draw");
+      else if (key === "t") setTool("text");
       else if (key === "0") resetViewport();
     };
 
@@ -142,6 +146,18 @@ export default function BoardToolbar({
       label: "Ponteiro Laser (ou Botão Direito)",
       shortcut: "Q",
       icon: Crosshair,
+    },
+    {
+      id: "draw",
+      label: "Desenhar / Magias",
+      shortcut: "D",
+      icon: Pencil,
+    },
+    {
+      id: "text",
+      label: "Texto no Mapa",
+      shortcut: "T",
+      icon: Type,
     },
   ];
 

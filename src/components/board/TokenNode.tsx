@@ -4,7 +4,7 @@ import { Circle, Group, Image as KonvaImage, Rect, Text } from "react-konva";
 import useImage from "use-image";
 import type { KonvaEventObject } from "konva/lib/Node";
 import { snapToGrid } from "@/lib/board/geometry";
-import type { Token } from "@/types/domain";
+import type { GridType, Token } from "@/types/domain";
 
 const CONDITION_BADGES: Record<string, { icon: string; color: string }> = {
   Caído: { icon: "▼", color: "#f59e0b" },
@@ -42,6 +42,9 @@ export default function TokenNode({
   displayX,
   displayY,
   gridSize,
+  gridOffsetX = 0,
+  gridOffsetY = 0,
+  gridType = "square",
   snapEnabled,
   canMove,
   isSelected,
@@ -54,6 +57,9 @@ export default function TokenNode({
   displayX: number;
   displayY: number;
   gridSize: number;
+  gridOffsetX?: number;
+  gridOffsetY?: number;
+  gridType?: GridType;
   snapEnabled: boolean;
   canMove: boolean;
   isSelected: boolean;
@@ -84,10 +90,14 @@ export default function TokenNode({
   };
 
   const handleDragEnd = (e: KonvaEventObject<DragEvent>) => {
+    const useSnap = snapEnabled && !e.evt?.altKey;
     const snapped = snapToGrid(
       { x: e.target.x(), y: e.target.y() },
       gridSize,
-      snapEnabled
+      useSnap,
+      gridOffsetX,
+      gridOffsetY,
+      gridType
     );
     e.target.position(snapped);
     onDragEnd(token.id, snapped.x, snapped.y);

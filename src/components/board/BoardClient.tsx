@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import type { Point2D } from "@/lib/board/geometry";
 import type {
   CampaignRole,
+  DrawPreviewPayload,
   PinnedRuler,
   Scene,
 } from "@/types/domain";
@@ -37,6 +38,9 @@ export default function BoardClient(props: {
     rulerId?: string
   ) => PinnedRuler | null;
   onPointerBroadcast?: (pos: Point2D, active: boolean) => void;
+  onDrawPreviewBroadcast?: (
+    preview: Omit<DrawPreviewPayload, "userId" | "sceneId">
+  ) => void;
   onSyncView?: (x: number, y: number, scale: number) => void;
 }) {
   return <BoardCanvas {...props} />;

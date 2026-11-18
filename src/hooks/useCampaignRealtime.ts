@@ -11,12 +11,14 @@ import {
 import type {
   CampaignRole,
   CharacterRow,
+  DrawPreviewPayload,
   MessageRow,
   PinnedRuler,
   PinnedRulerBroadcastPayload,
   PointerBroadcastPayload,
   RulerBroadcastPayload,
   Scene,
+  SceneElement,
   Token,
   TokenDragPayload,
   ViewportSyncPayload,
@@ -26,7 +28,12 @@ export type RealtimeConnectionStatus = "connecting" | "connected" | "error";
 
 export interface DatabaseBroadcastPayload {
   schema: string;
-  table: "tokens" | "scenes" | "messages" | "characters";
+  table:
+    | "tokens"
+    | "scenes"
+    | "scene_elements"
+    | "messages"
+    | "characters";
   type: "INSERT" | "UPDATE" | "DELETE";
   record: Record<string, unknown> | null;
   old_record: Record<string, unknown> | null;
@@ -99,12 +106,15 @@ export function useCampaignRealtime(params: {
     removeScene,
     upsertToken,
     removeToken,
+    upsertElement,
+    removeElement,
     setRemoteTokenDrag,
     setRemoteRuler,
     addPinnedRuler,
     removePinnedRuler,
     clearPinnedRulers,
     setRemotePointer,
+    setRemoteDrawPreview,
     setViewport,
     setCombatState,
   } = useBoardStore();
@@ -150,16 +160,33 @@ export function useCampaignRealtime(params: {
           const scene = data.record as unknown as Scene;
           upsertScene(scene);
 
-          // Se a cena acabou de ser ativada, recarrega os tokens dela via REST
+          // Se a cena acabou de ser ativada, recarrega os tokens e elementos dela via REST
           if (scene.is_active) {
-            const { data: sceneTokens } = await supabase
-              .from("tokens")
-              .select("*")
-              .eq("scene_id", scene.id);
+            const [{ data: sceneTokens }, { data: sceneEls }] =
+              await Promise.all([
+                supabase
+                  .from("tokens")
+                  .select("*")
+                  .eq("scene_id", scene.id),
+                supabase
+                  .from("scene_elements")
+                  .select("*")
+                  .eq("scene_id", scene.id),
+              ]);
             if (!isUnmounted && sceneTokens) {
               sceneTokens.forEach((t) => upsertToken(t));
             }
+            if (!isUnmounted && sceneEls) {
+              sceneEls.forEach((el) => upsertElement(el));
+            }
           }
+        }
+      } else if (data.table === "scene_elements") {
+        if (data.type === "DELETE") {
+          const oldId = data.old_record?.id as string | undefined;
+          if (oldId) removeElement(oldId);
+        } else if (data.record) {
+          upsertElement(data.record as unknown as SceneElement);
         }
       } else if (data.table === "messages") {
         onMessageRef.current?.(
@@ -241,6 +268,11 @@ export function useCampaignRealtime(params: {
         if (!gmIdsRef.current.has(p.userId)) return;
         setViewport({ x: p.x, y: p.y, scale: p.scale });
       })
+      .on("broadcast", { event: "draw:preview" }, (msg) => {
+        const p = msg.payload as DrawPreviewPayload | undefined;
+        if (!p || !p.userId || p.userId === currentUserId) return;
+        setRemoteDrawPreview(p);
+      })
       .on("broadcast", { event: "combat:state" }, (msg) => {
         const p = msg.payload as
           | (CombatStatePayload & { userId?: string })
@@ -308,6 +340,9 @@ export function useCampaignRealtime(params: {
     removePinnedRuler,
     clearPinnedRulers,
     setRemotePointer,
+    setRemoteDrawPreview,
+    upsertElement,
+    removeElement,
     setViewport,
     setCombatState,
   ]);
@@ -315,6 +350,7 @@ export function useCampaignRealtime(params: {
   const lastDragSentRef = useRef(0);
   const lastRulerSentRef = useRef(0);
   const lastPointerSentRef = useRef(0);
+  const lastDrawSentRef = useRef(0);
 
   const broadcastTokenDrag = useCallback(
     (tokenId: string, sceneId: string, x: number, y: number) => {
@@ -452,6 +488,29 @@ export function useCampaignRealtime(params: {
     [currentUserId]
   );
 
+  const broadcastDrawPreview = useCallback(
+    (
+      sceneId: string,
+      preview: Omit<DrawPreviewPayload, "userId" | "sceneId">
+    ) => {
+      const now = Date.now();
+      if (preview.active && now - lastDrawSentRef.current < 45) return;
+      lastDrawSentRef.current = now;
+
+      const payload: DrawPreviewPayload = {
+        ...preview,
+        userId: currentUserId,
+        sceneId,
+      };
+      mainChannelRef.current?.send({
+        type: "broadcast",
+        event: "draw:preview",
+        payload,
+      });
+    },
+    [currentUserId]
+  );
+
   return {
     status,
     broadcastTokenDrag,
@@ -459,6 +518,7 @@ export function useCampaignRealtime(params: {
     broadcastRulerPin,
     broadcastPointer,
     broadcastViewportSync,
+    broadcastDrawPreview,
     broadcastCombatState,
   };
 }

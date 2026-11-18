@@ -50,6 +50,7 @@ async function CampaignRoomLoader({
   const [
     { data: scenes },
     { data: tokens },
+    { data: sceneElements },
     { data: rawMembers },
     { data: recentMessages },
     { data: characters },
@@ -60,6 +61,11 @@ async function CampaignRoomLoader({
       .eq("campaign_id", id)
       .order("created_at", { ascending: true }),
     supabase.from("tokens").select("*").eq("campaign_id", id),
+    supabase
+      .from("scene_elements")
+      .select("*")
+      .eq("campaign_id", id)
+      .order("created_at", { ascending: true }),
     supabase
       .from("campaign_members")
       .select(
@@ -104,6 +110,7 @@ async function CampaignRoomLoader({
       role={myMembership.role}
       initialScenes={scenes ?? []}
       initialTokens={tokens ?? []}
+      initialElements={sceneElements ?? []}
       initialMessages={chronologicalMessages}
       initialCharacters={characters ?? []}
       members={members}

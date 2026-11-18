@@ -147,12 +147,78 @@ export const updateSceneSettingsSchema = z.object({
     .number()
     .finite()
     .transform((v) => Math.min(Math.max(v, 0), 1)),
+  grid_type: z
+    .enum(["none", "square", "hex_pointy", "hex_flat"])
+    .optional(),
+  grid_offset_x: z
+    .number()
+    .finite()
+    .transform((v) => Math.round(v))
+    .optional(),
+  grid_offset_y: z
+    .number()
+    .finite()
+    .transform((v) => Math.round(v))
+    .optional(),
   snap_to_grid: z.boolean(),
   meters_per_cell: z
     .number()
     .finite()
     .transform((v) => Math.max(v, 0.1)),
   distance_rule: z.enum(["chebyshev", "euclidean", "alternating"]),
+});
+
+const sceneElementDataSchema = z.object({
+  points: z.array(z.number().finite()).max(4000).optional(),
+  width: z.number().finite().optional(),
+  height: z.number().finite().optional(),
+  radius: z.number().finite().optional(),
+  angle: z.number().finite().optional(),
+  stroke: z.string().max(32).optional(),
+  fill: z.string().max(32).optional(),
+  strokeWidth: z.number().finite().min(1).max(40).optional(),
+  opacity: z.number().finite().min(0).max(1).optional(),
+  text: z.string().max(500).optional(),
+  fontSize: z.number().finite().min(8).max(120).optional(),
+  imageUrl: safeImageUrlSchema.optional(),
+  label: z.string().max(80).optional(),
+});
+
+export const createSceneElementSchema = z.object({
+  sceneId: z.string().uuid("Cena inválida."),
+  campaignId: z.string().uuid("Campanha inválida."),
+  layer: z
+    .enum(["prop", "mount", "drawing", "text", "attachment"])
+    .optional(),
+  kind: z.enum([
+    "freehand",
+    "line",
+    "rect",
+    "circle",
+    "cone",
+    "polygon",
+    "text",
+    "image",
+    "aura",
+  ]),
+  attachedToTokenId: z.string().uuid().nullable().optional(),
+  x: z.number().finite().optional(),
+  y: z.number().finite().optional(),
+  rotation: z.number().finite().optional(),
+  data: sceneElementDataSchema,
+  isHidden: z.boolean().optional(),
+});
+
+export const updateSceneElementSchema = z.object({
+  elementId: z.string().uuid("Elemento inválido."),
+  campaignId: z.string().uuid("Campanha inválida."),
+  x: z.number().finite().optional(),
+  y: z.number().finite().optional(),
+  rotation: z.number().finite().optional(),
+  attachedToTokenId: z.string().uuid().nullable().optional(),
+  data: sceneElementDataSchema.optional(),
+  isLocked: z.boolean().optional(),
+  isHidden: z.boolean().optional(),
 });
 
 export const combatStateSchema = z.object({

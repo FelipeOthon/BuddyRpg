@@ -8,9 +8,25 @@ import type { KonvaEventObject } from "konva/lib/Node";
 import { clamp, screenToWorld, type Point2D } from "@/lib/board/geometry";
 import { useKeyPressed } from "@/hooks/useKeyPressed";
 import { useBoardStore } from "@/stores/boardStore";
-import type { CampaignRole, PinnedRuler, Scene, Token } from "@/types/domain";
+import {
+  clearSceneDrawingsAction,
+  createSceneElementAction,
+  deleteSceneElementAction,
+  updateSceneElementAction,
+} from "@/actions/elements";
+import { createTokenAction } from "@/actions/tokens";
+import { uploadCampaignImage } from "@/lib/utils/storage";
+import type {
+  CampaignRole,
+  DrawPreviewPayload,
+  PinnedRuler,
+  Scene,
+  Token,
+} from "@/types/domain";
 import MapLayer from "./MapLayer";
 import GridLayer from "./GridLayer";
+import ElementsLayer, { type LocalDrawState } from "./ElementsLayer";
+import DrawingSubToolbar from "./DrawingSubToolbar";
 import TokenNode from "./TokenNode";
 import RulerLayer, { type LocalRulerState } from "./RulerLayer";
 import PointerLayer from "./PointerLayer";
@@ -26,6 +42,7 @@ export default function BoardCanvas({
   onRulerBroadcast,
   onRulerPinBroadcast,
   onPointerBroadcast,
+  onDrawPreviewBroadcast,
   onSyncView,
 }: {
   scene: Scene;
@@ -51,6 +68,9 @@ export default function BoardCanvas({
     rulerId?: string
   ) => PinnedRuler | null;
   onPointerBroadcast?: (pos: Point2D, active: boolean) => void;
+  onDrawPreviewBroadcast?: (
+    preview: Omit<DrawPreviewPayload, "userId" | "sceneId">
+  ) => void;
   onSyncView?: (x: number, y: number, scale: number) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -64,6 +84,18 @@ export default function BoardCanvas({
   const pinchDistRef = useRef<number | null>(null);
   const [localRuler, setLocalRuler] = useState<LocalRulerState | null>(null);
   const [localPointer, setLocalPointer] = useState<Point2D | null>(null);
+  const [localDraw, setLocalDraw] = useState<LocalDrawState | null>(null);
+  const [textDraft, setTextDraft] = useState<{
+    world: Point2D;
+    screen: Point2D;
+    value: string;
+  } | null>(null);
+  const [localTokenDragPos, setLocalTokenDragPos] = useState<{
+    tokenId: string;
+    x: number;
+    y: number;
+  } | null>(null);
+  const [isDragOverFile, setIsDragOverFile] = useState(false);
   const [tokenDragRuler, setTokenDragRuler] =
     useState<LocalRulerState | null>(null);
   const tokenDragCenterRef = useRef<{
@@ -84,8 +116,16 @@ export default function BoardCanvas({
     viewport,
     setViewport,
     tokens,
+    elements,
     selectedTokenId,
+    selectedElementId,
+    drawConfig,
+    remoteDrawPreviews,
     setSelectedTokenId,
+    setSelectedElementId,
+    upsertElement,
+    removeElement,
+    clearDrawingsForScene,
     setDraggingLocalTokenId,
     remoteTokenDrags,
     remoteRulers,
@@ -216,8 +256,49 @@ export default function BoardCanvas({
       return;
     }
 
+    if (isLeftClick && tool === "draw") {
+      const pointer = stage.getPointerPosition();
+      if (!pointer) return;
+      const worldPt = screenToWorld(pointer, viewport);
+      const initial: LocalDrawState = {
+        kind: drawConfig.kind,
+        x: worldPt.x,
+        y: worldPt.y,
+        rotation: 0,
+        data: {
+          points:
+            drawConfig.kind === "freehand" || drawConfig.kind === "line"
+              ? [0, 0]
+              : undefined,
+          width: drawConfig.kind === "rect" ? 0 : undefined,
+          height: drawConfig.kind === "rect" ? 0 : undefined,
+          radius:
+            drawConfig.kind === "circle" || drawConfig.kind === "cone"
+              ? 0
+              : undefined,
+          angle: drawConfig.kind === "cone" ? 53 : undefined,
+          stroke: drawConfig.stroke,
+          fill: drawConfig.fill,
+          strokeWidth: drawConfig.strokeWidth,
+          opacity: drawConfig.opacity,
+        },
+      };
+      setLocalDraw(initial);
+      onDrawPreviewBroadcast?.({ ...initial, active: true });
+      return;
+    }
+
+    if (isLeftClick && tool === "text") {
+      const pointer = stage.getPointerPosition();
+      if (!pointer) return;
+      const worldPt = screenToWorld(pointer, viewport);
+      setTextDraft({ world: worldPt, screen: pointer, value: "" });
+      return;
+    }
+
     if (e.target === stage) {
       setSelectedTokenId(null);
+      setSelectedElementId(null);
     }
   };
 
@@ -244,6 +325,52 @@ export default function BoardCanvas({
       return;
     }
 
+    if (localDraw) {
+      const stage = stageRef.current;
+      if (!stage) return;
+      const pointer = stage.getPointerPosition();
+      if (!pointer) return;
+      const worldPt = screenToWorld(pointer, viewport);
+      const dx = worldPt.x - localDraw.x;
+      const dy = worldPt.y - localDraw.y;
+
+      let nextDraw: LocalDrawState = localDraw;
+      if (localDraw.kind === "freehand") {
+        nextDraw = {
+          ...localDraw,
+          data: {
+            ...localDraw.data,
+            points: [...(localDraw.data.points ?? [0, 0]), dx, dy],
+          },
+        };
+      } else if (localDraw.kind === "line") {
+        nextDraw = {
+          ...localDraw,
+          data: { ...localDraw.data, points: [0, 0, dx, dy] },
+        };
+      } else if (localDraw.kind === "rect") {
+        nextDraw = {
+          ...localDraw,
+          data: { ...localDraw.data, width: dx, height: dy },
+        };
+      } else if (localDraw.kind === "circle") {
+        nextDraw = {
+          ...localDraw,
+          data: { ...localDraw.data, radius: Math.hypot(dx, dy) },
+        };
+      } else if (localDraw.kind === "cone") {
+        nextDraw = {
+          ...localDraw,
+          rotation: (Math.atan2(dy, dx) * 180) / Math.PI,
+          data: { ...localDraw.data, radius: Math.hypot(dx, dy) },
+        };
+      }
+
+      setLocalDraw(nextDraw);
+      onDrawPreviewBroadcast?.({ ...nextDraw, active: true });
+      return;
+    }
+
     if (localRuler) {
       const stage = stageRef.current;
       if (!stage) return;
@@ -264,6 +391,39 @@ export default function BoardCanvas({
     if (localPointer) {
       onPointerBroadcast?.(localPointer, false);
       setLocalPointer(null);
+    }
+    if (localDraw) {
+      const finished = localDraw;
+      setLocalDraw(null);
+      onDrawPreviewBroadcast?.({ ...finished, active: false });
+
+      const pts = finished.data.points ?? [];
+      const hasSize =
+        finished.kind === "freehand"
+          ? pts.length >= 4
+          : finished.kind === "line"
+            ? Math.hypot(pts[2] ?? 0, pts[3] ?? 0) > 6
+            : finished.kind === "rect"
+              ? Math.abs(finished.data.width ?? 0) > 6 ||
+                Math.abs(finished.data.height ?? 0) > 6
+              : (finished.data.radius ?? 0) > 6;
+
+      if (hasSize) {
+        void createSceneElementAction({
+          sceneId: scene.id,
+          campaignId: scene.campaign_id,
+          layer: "drawing",
+          kind: finished.kind,
+          x: finished.x,
+          y: finished.y,
+          rotation: finished.rotation,
+          data: finished.data,
+        }).then((res) => {
+          if (res.ok && res.element) {
+            upsertElement(res.element);
+          }
+        });
+      }
     }
     if (localRuler) {
       const dist = Math.hypot(
@@ -404,6 +564,7 @@ export default function BoardCanvas({
   };
 
   const handleTokenDragMove = (tokenId: string, x: number, y: number) => {
+    setLocalTokenDragPos({ tokenId, x, y });
     if (tokenDragCenterRef.current) {
       const { origin, halfSize } = tokenDragCenterRef.current;
       setTokenDragRuler({
@@ -417,6 +578,7 @@ export default function BoardCanvas({
 
   const handleTokenDragEnd = (tokenId: string, x: number, y: number) => {
     setDraggingLocalTokenId(null);
+    setLocalTokenDragPos(null);
     tokenDragCenterRef.current = null;
     setTokenDragRuler(null);
 
@@ -439,12 +601,83 @@ export default function BoardCanvas({
     onTokenDragCommit?.(tokenId, x, y, prevX, prevY);
   };
 
+  const handleFileDrop = async (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragOverFile(false);
+    const file = e.dataTransfer.files?.[0];
+    if (!file || !file.type.startsWith("image/")) return;
+
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const worldPt = screenToWorld(
+      { x: e.clientX - rect.left, y: e.clientY - rect.top },
+      viewport
+    );
+
+    try {
+      const uploaded = await uploadCampaignImage({
+        bucket: "tokens",
+        campaignId: scene.campaign_id,
+        file,
+      });
+      const baseName = file.name.replace(/\.[^.]+$/, "").slice(0, 40) || "Token";
+      const res = await createTokenAction({
+        sceneId: scene.id,
+        campaignId: scene.campaign_id,
+        name: baseName,
+        imageUrl: uploaded.publicUrl,
+        size: 1,
+        hpCurrent: 20,
+        hpMax: 20,
+        posX: Math.round(worldPt.x - scene.grid_size / 2),
+        posY: Math.round(worldPt.y - scene.grid_size / 2),
+      });
+      if (res.ok && res.token) {
+        upsertToken(res.token);
+      }
+    } catch {
+      // Silencioso se o formato ou permissão falhar
+    }
+  };
+
+  const submitTextDraft = () => {
+    if (!textDraft) return;
+    const content = textDraft.value.trim();
+    const world = textDraft.world;
+    setTextDraft(null);
+    if (!content) return;
+
+    void createSceneElementAction({
+      sceneId: scene.id,
+      campaignId: scene.campaign_id,
+      layer: "text",
+      kind: "text",
+      x: world.x,
+      y: world.y,
+      data: {
+        text: content,
+        stroke: drawConfig.stroke,
+        fontSize: 18,
+      },
+    }).then((res) => {
+      if (res.ok && res.element) {
+        upsertElement(res.element);
+      }
+    });
+  };
+
+  const selectedElement =
+    elements.find((el) => el.id === selectedElementId) ?? null;
+
   const cursorClass =
     isPanning
       ? "cursor-grabbing"
       : spaceDown || tool === "pan"
         ? "cursor-grab"
-        : tool === "ruler" || tool === "pointer"
+        : tool === "ruler" ||
+            tool === "pointer" ||
+            tool === "draw" ||
+            tool === "text"
           ? "cursor-crosshair"
           : "cursor-default";
 
@@ -452,18 +685,62 @@ export default function BoardCanvas({
     <div
       ref={containerRef}
       onContextMenu={(e) => e.preventDefault()}
+      onDragOver={(e) => {
+        if (e.dataTransfer.types.includes("Files")) {
+          e.preventDefault();
+          setIsDragOverFile(true);
+        }
+      }}
+      onDragLeave={() => setIsDragOverFile(false)}
+      onDrop={handleFileDrop}
       className={`relative h-full w-full touch-none overflow-hidden bg-zinc-950 select-none ${cursorClass}`}
     >
       {!uiHidden ? (
-        <BoardToolbar
-          scene={scene}
-          isGm={role === "gm"}
-          onSyncView={onSyncView}
-          onClearPinnedRulers={() => {
-            clearPinnedRulers(scene.id);
-            onRulerPinBroadcast?.("clear");
-          }}
-        />
+        <>
+          <BoardToolbar
+            scene={scene}
+            isGm={role === "gm"}
+            onSyncView={onSyncView}
+            onClearPinnedRulers={() => {
+              clearPinnedRulers(scene.id);
+              onRulerPinBroadcast?.("clear");
+            }}
+          />
+          <DrawingSubToolbar
+            sceneId={scene.id}
+            sceneTokens={sceneTokens}
+            selectedElement={selectedElement}
+            isGm={role === "gm"}
+            currentUserId={currentUserId}
+            onClearDrawings={(sid) => {
+              clearDrawingsForScene(sid);
+              void clearSceneDrawingsAction({ sceneId: sid });
+            }}
+            onDeleteElement={(elId) => {
+              removeElement(elId);
+              void deleteSceneElementAction({ elementId: elId });
+            }}
+            onUpdateElement={(elId, patch) => {
+              const current = elements.find((x) => x.id === elId);
+              if (current) {
+                upsertElement({
+                  ...current,
+                  ...(patch.attachedToTokenId !== undefined
+                    ? { attached_to_token_id: patch.attachedToTokenId }
+                    : {}),
+                  ...(patch.isLocked !== undefined
+                    ? { is_locked: patch.isLocked }
+                    : {}),
+                });
+              }
+              void updateSceneElementAction({
+                elementId: elId,
+                campaignId: scene.campaign_id,
+                ...patch,
+              });
+            }}
+          />
+        </>
       ) : (
         <button
           type="button"
@@ -474,6 +751,50 @@ export default function BoardCanvas({
           <Eye className="h-3.5 w-3.5" />
           Mostrar UI
         </button>
+      )}
+
+      {isDragOverFile && (
+        <div className="pointer-events-none absolute inset-4 z-40 flex items-center justify-center rounded-2xl border-2 border-dashed border-amber-400 bg-amber-500/10 text-sm font-bold text-amber-200 backdrop-blur-[1px]">
+          Solte a imagem para invocar um Token nesta posição
+        </div>
+      )}
+
+      {textDraft && (
+        <div
+          className="absolute z-40 flex items-center gap-1.5 rounded-xl border border-amber-500/50 bg-zinc-950/95 p-1.5 shadow-2xl"
+          style={{
+            left: Math.min(textDraft.screen.x, Math.max(size.width - 240, 20)),
+            top: Math.min(textDraft.screen.y, Math.max(size.height - 60, 20)),
+          }}
+        >
+          <input
+            type="text"
+            autoFocus
+            value={textDraft.value}
+            onChange={(e) =>
+              setTextDraft((prev) =>
+                prev ? { ...prev, value: e.target.value } : null
+              )
+            }
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                submitTextDraft();
+              } else if (e.key === "Escape") {
+                setTextDraft(null);
+              }
+            }}
+            placeholder="Digite a anotação..."
+            className="w-44 rounded-lg border border-zinc-800 bg-zinc-900 px-2.5 py-1 text-xs text-white outline-none focus:border-amber-400"
+          />
+          <button
+            type="button"
+            onClick={submitTextDraft}
+            className="rounded-lg bg-amber-500 px-2.5 py-1 text-xs font-bold text-zinc-950"
+          >
+            OK
+          </button>
+        </div>
       )}
 
       <Stage
@@ -499,7 +820,35 @@ export default function BoardCanvas({
           <GridLayer scene={scene} />
         </Layer>
 
-        {/* Camada 2: Tokens */}
+        {/* Camada 2: Desenhos, Textos, Templates de Magia & Attachments */}
+        <Layer>
+          <ElementsLayer
+            elements={elements}
+            tokens={renderedTokens}
+            remoteTokenDrags={remoteTokenDrags}
+            localTokenDragPos={localTokenDragPos}
+            localDraw={localDraw}
+            remoteDrawPreviews={remoteDrawPreviews}
+            sceneId={scene.id}
+            currentUserId={currentUserId}
+            isGm={role === "gm"}
+            canSelect={tool === "select" && !spaceDown}
+            selectedElementId={selectedElementId}
+            onSelectElement={setSelectedElementId}
+            onMoveElement={(elId, nx, ny) => {
+              const cur = elements.find((x) => x.id === elId);
+              if (cur) upsertElement({ ...cur, x: nx, y: ny });
+              void updateSceneElementAction({
+                elementId: elId,
+                campaignId: scene.campaign_id,
+                x: nx,
+                y: ny,
+              });
+            }}
+          />
+        </Layer>
+
+        {/* Camada 3: Tokens */}
         <Layer>
           {renderedTokens.map((token) => {
             const remoteDrag = remoteTokenDrags[token.id];
@@ -515,6 +864,9 @@ export default function BoardCanvas({
                 displayX={displayX}
                 displayY={displayY}
                 gridSize={scene.grid_size}
+                gridOffsetX={scene.grid_offset_x ?? 0}
+                gridOffsetY={scene.grid_offset_y ?? 0}
+                gridType={scene.grid_type ?? "square"}
                 snapEnabled={scene.snap_to_grid}
                 canMove={canMove}
                 isSelected={selectedTokenId === token.id}
@@ -527,7 +879,7 @@ export default function BoardCanvas({
           })}
         </Layer>
 
-        {/* Camada 3: Régua de Medição e Pointer Laser */}
+        {/* Camada 4: Régua de Medição e Pointer Laser */}
         <Layer>
           <RulerLayer
             localRuler={localRuler}
@@ -555,7 +907,7 @@ export default function BoardCanvas({
       {/* Dica de controles no rodapé do tabuleiro */}
       {!uiHidden && (
         <div className="pointer-events-none absolute bottom-3 left-4 z-10 hidden rounded-lg border border-zinc-800/80 bg-zinc-900/80 px-3 py-1.5 text-[11px] text-zinc-400 backdrop-blur sm:block">
-          Scroll: Zoom · Espaço+Arrastar: Pan · Botão Direito (Q): Pointer · Régua (R, Shift fixa) · Foco: Ctrl+Shift+H
+          Zoom: Scroll · Pan: Espaço · Pointer: Botão Dir. (Q) · Desenhar: D · Texto: T · Régua: R (Shift fixa) · Solte imagem p/ Token
         </div>
       )}
     </div>

@@ -1,4 +1,4 @@
-import type { DistanceRule } from "@/types/domain";
+import type { DistanceRule, GridType } from "@/types/domain";
 
 export interface Point2D {
   x: number;
@@ -35,20 +35,70 @@ export function worldToScreen(
   };
 }
 
+function cubeRound(qf: number, rf: number): { q: number; r: number } {
+  const sf = -qf - rf;
+  let q = Math.round(qf);
+  let r = Math.round(rf);
+  const s = Math.round(sf);
+
+  const qDiff = Math.abs(q - qf);
+  const rDiff = Math.abs(r - rf);
+  const sDiff = Math.abs(s - sf);
+
+  if (qDiff > rDiff && qDiff > sDiff) {
+    q = -r - s;
+  } else if (rDiff > sDiff) {
+    r = -q - s;
+  }
+  return { q, r };
+}
+
 export function snapToGrid(
   pos: Point2D,
   gridSize: number,
-  snapEnabled: boolean
+  snapEnabled: boolean,
+  offsetX = 0,
+  offsetY = 0,
+  gridType: GridType = "square"
 ): Point2D {
-  if (!snapEnabled || gridSize <= 0) {
+  if (!snapEnabled || gridSize <= 0 || gridType === "none") {
     return {
       x: Math.round(pos.x),
       y: Math.round(pos.y),
     };
   }
+
+  if (gridType === "hex_pointy" || gridType === "hex_flat") {
+    const rSize = gridSize / Math.sqrt(3);
+    const px = pos.x - offsetX;
+    const py = pos.y - offsetY;
+
+    if (gridType === "hex_pointy") {
+      const qf = ((Math.sqrt(3) / 3) * px - (1 / 3) * py) / rSize;
+      const rf = ((2 / 3) * py) / rSize;
+      const { q, r } = cubeRound(qf, rf);
+      const cx = rSize * (Math.sqrt(3) * q + (Math.sqrt(3) / 2) * r);
+      const cy = rSize * ((3 / 2) * r);
+      return {
+        x: Math.round(cx + offsetX - gridSize / 2),
+        y: Math.round(cy + offsetY - gridSize / 2),
+      };
+    } else {
+      const qf = ((2 / 3) * px) / rSize;
+      const rf = ((-1 / 3) * px + (Math.sqrt(3) / 3) * py) / rSize;
+      const { q, r } = cubeRound(qf, rf);
+      const cx = rSize * ((3 / 2) * q);
+      const cy = rSize * ((Math.sqrt(3) / 2) * q + Math.sqrt(3) * r);
+      return {
+        x: Math.round(cx + offsetX - gridSize / 2),
+        y: Math.round(cy + offsetY - gridSize / 2),
+      };
+    }
+  }
+
   return {
-    x: Math.round(pos.x / gridSize) * gridSize,
-    y: Math.round(pos.y / gridSize) * gridSize,
+    x: Math.round((pos.x - offsetX) / gridSize) * gridSize + offsetX,
+    y: Math.round((pos.y - offsetY) / gridSize) * gridSize + offsetY,
   };
 }
 

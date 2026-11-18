@@ -8,7 +8,7 @@ import {
   updateSceneSettingsSchema,
 } from "@/lib/validation/schemas";
 import type { Json } from "@/types/database.types";
-import type { DistanceRule, Scene } from "@/types/domain";
+import type { DistanceRule, GridType, Scene } from "@/types/domain";
 
 export interface SceneActionResult {
   ok: boolean;
@@ -68,6 +68,9 @@ export async function updateSceneSettingsAction(input: {
   map_height: number;
   grid_size: number;
   grid_opacity: number;
+  grid_type?: GridType;
+  grid_offset_x?: number;
+  grid_offset_y?: number;
   snap_to_grid: boolean;
   meters_per_cell: number;
   distance_rule: DistanceRule;
@@ -101,6 +104,13 @@ export async function updateSceneSettingsAction(input: {
       map_height: v.map_height,
       grid_size: v.grid_size,
       grid_opacity: v.grid_opacity,
+      ...(v.grid_type !== undefined ? { grid_type: v.grid_type } : {}),
+      ...(v.grid_offset_x !== undefined
+        ? { grid_offset_x: v.grid_offset_x }
+        : {}),
+      ...(v.grid_offset_y !== undefined
+        ? { grid_offset_y: v.grid_offset_y }
+        : {}),
       snap_to_grid: v.snap_to_grid,
       meters_per_cell: v.meters_per_cell,
       distance_rule: v.distance_rule,

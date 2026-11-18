@@ -8,6 +8,23 @@ export type Json =
 
 export type DistanceRule = "chebyshev" | "euclidean" | "alternating";
 export type CampaignRole = "gm" | "player";
+export type GridType = "none" | "square" | "hex_pointy" | "hex_flat";
+export type SceneElementLayer =
+  | "prop"
+  | "mount"
+  | "drawing"
+  | "text"
+  | "attachment";
+export type SceneElementKind =
+  | "freehand"
+  | "line"
+  | "rect"
+  | "circle"
+  | "cone"
+  | "polygon"
+  | "text"
+  | "image"
+  | "aura";
 
 export interface Database {
   public: {
@@ -111,6 +128,9 @@ export interface Database {
           map_height: number;
           grid_size: number;
           grid_opacity: number;
+          grid_type: GridType;
+          grid_offset_x: number;
+          grid_offset_y: number;
           snap_to_grid: boolean;
           meters_per_cell: number;
           distance_rule: DistanceRule;
@@ -127,6 +147,9 @@ export interface Database {
           map_height?: number;
           grid_size?: number;
           grid_opacity?: number;
+          grid_type?: GridType;
+          grid_offset_x?: number;
+          grid_offset_y?: number;
           snap_to_grid?: boolean;
           meters_per_cell?: number;
           distance_rule?: DistanceRule;
@@ -143,6 +166,9 @@ export interface Database {
           map_height?: number;
           grid_size?: number;
           grid_opacity?: number;
+          grid_type?: GridType;
+          grid_offset_x?: number;
+          grid_offset_y?: number;
           snap_to_grid?: boolean;
           meters_per_cell?: number;
           distance_rule?: DistanceRule;
@@ -156,6 +182,82 @@ export interface Database {
             columns: ["campaign_id"];
             isOneToOne: false;
             referencedRelation: "campaigns";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      scene_elements: {
+        Row: {
+          id: string;
+          scene_id: string;
+          campaign_id: string;
+          created_by: string | null;
+          layer: SceneElementLayer;
+          kind: SceneElementKind;
+          attached_to_token_id: string | null;
+          x: number;
+          y: number;
+          rotation: number;
+          data: Json;
+          is_locked: boolean;
+          is_hidden: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          scene_id: string;
+          campaign_id: string;
+          created_by?: string | null;
+          layer?: SceneElementLayer;
+          kind: SceneElementKind;
+          attached_to_token_id?: string | null;
+          x?: number;
+          y?: number;
+          rotation?: number;
+          data?: Json;
+          is_locked?: boolean;
+          is_hidden?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          scene_id?: string;
+          campaign_id?: string;
+          created_by?: string | null;
+          layer?: SceneElementLayer;
+          kind?: SceneElementKind;
+          attached_to_token_id?: string | null;
+          x?: number;
+          y?: number;
+          rotation?: number;
+          data?: Json;
+          is_locked?: boolean;
+          is_hidden?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "scene_elements_scene_id_fkey";
+            columns: ["scene_id"];
+            isOneToOne: false;
+            referencedRelation: "scenes";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "scene_elements_campaign_id_fkey";
+            columns: ["campaign_id"];
+            isOneToOne: false;
+            referencedRelation: "campaigns";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "scene_elements_attached_to_token_id_fkey";
+            columns: ["attached_to_token_id"];
+            isOneToOne: false;
+            referencedRelation: "tokens";
             referencedColumns: ["id"];
           },
         ];

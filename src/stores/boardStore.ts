@@ -1,15 +1,35 @@
 import { create } from "zustand";
 import type { ViewportTransform } from "@/lib/board/geometry";
 import type {
+  DrawPreviewPayload,
   PinnedRuler,
   PointerBroadcastPayload,
   RollResult,
   RulerBroadcastPayload,
   Scene,
+  SceneElement,
+  SceneElementKind,
   Token,
 } from "@/types/domain";
 
-export type BoardTool = "select" | "pan" | "ruler" | "pointer";
+export type BoardTool =
+  | "select"
+  | "pan"
+  | "ruler"
+  | "pointer"
+  | "draw"
+  | "text";
+
+export interface DrawConfig {
+  kind: Extract<
+    SceneElementKind,
+    "freehand" | "line" | "rect" | "circle" | "cone"
+  >;
+  stroke: string;
+  fill: string;
+  strokeWidth: number;
+  opacity: number;
+}
 
 export interface RemoteDragPosition {
   x: number;
@@ -69,7 +89,11 @@ interface BoardState {
   scenes: Scene[];
   viewedSceneId: string | null;
   tokens: Token[];
+  elements: SceneElement[];
   selectedTokenId: string | null;
+  selectedElementId: string | null;
+  drawConfig: DrawConfig;
+  remoteDrawPreviews: Record<string, DrawPreviewPayload>;
   draggingLocalTokenId: string | null;
   remoteTokenDrags: Record<string, RemoteDragPosition>;
   remoteRulers: Record<string, RulerBroadcastPayload>;
@@ -84,13 +108,23 @@ interface BoardState {
   setTool: (tool: BoardTool) => void;
   setViewport: (viewport: ViewportTransform) => void;
   resetViewport: () => void;
-  hydrateBoard: (payload: { scenes: Scene[]; tokens: Token[] }) => void;
+  hydrateBoard: (payload: {
+    scenes: Scene[];
+    tokens: Token[];
+    elements?: SceneElement[];
+  }) => void;
   setViewedSceneId: (sceneId: string) => void;
   upsertScene: (scene: Scene) => void;
   removeScene: (sceneId: string) => void;
   upsertToken: (token: Token) => void;
   removeToken: (tokenId: string) => void;
+  upsertElement: (element: SceneElement) => void;
+  removeElement: (elementId: string) => void;
+  clearDrawingsForScene: (sceneId: string) => void;
   setSelectedTokenId: (tokenId: string | null) => void;
+  setSelectedElementId: (elementId: string | null) => void;
+  setDrawConfig: (patch: Partial<DrawConfig>) => void;
+  setRemoteDrawPreview: (payload: DrawPreviewPayload) => void;
   setDraggingLocalTokenId: (tokenId: string | null) => void;
   setRemoteTokenDrag: (tokenId: string, drag: RemoteDragPosition) => void;
   clearRemoteTokenDrag: (tokenId: string) => void;
@@ -112,7 +146,17 @@ export const useBoardStore = create<BoardState>((set) => ({
   scenes: [],
   viewedSceneId: null,
   tokens: [],
+  elements: [],
   selectedTokenId: null,
+  selectedElementId: null,
+  drawConfig: {
+    kind: "freehand",
+    stroke: "#f59e0b",
+    fill: "#f59e0b",
+    strokeWidth: 4,
+    opacity: 0.35,
+  },
+  remoteDrawPreviews: {},
   draggingLocalTokenId: null,
   remoteTokenDrags: {},
   remoteRulers: {},
@@ -128,7 +172,7 @@ export const useBoardStore = create<BoardState>((set) => ({
   setViewport: (viewport) => set({ viewport }),
   resetViewport: () => set({ viewport: { x: 40, y: 40, scale: 1 } }),
 
-  hydrateBoard: ({ scenes, tokens }) =>
+  hydrateBoard: ({ scenes, tokens, elements }) =>
     set((state) => {
       const activeScene =
         scenes.find((s) => s.is_active) ?? scenes[0] ?? null;
@@ -145,6 +189,7 @@ export const useBoardStore = create<BoardState>((set) => ({
         scenes,
         viewedSceneId: nextViewedId,
         tokens,
+        ...(elements !== undefined ? { elements } : {}),
         combat: viewedScene
           ? extractCombatState(viewedScene)
           : DEFAULT_COMBAT_STATE,
@@ -157,6 +202,7 @@ export const useBoardStore = create<BoardState>((set) => ({
       return {
         viewedSceneId: sceneId,
         selectedTokenId: null,
+        selectedElementId: null,
         combat: targetScene
           ? extractCombatState(targetScene)
           : DEFAULT_COMBAT_STATE,
@@ -240,7 +286,45 @@ export const useBoardStore = create<BoardState>((set) => ({
       };
     }),
 
-  setSelectedTokenId: (tokenId) => set({ selectedTokenId: tokenId }),
+  setSelectedTokenId: (tokenId) =>
+    set({ selectedTokenId: tokenId, selectedElementId: null }),
+  setSelectedElementId: (elementId) =>
+    set({ selectedElementId: elementId, selectedTokenId: null }),
+  setDrawConfig: (patch) =>
+    set((state) => ({ drawConfig: { ...state.drawConfig, ...patch } })),
+  setRemoteDrawPreview: (payload) =>
+    set((state) => {
+      const next = { ...state.remoteDrawPreviews };
+      if (!payload.active) {
+        delete next[payload.userId];
+      } else {
+        next[payload.userId] = payload;
+      }
+      return { remoteDrawPreviews: next };
+    }),
+  upsertElement: (element) =>
+    set((state) => {
+      const exists = state.elements.some((el) => el.id === element.id);
+      return {
+        elements: exists
+          ? state.elements.map((el) => (el.id === element.id ? element : el))
+          : [...state.elements, element],
+      };
+    }),
+  removeElement: (elementId) =>
+    set((state) => ({
+      elements: state.elements.filter((el) => el.id !== elementId),
+      selectedElementId:
+        state.selectedElementId === elementId ? null : state.selectedElementId,
+    })),
+  clearDrawingsForScene: (sceneId) =>
+    set((state) => ({
+      elements: state.elements.filter(
+        (el) =>
+          el.scene_id !== sceneId ||
+          (el.layer !== "drawing" && el.layer !== "text")
+      ),
+    })),
   setDraggingLocalTokenId: (tokenId) => set({ draggingLocalTokenId: tokenId }),
 
   setRemoteTokenDrag: (tokenId, drag) =>
