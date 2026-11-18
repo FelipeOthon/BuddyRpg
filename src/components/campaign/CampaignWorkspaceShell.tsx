@@ -505,11 +505,12 @@ export default function CampaignWorkspaceShell({
                 : "hidden"
           } shrink-0 flex-col border-l border-amber-500/20 bg-zinc-900/95 backdrop-blur`}
         >
-          <nav
-            className={`grid ${
-              isGm ? "grid-cols-5" : "grid-cols-4"
-            } border-b border-zinc-800 bg-zinc-950/60 p-1`}
-          >
+          <div className="flex items-center border-b border-zinc-800 bg-zinc-950/60 p-1">
+            <nav
+              className={`grid flex-1 ${
+                isGm ? "grid-cols-5" : "grid-cols-4"
+              }`}
+            >
             <button
               type="button"
               onClick={() => setActiveTab("chat")}
@@ -572,7 +573,17 @@ export default function CampaignWorkspaceShell({
               <Users className="h-4 w-4" />
               Mesa ({members.length})
             </button>
-          </nav>
+            </nav>
+
+            <button
+              type="button"
+              onClick={() => setSidebarOpen(false)}
+              title="Esconder menu lateral"
+              className="ml-1 flex h-10 w-8 shrink-0 items-center justify-center rounded-lg border border-zinc-800 bg-zinc-900 text-zinc-400 transition hover:border-amber-500/40 hover:text-amber-300"
+            >
+              <PanelRightClose className="h-4 w-4" />
+            </button>
+          </div>
 
           <div className="flex-1 overflow-y-auto p-4">
             {activeTab === "chat" && (
