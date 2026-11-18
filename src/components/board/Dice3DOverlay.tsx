@@ -1,180 +1,295 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import * as THREE from "three";
 import { Dices, Skull, Sparkles } from "lucide-react";
-import {
-  buildDiceSimulation,
-  rotatePoint3D,
-  stepDiceSimulation,
-  type SimulatedDie3D,
-} from "@/lib/dice/dice3dEngine";
 import { playDiceRollSound } from "@/lib/audio/soundEngine";
 import { useBoardStore } from "@/stores/boardStore";
 
-function drawSingleDie3D(ctx: CanvasRenderingContext2D, d: SimulatedDie3D) {
-  const scale = 1 + d.z * 0.0025;
-  const r = d.radius * scale;
-  const screenX = d.x;
-  const screenY = d.y - d.z * 0.55;
+interface DiePhysicsBody {
+  group: THREE.Group;
+  badge: THREE.Sprite;
+  vx: number;
+  vy: number;
+  vz: number;
+  wx: number;
+  wy: number;
+  wz: number;
+  settled: boolean;
+  isCrit: boolean;
+  isFumble: boolean;
+  kept: boolean;
+}
 
-  // Sombra projetada no tabuleiro
-  ctx.save();
+function createGeometryForSides(sides: number): THREE.BufferGeometry {
+  if (sides === 4) return new THREE.TetrahedronGeometry(0.78, 0);
+  if (sides === 6) return new THREE.BoxGeometry(0.95, 0.95, 0.95);
+  if (sides === 8 || sides === 10 || sides === 100) {
+    return new THREE.OctahedronGeometry(0.76, 0);
+  }
+  if (sides === 12) return new THREE.DodecahedronGeometry(0.72, 0);
+  return new THREE.IcosahedronGeometry(0.78, 0);
+}
+
+function createNumberBadgeSprite(params: {
+  value: number;
+  sides: number;
+  isCrit: boolean;
+  isFumble: boolean;
+  kept: boolean;
+}): THREE.Sprite {
+  const canvas = document.createElement("canvas");
+  canvas.width = 256;
+  canvas.height = 256;
+  const ctx = canvas.getContext("2d")!;
+
+  ctx.clearRect(0, 0, 256, 256);
+
+  // Anel externo dourado/esmeralda/rubro
   ctx.beginPath();
-  ctx.ellipse(
-    d.x + d.z * 0.18,
-    d.y + d.z * 0.12 + 8,
-    d.radius * 0.85,
-    d.radius * 0.52,
-    0,
-    0,
-    Math.PI * 2
-  );
-  ctx.fillStyle = `rgba(0, 0, 0, ${Math.max(0.45 - d.z * 0.0015, 0.12)})`;
+  ctx.arc(128, 128, 84, 0, Math.PI * 2);
+  ctx.fillStyle = params.isCrit
+    ? "rgba(6, 78, 59, 0.92)"
+    : params.isFumble
+      ? "rgba(136, 19, 55, 0.92)"
+      : "rgba(12, 10, 18, 0.88)";
   ctx.fill();
-  ctx.restore();
 
-  // Transforma vértices 3D
-  const transformed = d.mesh.vertices.map((v) => {
-    const rot = rotatePoint3D(v, d.rx, d.ry, d.rz);
-    return {
-      x: screenX + rot.x * r,
-      y: screenY + rot.y * r,
-      z: rot.z,
-    };
-  });
+  ctx.lineWidth = 8;
+  ctx.strokeStyle = params.isCrit
+    ? "#34d399"
+    : params.isFumble
+      ? "#fb7185"
+      : params.kept
+        ? "#f59e0b"
+        : "#52525b";
+  ctx.stroke();
 
-  // Ordena faces por profundidade (Painter's Algorithm)
-  const sortedFaces = d.mesh.faces
-    .map((faceIndices) => {
-      const pts = faceIndices.map((idx) => transformed[idx]!);
-      const avgZ = pts.reduce((acc, p) => acc + p.z, 0) / pts.length;
-      return { pts, avgZ };
-    })
-    .sort((a, b) => a.avgZ - b.avgZ);
-
-  const isCrit = d.kept && d.sides === 20 && d.value === 20;
-  const isFumble = d.kept && d.sides === 20 && d.value === 1;
-
-  ctx.save();
-  if (!d.kept) {
-    ctx.globalAlpha = 0.42;
-  }
-
-  for (const face of sortedFaces) {
-    if (face.avgZ < -0.25) continue;
-
-    ctx.beginPath();
-    face.pts.forEach((pt, idx) => {
-      if (idx === 0) ctx.moveTo(pt.x, pt.y);
-      else ctx.lineTo(pt.x, pt.y);
-    });
-    ctx.closePath();
-
-    const light = Math.max(0.25, Math.min(1, (face.avgZ + 1) * 0.55));
-    if (isCrit) {
-      ctx.fillStyle = `rgba(${Math.round(16 * light)}, ${Math.round(
-        145 * light
-      )}, ${Math.round(105 * light)}, 0.96)`;
-      ctx.strokeStyle = "#fde047";
-    } else if (isFumble) {
-      ctx.fillStyle = `rgba(${Math.round(165 * light)}, ${Math.round(
-        24 * light
-      )}, ${Math.round(45 * light)}, 0.96)`;
-      ctx.strokeStyle = "#fda4af";
-    } else {
-      ctx.fillStyle = `rgba(${Math.round(38 * light)}, ${Math.round(
-        28 * light
-      )}, ${Math.round(52 * light)}, 0.96)`;
-      ctx.strokeStyle = "#f59e0b";
-    }
-
-    ctx.lineWidth = 1.6;
-    ctx.fill();
-    ctx.stroke();
-  }
-
-  // Número do resultado no centro do poliedro + etiqueta do tipo de dado (d20, d6...)
+  // Número sorteado
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
+  ctx.font = "900 84px ui-monospace, SFMono-Regular, Menlo, monospace";
+  ctx.fillStyle = params.isCrit
+    ? "#fef08a"
+    : params.isFumble
+      ? "#fecdd3"
+      : params.kept
+        ? "#fef3c7"
+        : "#a1a1aa";
+  ctx.fillText(String(params.value), 128, 118);
 
-  // Brilho atrás do número quando o dado assenta
-  if (d.settled) {
-    ctx.beginPath();
-    ctx.arc(screenX, screenY, r * 0.52, 0, Math.PI * 2);
-    ctx.fillStyle = isCrit
-      ? "rgba(6, 78, 59, 0.88)"
-      : isFumble
-        ? "rgba(136, 19, 55, 0.88)"
-        : "rgba(9, 9, 11, 0.82)";
-    ctx.fill();
-    ctx.strokeStyle = isCrit
-      ? "#34d399"
-      : isFumble
-        ? "#fb7185"
-        : "rgba(251, 191, 36, 0.65)";
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-  }
+  // Tipo de dado (ex: d20)
+  ctx.font = "700 30px ui-sans-serif, system-ui, sans-serif";
+  ctx.fillStyle = params.isCrit
+    ? "#6ee7b7"
+    : params.isFumble
+      ? "#fda4af"
+      : "#fbbf24";
+  ctx.fillText(`d${params.sides}`, 128, 176);
 
-  ctx.font = `900 ${Math.round(r * 0.55)}px ui-monospace, monospace`;
-  ctx.fillStyle = isCrit ? "#fef08a" : isFumble ? "#fecdd3" : "#fef3c7";
-  ctx.fillText(String(d.value), screenX, screenY - 2);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.needsUpdate = true;
 
-  ctx.font = `700 ${Math.max(Math.round(r * 0.24), 9)}px ui-sans-serif, sans-serif`;
-  ctx.fillStyle = "rgba(251, 191, 36, 0.85)";
-  ctx.fillText(`d${d.sides}`, screenX, screenY + r * 0.36);
+  const material = new THREE.SpriteMaterial({
+    map: texture,
+    transparent: true,
+    opacity: 0,
+    depthTest: false,
+  });
 
-  ctx.restore();
+  const sprite = new THREE.Sprite(material);
+  sprite.scale.set(1.25, 1.25, 1);
+  return sprite;
 }
 
 export default function Dice3DOverlay() {
   const { dice3dEnabled, activeDice3dRoll, triggerDice3dRoll } =
     useBoardStore();
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const mountRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!dice3dEnabled || !activeDice3dRoll) return;
+    const container = mountRef.current;
+    if (!container) return;
 
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+    const width = container.clientWidth || 960;
+    const height = container.clientHeight || 640;
 
-    const width = canvas.parentElement?.clientWidth || 960;
-    const height = canvas.parentElement?.clientHeight || 640;
-    canvas.width = width;
-    canvas.height = height;
+    let renderer: THREE.WebGLRenderer;
+    try {
+      renderer = new THREE.WebGLRenderer({
+        alpha: true,
+        antialias: true,
+        powerPreference: "high-performance",
+      });
+    } catch {
+      return;
+    }
 
-    const { dice, particles } = buildDiceSimulation(
-      activeDice3dRoll.roll,
-      width,
-      height
-    );
+    renderer.setSize(width, height);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    container.innerHTML = "";
+    container.appendChild(renderer.domElement);
 
-    let soundNat20 = false;
-    let soundNat1 = false;
-    for (const t of activeDice3dRoll.roll.terms) {
-      if (t.type === "dice" && t.sides === 20) {
-        for (const r of t.rolls) {
-          if (r.kept && r.v === 20) soundNat20 = true;
-          if (r.kept && r.v === 1) soundNat1 = true;
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(42, width / height, 0.1, 100);
+    camera.position.set(0, -6.2, 11.5);
+    camera.lookAt(0, 0.2, 0);
+
+    // Iluminação cinematográfica (luz quente de tocha + luz arcana fria)
+    const ambient = new THREE.AmbientLight(0xfff1d6, 0.75);
+    scene.add(ambient);
+
+    const keyLight = new THREE.DirectionalLight(0xffd28a, 2.4);
+    keyLight.position.set(5, -4, 12);
+    keyLight.castShadow = true;
+    keyLight.shadow.mapSize.width = 1024;
+    keyLight.shadow.mapSize.height = 1024;
+    keyLight.shadow.camera.near = 1;
+    keyLight.shadow.camera.far = 30;
+    const dCam = 9;
+    keyLight.shadow.camera.left = -dCam;
+    keyLight.shadow.camera.right = dCam;
+    keyLight.shadow.camera.top = dCam;
+    keyLight.shadow.camera.bottom = -dCam;
+    scene.add(keyLight);
+
+    const rimLight = new THREE.PointLight(0x818cf8, 22, 25);
+    rimLight.position.set(-6, 5, 6);
+    scene.add(rimLight);
+
+    // Plano invisível que recebe sombras reais sobre o mapa
+    const floorGeo = new THREE.PlaneGeometry(32, 24);
+    const floorMat = new THREE.ShadowMaterial({ opacity: 0.48 });
+    const floor = new THREE.Mesh(floorGeo, floorMat);
+    floor.receiveShadow = true;
+    floor.position.z = 0;
+    scene.add(floor);
+
+    // Constrói os dados do roll_result
+    const flatDice: Array<{ sides: number; value: number; kept: boolean }> =
+      [];
+    for (const term of activeDice3dRoll.roll.terms) {
+      if (term.type === "dice") {
+        for (const r of term.rolls) {
+          flatDice.push({
+            sides: term.sides,
+            value: r.v,
+            kept: r.kept,
+          });
         }
       }
     }
+
+    const bodies: DiePhysicsBody[] = [];
+    const diceCount = Math.min(flatDice.length, 16);
+
+    let soundNat20 = false;
+    let soundNat1 = false;
+
+    for (let i = 0; i < diceCount; i++) {
+      const item = flatDice[i]!;
+      const isCrit = item.kept && item.sides === 20 && item.value === 20;
+      const isFumble = item.kept && item.sides === 20 && item.value === 1;
+      if (isCrit) soundNat20 = true;
+      if (isFumble) soundNat1 = true;
+
+      const geo = createGeometryForSides(item.sides);
+      const baseColor = isCrit
+        ? 0x065f46
+        : isFumble
+          ? 0x881337
+          : item.kept
+            ? 0x221738
+            : 0x27272a;
+
+      const mat = new THREE.MeshPhysicalMaterial({
+        color: baseColor,
+        roughness: 0.22,
+        metalness: 0.35,
+        clearcoat: 0.9,
+        clearcoatRoughness: 0.15,
+        transparent: !item.kept,
+        opacity: item.kept ? 1 : 0.48,
+      });
+
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+
+      // Bordas metálicas em ouro velho / esmeralda / rubi
+      const edgesGeo = new THREE.EdgesGeometry(geo);
+      const edgeColor = isCrit
+        ? 0x34d399
+        : isFumble
+          ? 0xfb7185
+          : item.kept
+            ? 0xf59e0b
+            : 0x71717a;
+      const edgesMat = new THREE.LineBasicMaterial({
+        color: edgeColor,
+        transparent: true,
+        opacity: item.kept ? 0.95 : 0.45,
+      });
+      const edges = new THREE.LineSegments(edgesGeo, edgesMat);
+      mesh.add(edges);
+
+      const group = new THREE.Group();
+      group.add(mesh);
+
+      const angle = (i / Math.max(diceCount, 1)) * Math.PI * 2;
+      const startX = -3.8 + (i % 4) * 1.1;
+      const startY = -3.6 + Math.floor(i / 4) * 0.8;
+      group.position.set(startX, startY, 3.6 + (i % 3) * 0.7);
+      group.rotation.set(i * 0.9, i * 1.4, i * 0.6);
+
+      scene.add(group);
+
+      const badge = createNumberBadgeSprite({
+        value: item.value,
+        sides: item.sides,
+        isCrit,
+        isFumble,
+        kept: item.kept,
+      });
+      badge.position.set(startX, startY, 1.35);
+      scene.add(badge);
+
+      const targetX = Math.cos(angle) * Math.min(diceCount * 0.55, 2.8);
+      const targetY = Math.sin(angle) * Math.min(diceCount * 0.45, 2.0);
+      const flightFrames = 36;
+
+      bodies.push({
+        group,
+        badge,
+        vx: (targetX - startX) / flightFrames,
+        vy: (targetY - startY) / flightFrames,
+        vz: 0.12 + (i % 3) * 0.03,
+        wx: (i % 2 === 0 ? 1 : -1) * 0.24,
+        wy: 0.28,
+        wz: 0.19,
+        settled: false,
+        isCrit,
+        isFumble,
+        kept: item.kept,
+      });
+    }
+
     playDiceRollSound({
-      diceCount: dice.length,
+      diceCount,
       hasNat20: soundNat20,
       hasNat1: soundNat1,
     });
 
     let rafId = 0;
     const startTime = performance.now();
-    const totalDuration = 3900;
+    const totalDuration = 4000;
 
-    const renderFrame = (now: number) => {
+    const animate = (now: number) => {
       const elapsed = now - startTime;
       if (elapsed >= totalDuration) {
-        ctx.clearRect(0, 0, width, height);
         triggerDice3dRoll(null);
         return;
       }
@@ -183,37 +298,104 @@ export default function Dice3DOverlay() {
         elapsed > totalDuration - 650
           ? Math.max((totalDuration - elapsed) / 650, 0)
           : 1;
+      renderer.domElement.style.opacity = String(fadeAlpha);
 
-      ctx.clearRect(0, 0, width, height);
-      ctx.save();
-      ctx.globalAlpha = fadeAlpha;
+      // Passo de física 3D
+      for (let i = 0; i < bodies.length; i++) {
+        const b = bodies[i]!;
+        if (!b.settled) {
+          b.group.position.x += b.vx;
+          b.group.position.y += b.vy;
+          b.group.position.z += b.vz;
+          b.vz -= 0.019; // gravidade
 
-      stepDiceSimulation(dice, particles, width, height);
+          b.group.rotation.x += b.wx;
+          b.group.rotation.y += b.wy;
+          b.group.rotation.z += b.wz;
 
-      // Desenha partículas de crítico / falha
-      for (const pt of particles) {
-        ctx.save();
-        ctx.globalAlpha = Math.max(pt.alpha * fadeAlpha, 0);
-        ctx.fillStyle = pt.color;
-        ctx.beginPath();
-        ctx.arc(pt.x, pt.y, pt.size, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
+          // Limites da mesa
+          if (b.group.position.x < -5.5 || b.group.position.x > 5.5) {
+            b.vx = -b.vx * 0.7;
+          }
+          if (b.group.position.y < -3.8 || b.group.position.y > 3.8) {
+            b.vy = -b.vy * 0.7;
+          }
+
+          // Quique no chão z = 0.65
+          if (b.group.position.z <= 0.65) {
+            b.group.position.z = 0.65;
+            if (Math.abs(b.vz) > 0.055) {
+              b.vz = -b.vz * 0.54;
+              b.vx *= 0.76;
+              b.vy *= 0.76;
+              b.wx *= 0.72;
+              b.wy *= 0.72;
+              b.wz *= 0.72;
+            } else {
+              b.vz = 0;
+              b.vx *= 0.82;
+              b.vy *= 0.82;
+              b.wx *= 0.68;
+              b.wy *= 0.68;
+              b.wz *= 0.68;
+
+              if (
+                Math.hypot(b.vx, b.vy) < 0.008 &&
+                Math.hypot(b.wx, b.wy, b.wz) < 0.02
+              ) {
+                b.settled = true;
+              }
+            }
+          }
+        }
+
+        // Repulsão suave entre dados
+        for (let j = i + 1; j < bodies.length; j++) {
+          const other = bodies[j]!;
+          const dx = other.group.position.x - b.group.position.x;
+          const dy = other.group.position.y - b.group.position.y;
+          const dist = Math.hypot(dx, dy);
+          if (dist > 0 && dist < 1.45) {
+            const push = (1.45 - dist) * 0.08;
+            const nx = dx / dist;
+            const ny = dy / dist;
+            b.group.position.x -= nx * push;
+            b.group.position.y -= ny * push;
+            other.group.position.x += nx * push;
+            other.group.position.y += ny * push;
+          }
+        }
+
+        // Badge acompanha o dado e aparece suavemente ao assentar (ou após 850ms)
+        b.badge.position.set(
+          b.group.position.x,
+          b.group.position.y,
+          b.group.position.z + 0.95
+        );
+        const badgeMat = b.badge.material as THREE.SpriteMaterial;
+        if (b.settled || elapsed > 900) {
+          badgeMat.opacity = Math.min(badgeMat.opacity + 0.12, 1);
+        }
       }
 
-      // Desenha os dados 3D
-      for (const d of dice) {
-        drawSingleDie3D(ctx, d);
-      }
-
-      ctx.restore();
-      rafId = window.requestAnimationFrame(renderFrame);
+      renderer.render(scene, camera);
+      rafId = window.requestAnimationFrame(animate);
     };
 
-    rafId = window.requestAnimationFrame(renderFrame);
+    rafId = window.requestAnimationFrame(animate);
 
     return () => {
       window.cancelAnimationFrame(rafId);
+      bodies.forEach((b) => {
+        b.badge.material.map?.dispose();
+        b.badge.material.dispose();
+      });
+      floorGeo.dispose();
+      floorMat.dispose();
+      renderer.dispose();
+      if (container.contains(renderer.domElement)) {
+        container.removeChild(renderer.domElement);
+      }
     };
   }, [dice3dEnabled, activeDice3dRoll, triggerDice3dRoll]);
 
@@ -235,10 +417,10 @@ export default function Dice3DOverlay() {
 
   return (
     <div className="pointer-events-none absolute inset-0 z-25 overflow-hidden">
-      <canvas ref={canvasRef} className="h-full w-full" />
+      <div ref={mountRef} className="h-full w-full" />
 
       {/* Banner Arcano Superior do Resultado */}
-      <div className="absolute top-16 left-1/2 flex -translate-x-1/2 items-center gap-3 rounded-2xl border border-amber-500/50 bg-zinc-950/95 px-5 py-2.5 shadow-[0_0_35px_rgba(245,158,11,0.35)] backdrop-blur">
+      <div className="absolute top-16 left-1/2 flex max-w-[92vw] -translate-x-1/2 flex-wrap items-center justify-center gap-2.5 rounded-2xl border border-amber-500/50 bg-zinc-950/95 px-4 py-2 shadow-[0_0_35px_rgba(245,158,11,0.35)] backdrop-blur sm:px-5 sm:py-2.5">
         <Dices className="h-5 w-5 text-amber-400" />
         <div className="text-xs">
           <span className="font-bold text-amber-200">{author}</span>{" "}
