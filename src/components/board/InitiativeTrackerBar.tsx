@@ -1,6 +1,7 @@
 "use client";
 
 import { ChevronRight, Shield, Swords, X } from "lucide-react";
+import { updateSceneCombatStateAction } from "@/actions/scenes";
 import {
   useBoardStore,
   type CombatStatePayload,
@@ -28,6 +29,16 @@ export default function InitiativeTrackerBar({
 
   const sceneTokens = tokens.filter((t) => t.scene_id === scene.id);
 
+  const syncCombat = (next: CombatStatePayload) => {
+    setCombatState(next);
+    onBroadcastCombat?.(next);
+    void updateSceneCombatStateAction({
+      sceneId: scene.id,
+      campaignId: scene.campaign_id,
+      combatState: next,
+    });
+  };
+
   const startCombat = () => {
     if (!isGm || sceneTokens.length === 0) return;
 
@@ -45,8 +56,7 @@ export default function InitiativeTrackerBar({
       turnIndex: 0,
       combatants: rolled,
     };
-    setCombatState(next);
-    onBroadcastCombat?.(next);
+    syncCombat(next);
   };
 
   const nextTurn = () => {
@@ -57,8 +67,7 @@ export default function InitiativeTrackerBar({
       round: isLast ? combat.round + 1 : combat.round,
       turnIndex: isLast ? 0 : combat.turnIndex + 1,
     };
-    setCombatState(next);
-    onBroadcastCombat?.(next);
+    syncCombat(next);
 
     const activeTokenId = next.combatants[next.turnIndex]?.tokenId;
     if (activeTokenId) {
@@ -74,8 +83,7 @@ export default function InitiativeTrackerBar({
       turnIndex: 0,
       combatants: [],
     };
-    setCombatState(next);
-    onBroadcastCombat?.(next);
+    syncCombat(next);
   };
 
   if (!combat.active) {

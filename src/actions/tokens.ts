@@ -2,6 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import {
+  createTokenSchema,
+  updateTokenStatsSchema,
+} from "@/lib/validation/schemas";
 import type { Database } from "@/types/database.types";
 import type { Token } from "@/types/domain";
 
@@ -24,13 +28,14 @@ export async function createTokenAction(input: {
   posX?: number;
   posY?: number;
 }): Promise<TokenActionResult> {
-  const name = input.name.trim();
-  if (name.length < 1 || name.length > 80) {
+  const parsed = createTokenSchema.safeParse(input);
+  if (!parsed.success) {
     return {
       ok: false,
-      error: "O nome do token deve ter entre 1 e 80 caracteres.",
+      error: parsed.error.issues[0]?.message ?? "Dados do token inválidos.",
     };
   }
+  const v = parsed.data;
 
   const supabase = await createServerSupabaseClient();
   const {
@@ -44,7 +49,7 @@ export async function createTokenAction(input: {
   const { data: membership } = await supabase
     .from("campaign_members")
     .select("role")
-    .eq("campaign_id", input.campaignId)
+    .eq("campaign_id", v.campaignId)
     .eq("user_id", user.id)
     .maybeSingle();
 
@@ -53,23 +58,25 @@ export async function createTokenAction(input: {
   }
 
   const isGm = membership.role === "gm";
-  const finalOwnerId = isGm ? input.ownerId ?? user.id : user.id;
-  const hpMax = Math.max(Math.round(input.hpMax || 10), 1);
-  const hpCurrent = Math.min(Math.max(Math.round(input.hpCurrent ?? hpMax), 0), hpMax);
-  const size = Math.min(Math.max(Math.round(input.size || 1), 1), 4);
+  const finalOwnerId = isGm ? v.ownerId ?? user.id : user.id;
+  const hpMax = v.hpMax;
+  const hpCurrent = Math.min(
+    Math.max(Math.round(v.hpCurrent ?? hpMax), 0),
+    hpMax
+  );
 
   const { data, error } = await supabase
     .from("tokens")
     .insert({
-      scene_id: input.sceneId,
-      campaign_id: input.campaignId,
+      scene_id: v.sceneId,
+      campaign_id: v.campaignId,
       owner_id: finalOwnerId,
-      character_id: input.characterId ?? null,
-      name,
-      image_url: input.imageUrl ?? null,
-      pos_x: input.posX ?? 140,
-      pos_y: input.posY ?? 140,
-      size,
+      character_id: v.characterId ?? null,
+      name: v.name,
+      image_url: v.imageUrl ?? null,
+      pos_x: v.posX ?? 140,
+      pos_y: v.posY ?? 140,
+      size: v.size,
       hp_current: hpCurrent,
       hp_max: hpMax,
     })
@@ -83,7 +90,7 @@ export async function createTokenAction(input: {
     };
   }
 
-  revalidatePath(`/campaign/${input.campaignId}`);
+  revalidatePath(`/campaign/${v.campaignId}`);
   return { ok: true, token: data };
 }
 
@@ -96,37 +103,56 @@ export async function updateTokenStatsAction(input: {
   size?: number;
   ownerId?: string | null;
   characterId?: string | null;
+  isHidden?: boolean;
+  conditions?: string[];
 }): Promise<TokenActionResult> {
+  const parsed = updateTokenStatsSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Dados do token inválidos.",
+    };
+  }
+  const v = parsed.data;
+
   const supabase = await createServerSupabaseClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { ok: false, error: "Sessão expirada." };
+  }
 
   const patch: Database["public"]["Tables"]["tokens"]["Update"] = {};
-  if (input.name !== undefined) {
-    const trimmed = input.name.trim();
-    if (trimmed.length < 1 || trimmed.length > 80) {
-      return { ok: false, error: "Nome inválido." };
+  if (v.name !== undefined) patch.name = v.name;
+  if (v.hpMax !== undefined) patch.hp_max = v.hpMax;
+  if (v.hpCurrent !== undefined) patch.hp_current = v.hpCurrent;
+  if (v.size !== undefined) patch.size = v.size;
+  if (v.ownerId !== undefined) patch.owner_id = v.ownerId;
+  if (v.characterId !== undefined) patch.character_id = v.characterId;
+  if (v.conditions !== undefined) patch.conditions = v.conditions;
+  if (v.isHidden !== undefined) {
+    const { data: membership } = await supabase
+      .from("campaign_members")
+      .select("role")
+      .eq("campaign_id", v.campaignId)
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (membership?.role !== "gm") {
+      return {
+        ok: false,
+        error: "Apenas o Mestre pode ocultar ou revelar tokens.",
+      };
     }
-    patch.name = trimmed;
-  }
-  if (input.hpMax !== undefined) {
-    patch.hp_max = Math.max(Math.round(input.hpMax), 1);
-  }
-  if (input.hpCurrent !== undefined) {
-    patch.hp_current = Math.max(Math.round(input.hpCurrent), 0);
-  }
-  if (input.size !== undefined) {
-    patch.size = Math.min(Math.max(Math.round(input.size), 1), 4);
-  }
-  if (input.ownerId !== undefined) {
-    patch.owner_id = input.ownerId;
-  }
-  if (input.characterId !== undefined) {
-    patch.character_id = input.characterId;
+    patch.is_hidden = v.isHidden;
   }
 
   const { data, error } = await supabase
     .from("tokens")
     .update(patch)
-    .eq("id", input.tokenId)
+    .eq("id", v.tokenId)
     .select("*")
     .single();
 
@@ -147,6 +173,14 @@ export async function deleteTokenAction(input: {
   campaignId: string;
 }): Promise<TokenActionResult> {
   const supabase = await createServerSupabaseClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { ok: false, error: "Sessão expirada." };
+  }
+
   const { error } = await supabase
     .from("tokens")
     .delete()

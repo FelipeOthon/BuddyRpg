@@ -20,6 +20,7 @@ import {
   Users,
   Wifi,
 } from "lucide-react";
+import { loadOlderMessagesAction } from "@/actions/chat";
 import BoardClient from "@/components/board/BoardClient";
 import Dice3DOverlay from "@/components/board/Dice3DOverlay";
 import InitiativeTrackerBar from "@/components/board/InitiativeTrackerBar";
@@ -77,9 +78,40 @@ export default function CampaignWorkspaceShell({
   const [copied, setCopied] = useState<"code" | "link" | null>(null);
   const [toastError, setToastError] = useState<string | null>(null);
   const [messages, setMessages] = useState<MessageRow[]>(initialMessages);
+  const [hasMoreMessages, setHasMoreMessages] = useState(
+    initialMessages.length >= 100
+  );
+  const [membersList, setMembersList] =
+    useState<CampaignMemberInfo[]>(members);
   const [characters, setCharacters] =
     useState<CharacterRow[]>(initialCharacters);
   const [openCharacterId, setOpenCharacterId] = useState<string | null>(null);
+  const lastMemberRefreshRef = useRef(0);
+
+  const refreshMembers = useCallback(async () => {
+    const now = Date.now();
+    if (now - lastMemberRefreshRef.current < 3000) return;
+    lastMemberRefreshRef.current = now;
+
+    const supabase = createBrowserSupabaseClient();
+    const { data: rawMembers } = await supabase
+      .from("campaign_members")
+      .select("user_id, role, profiles ( username )")
+      .eq("campaign_id", campaign.id)
+      .order("joined_at", { ascending: true });
+
+    if (!rawMembers) return;
+    setMembersList(
+      rawMembers.map((m) => {
+        const p = Array.isArray(m.profiles) ? m.profiles[0] : m.profiles;
+        return {
+          userId: m.user_id,
+          username: p?.username ?? `user_${m.user_id.slice(0, 6)}`,
+          role: m.role,
+        };
+      })
+    );
+  }, [campaign.id]);
 
   const {
     scenes,
@@ -110,10 +142,17 @@ export default function CampaignWorkspaceShell({
         return [...prev, msg];
       });
 
+      if (
+        msg.user_id &&
+        !membersList.some((m) => m.userId === msg.user_id)
+      ) {
+        void refreshMembers();
+      }
+
       if (msg.roll_result && lastAnimatedMsgIdRef.current !== msg.id) {
         lastAnimatedMsgIdRef.current = msg.id;
         const author =
-          members.find((m) => m.userId === msg.user_id)?.username ??
+          membersList.find((m) => m.userId === msg.user_id)?.username ??
           "Aventureiro";
         triggerDice3dRoll({
           id: `roll-${msg.id}-${Date.now()}`,
@@ -123,8 +162,36 @@ export default function CampaignWorkspaceShell({
         });
       }
     },
-    [members, triggerDice3dRoll]
+    [membersList, refreshMembers, triggerDice3dRoll]
   );
+
+  const handleLoadOlderMessages = useCallback(async () => {
+    const oldest = messages[0];
+    if (!oldest) {
+      setHasMoreMessages(false);
+      return;
+    }
+
+    const res = await loadOlderMessagesAction({
+      campaignId: campaign.id,
+      beforeCreatedAt: oldest.created_at,
+    });
+
+    if (!res.ok) {
+      showError(res.error ?? "Erro ao carregar histórico.");
+      return;
+    }
+
+    const older = res.messages ?? [];
+    setHasMoreMessages(Boolean(res.hasMore));
+    if (older.length > 0) {
+      setMessages((prev) => {
+        const existingIds = new Set(prev.map((m) => m.id));
+        const uniqueOlder = older.filter((m) => !existingIds.has(m.id));
+        return [...uniqueOlder, ...prev];
+      });
+    }
+  }, [campaign.id, messages, showError]);
 
   const upsertCharacter = useCallback((char: CharacterRow) => {
     setCharacters((prev) => {
@@ -174,14 +241,14 @@ export default function CampaignWorkspaceShell({
 
   const currentUsername = useMemo(() => {
     return (
-      members.find((m) => m.userId === currentUserId)?.username ??
+      membersList.find((m) => m.userId === currentUserId)?.username ??
       "Aventureiro"
     );
-  }, [members, currentUserId]);
+  }, [membersList, currentUserId]);
 
   const gmUserIds = useMemo(
-    () => members.filter((m) => m.role === "gm").map((m) => m.userId),
-    [members]
+    () => membersList.filter((m) => m.role === "gm").map((m) => m.userId),
+    [membersList]
   );
 
   const {
@@ -571,7 +638,7 @@ export default function CampaignWorkspaceShell({
               }`}
             >
               <Users className="h-4 w-4" />
-              Mesa ({members.length})
+              Mesa ({membersList.length})
             </button>
             </nav>
 
@@ -591,7 +658,9 @@ export default function CampaignWorkspaceShell({
                 campaignId={campaign.id}
                 currentUserId={currentUserId}
                 messages={messages}
-                members={members}
+                members={membersList}
+                hasMoreMessages={hasMoreMessages}
+                onLoadOlderMessages={handleLoadOlderMessages}
                 onAppendMessage={appendOrDedupeMessage}
               />
             )}
@@ -602,7 +671,7 @@ export default function CampaignWorkspaceShell({
                 scene={viewedScene}
                 currentUserId={currentUserId}
                 role={role}
-                members={members}
+                members={membersList}
                 characters={characters}
               />
             )}
@@ -613,7 +682,7 @@ export default function CampaignWorkspaceShell({
                 currentUserId={currentUserId}
                 role={role}
                 characters={characters}
-                members={members}
+                members={membersList}
                 onUpsertCharacter={upsertCharacter}
                 onRemoveCharacter={removeCharacter}
                 onOpenCharacter={(c) => setOpenCharacterId(c.id)}
@@ -655,10 +724,10 @@ export default function CampaignWorkspaceShell({
                 </div>
 
                 <h3 className="pt-2 text-xs font-semibold uppercase tracking-wider text-zinc-400">
-                  Participantes ({members.length})
+                  Participantes ({membersList.length})
                 </h3>
                 <ul className="space-y-2">
-                  {members.map((m) => (
+                  {membersList.map((m) => (
                     <li
                       key={m.userId}
                       className="flex items-center justify-between rounded-xl border border-zinc-800/80 bg-zinc-950/60 px-3.5 py-2.5"
@@ -692,7 +761,7 @@ export default function CampaignWorkspaceShell({
           currentUserId={currentUserId}
           role={role}
           ownerName={
-            members.find((m) => m.userId === openCharacter.owner_id)
+            membersList.find((m) => m.userId === openCharacter.owner_id)
               ?.username ?? "Mestre"
           }
           onClose={() => setOpenCharacterId(null)}

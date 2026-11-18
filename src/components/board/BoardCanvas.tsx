@@ -88,7 +88,9 @@ export default function BoardCanvas({
     return () => observer.disconnect();
   }, []);
 
-  const sceneTokens = tokens.filter((t) => t.scene_id === scene.id);
+  const sceneTokens = tokens.filter(
+    (t) => t.scene_id === scene.id && (role === "gm" || !t.is_hidden)
+  );
 
   const fallbackDemoToken: Token = {
     id: `demo-token-${scene.id}`,
@@ -103,6 +105,8 @@ export default function BoardCanvas({
     size: 1,
     hp_current: 24,
     hp_max: 30,
+    is_hidden: false,
+    conditions: [],
     updated_at: new Date().toISOString(),
   };
 

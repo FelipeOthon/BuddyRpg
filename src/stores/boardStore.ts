@@ -36,6 +36,31 @@ export interface CombatStatePayload {
   combatants: CombatantEntry[];
 }
 
+const DEFAULT_COMBAT_STATE: CombatStatePayload = {
+  active: false,
+  round: 1,
+  turnIndex: 0,
+  combatants: [],
+};
+
+function extractCombatState(scene: Scene | null | undefined): CombatStatePayload {
+  const raw = scene?.combat_state as unknown;
+  if (!raw || typeof raw !== "object") return DEFAULT_COMBAT_STATE;
+  const obj = raw as Partial<CombatStatePayload>;
+  if (typeof obj.active !== "boolean" || !Array.isArray(obj.combatants)) {
+    return DEFAULT_COMBAT_STATE;
+  }
+  return {
+    active: obj.active,
+    round: typeof obj.round === "number" && obj.round >= 1 ? obj.round : 1,
+    turnIndex:
+      typeof obj.turnIndex === "number" && obj.turnIndex >= 0
+        ? obj.turnIndex
+        : 0,
+    combatants: obj.combatants,
+  };
+}
+
 interface BoardState {
   tool: BoardTool;
   viewport: ViewportTransform;
@@ -81,12 +106,7 @@ export const useBoardStore = create<BoardState>((set) => ({
   remoteRulers: {},
   dice3dEnabled: true,
   activeDice3dRoll: null,
-  combat: {
-    active: false,
-    round: 1,
-    turnIndex: 0,
-    combatants: [],
-  },
+  combat: DEFAULT_COMBAT_STATE,
 
   setTool: (tool) => set({ tool }),
   setViewport: (viewport) => set({ viewport }),
@@ -99,18 +119,33 @@ export const useBoardStore = create<BoardState>((set) => ({
       const keepViewed =
         state.viewedSceneId &&
         scenes.some((s) => s.id === state.viewedSceneId);
+      const nextViewedId = keepViewed
+        ? state.viewedSceneId
+        : activeScene?.id ?? null;
+      const viewedScene =
+        scenes.find((s) => s.id === nextViewedId) ?? activeScene;
 
       return {
         scenes,
-        viewedSceneId: keepViewed
-          ? state.viewedSceneId
-          : activeScene?.id ?? null,
+        viewedSceneId: nextViewedId,
         tokens,
+        combat: viewedScene
+          ? extractCombatState(viewedScene)
+          : DEFAULT_COMBAT_STATE,
       };
     }),
 
   setViewedSceneId: (sceneId) =>
-    set({ viewedSceneId: sceneId, selectedTokenId: null }),
+    set((state) => {
+      const targetScene = state.scenes.find((s) => s.id === sceneId);
+      return {
+        viewedSceneId: sceneId,
+        selectedTokenId: null,
+        combat: targetScene
+          ? extractCombatState(targetScene)
+          : DEFAULT_COMBAT_STATE,
+      };
+    }),
 
   upsertScene: (scene) =>
     set((state) => {
@@ -124,9 +159,15 @@ export const useBoardStore = create<BoardState>((set) => ({
           ? scene.id
           : state.viewedSceneId;
 
+      const shouldSyncCombat =
+        scene.id === nextViewed && scene.combat_state !== undefined;
+
       return {
         scenes: nextScenes,
         viewedSceneId: nextViewed,
+        ...(shouldSyncCombat
+          ? { combat: extractCombatState(scene) }
+          : {}),
       };
     }),
 

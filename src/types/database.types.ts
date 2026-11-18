@@ -115,6 +115,7 @@ export interface Database {
           meters_per_cell: number;
           distance_rule: DistanceRule;
           is_active: boolean;
+          combat_state: Json | null;
           created_at: string;
         };
         Insert: {
@@ -130,6 +131,7 @@ export interface Database {
           meters_per_cell?: number;
           distance_rule?: DistanceRule;
           is_active?: boolean;
+          combat_state?: Json | null;
           created_at?: string;
         };
         Update: {
@@ -145,6 +147,7 @@ export interface Database {
           meters_per_cell?: number;
           distance_rule?: DistanceRule;
           is_active?: boolean;
+          combat_state?: Json | null;
           created_at?: string;
         };
         Relationships: [
@@ -219,6 +222,8 @@ export interface Database {
           size: number;
           hp_current: number;
           hp_max: number;
+          is_hidden: boolean;
+          conditions: string[];
           updated_at: string;
         };
         Insert: {
@@ -234,6 +239,8 @@ export interface Database {
           size?: number;
           hp_current?: number;
           hp_max?: number;
+          is_hidden?: boolean;
+          conditions?: string[];
           updated_at?: string;
         };
         Update: {
@@ -249,6 +256,8 @@ export interface Database {
           size?: number;
           hp_current?: number;
           hp_max?: number;
+          is_hidden?: boolean;
+          conditions?: string[];
           updated_at?: string;
         };
         Relationships: [

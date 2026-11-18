@@ -21,22 +21,34 @@ export default function ChatPanel({
   currentUserId,
   messages,
   members,
+  hasMoreMessages = false,
+  onLoadOlderMessages,
   onAppendMessage,
 }: {
   campaignId: string;
   currentUserId: string;
   messages: MessageRow[];
   members: CampaignMemberInfo[];
+  hasMoreMessages?: boolean;
+  onLoadOlderMessages?: () => Promise<void>;
   onAppendMessage: (msg: MessageRow) => void;
 }) {
   const [text, setText] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [loadingOlder, setLoadingOlder] = useState(false);
   const [isPending, startTransition] = useTransition();
   const bottomRef = useRef<HTMLDivElement>(null);
+  const lastMsgIdRef = useRef<number | null>(
+    messages[messages.length - 1]?.id ?? null
+  );
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages.length]);
+    const newestId = messages[messages.length - 1]?.id ?? null;
+    if (newestId !== lastMsgIdRef.current) {
+      lastMsgIdRef.current = newestId;
+      bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [messages]);
 
   const submitMessage = (contentToSend: string) => {
     const trimmed = contentToSend.trim();
@@ -70,6 +82,26 @@ export default function ChatPanel({
     <div className="flex h-full flex-col">
       {/* Lista de Mensagens */}
       <div className="flex-1 space-y-3 overflow-y-auto pr-1">
+        {hasMoreMessages && onLoadOlderMessages && (
+          <div className="flex justify-center pb-1">
+            <button
+              type="button"
+              disabled={loadingOlder}
+              onClick={async () => {
+                setLoadingOlder(true);
+                await onLoadOlderMessages();
+                setLoadingOlder(false);
+              }}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-1 text-[11px] font-medium text-zinc-300 transition hover:border-amber-500/40 hover:text-amber-300 disabled:opacity-50"
+            >
+              {loadingOlder ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : null}
+              Carregar mensagens anteriores
+            </button>
+          </div>
+        )}
+
         {messages.length === 0 ? (
           <div className="rounded-xl border border-dashed border-zinc-800 p-6 text-center">
             <Dices className="mx-auto h-7 w-7 text-zinc-600" />

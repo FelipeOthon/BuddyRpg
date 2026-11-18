@@ -88,6 +88,7 @@ export default function TokenNode({
     <Group
       x={displayX}
       y={displayY}
+      opacity={token.is_hidden ? 0.45 : 1}
       draggable={canMove}
       onClick={(e) => {
         e.cancelBubble = true;
@@ -113,6 +114,7 @@ export default function TokenNode({
         fill="#1e293b"
         stroke={isSelected ? "#fbbf24" : canMove ? "#38bdf8" : "#ef4444"}
         strokeWidth={isSelected ? 4 : 2.5}
+        dash={token.is_hidden ? [6, 4] : undefined}
         shadowColor="#000000"
         shadowBlur={8}
         shadowOpacity={0.5}
@@ -165,7 +167,7 @@ export default function TokenNode({
           width={pixelSize + 20}
           y={3}
           align="center"
-          text={`${token.name} (${hpCurrent}/${hpMax})`}
+          text={`${token.is_hidden ? "👁‍🗨 " : ""}${token.name} (${hpCurrent}/${hpMax})`}
           fontSize={11}
           fontStyle="bold"
           fill="#f4f4f5"
@@ -173,6 +175,29 @@ export default function TokenNode({
           wrap="none"
         />
       </Group>
+
+      {/* Condições ativas */}
+      {token.conditions && token.conditions.length > 0 && (
+        <Group x={-10} y={pixelSize + 24} listening={false}>
+          <Rect
+            width={pixelSize + 20}
+            height={15}
+            cornerRadius={4}
+            fill="rgba(127, 29, 29, 0.85)"
+          />
+          <Text
+            width={pixelSize + 20}
+            y={2}
+            align="center"
+            text={token.conditions.slice(0, 3).join(" · ")}
+            fontSize={9}
+            fontStyle="bold"
+            fill="#fecaca"
+            ellipsis
+            wrap="none"
+          />
+        </Group>
+      )}
     </Group>
   );
 }

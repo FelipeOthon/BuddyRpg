@@ -2,6 +2,12 @@
 
 import { revalidatePath } from "next/cache";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import {
+  combatStateSchema,
+  createSceneSchema,
+  updateSceneSettingsSchema,
+} from "@/lib/validation/schemas";
+import type { Json } from "@/types/database.types";
 import type { DistanceRule, Scene } from "@/types/domain";
 
 export interface SceneActionResult {
@@ -14,17 +20,29 @@ export async function createSceneAction(input: {
   campaignId: string;
   name: string;
 }): Promise<SceneActionResult> {
-  const name = input.name.trim();
-  if (name.length < 1 || name.length > 80) {
-    return { ok: false, error: "O nome da cena deve ter entre 1 e 80 caracteres." };
+  const parsed = createSceneSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Dados da cena inválidos.",
+    };
   }
+  const v = parsed.data;
 
   const supabase = await createServerSupabaseClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { ok: false, error: "Sessão expirada." };
+  }
+
   const { data, error } = await supabase
     .from("scenes")
     .insert({
-      campaign_id: input.campaignId,
-      name,
+      campaign_id: v.campaignId,
+      name: v.name,
       is_active: false,
     })
     .select("*")
@@ -37,7 +55,7 @@ export async function createSceneAction(input: {
     };
   }
 
-  revalidatePath(`/campaign/${input.campaignId}`);
+  revalidatePath(`/campaign/${v.campaignId}`);
   return { ok: true, scene: data };
 }
 
@@ -54,22 +72,40 @@ export async function updateSceneSettingsAction(input: {
   meters_per_cell: number;
   distance_rule: DistanceRule;
 }): Promise<SceneActionResult> {
+  const parsed = updateSceneSettingsSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error:
+        parsed.error.issues[0]?.message ??
+        "Configurações da cena inválidas.",
+    };
+  }
+  const v = parsed.data;
+
   const supabase = await createServerSupabaseClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { ok: false, error: "Sessão expirada." };
+  }
 
   const { data, error } = await supabase
     .from("scenes")
     .update({
-      name: input.name.trim(),
-      map_url: input.map_url,
-      map_width: Math.min(Math.max(Math.round(input.map_width), 200), 10000),
-      map_height: Math.min(Math.max(Math.round(input.map_height), 200), 10000),
-      grid_size: Math.min(Math.max(Math.round(input.grid_size), 10), 300),
-      grid_opacity: Math.min(Math.max(input.grid_opacity, 0), 1),
-      snap_to_grid: input.snap_to_grid,
-      meters_per_cell: Math.max(input.meters_per_cell, 0.1),
-      distance_rule: input.distance_rule,
+      name: v.name,
+      map_url: v.map_url,
+      map_width: v.map_width,
+      map_height: v.map_height,
+      grid_size: v.grid_size,
+      grid_opacity: v.grid_opacity,
+      snap_to_grid: v.snap_to_grid,
+      meters_per_cell: v.meters_per_cell,
+      distance_rule: v.distance_rule,
     })
-    .eq("id", input.sceneId)
+    .eq("id", v.sceneId)
     .select("*")
     .single();
 
@@ -80,7 +116,7 @@ export async function updateSceneSettingsAction(input: {
     };
   }
 
-  revalidatePath(`/campaign/${input.campaignId}`);
+  revalidatePath(`/campaign/${v.campaignId}`);
   return { ok: true, scene: data };
 }
 
@@ -89,6 +125,14 @@ export async function activateSceneAction(input: {
   campaignId: string;
 }): Promise<SceneActionResult> {
   const supabase = await createServerSupabaseClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { ok: false, error: "Sessão expirada." };
+  }
+
   const { error } = await supabase.rpc("set_active_scene", {
     target_scene_id: input.sceneId,
   });
@@ -106,6 +150,14 @@ export async function deleteSceneAction(input: {
   campaignId: string;
 }): Promise<SceneActionResult> {
   const supabase = await createServerSupabaseClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { ok: false, error: "Sessão expirada." };
+  }
+
   const { error } = await supabase
     .from("scenes")
     .delete()
@@ -117,4 +169,47 @@ export async function deleteSceneAction(input: {
 
   revalidatePath(`/campaign/${input.campaignId}`);
   return { ok: true };
+}
+
+export async function updateSceneCombatStateAction(input: {
+  sceneId: string;
+  campaignId: string;
+  combatState: {
+    active: boolean;
+    round: number;
+    turnIndex: number;
+    combatants: Array<{ tokenId: string; name: string; initiative: number }>;
+  };
+}): Promise<SceneActionResult> {
+  const parsed = combatStateSchema.safeParse(input.combatState);
+  if (!parsed.success) {
+    return { ok: false, error: "Estado de combate inválido." };
+  }
+
+  const supabase = await createServerSupabaseClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { ok: false, error: "Sessão expirada." };
+  }
+
+  const { data, error } = await supabase
+    .from("scenes")
+    .update({
+      combat_state: parsed.data as unknown as Json,
+    })
+    .eq("id", input.sceneId)
+    .select("*")
+    .single();
+
+  if (error || !data) {
+    return {
+      ok: false,
+      error: error?.message ?? "Não foi possível salvar o estado de combate.",
+    };
+  }
+
+  return { ok: true, scene: data };
 }

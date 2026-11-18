@@ -112,3 +112,43 @@ export async function sendChatMessageAction(input: {
 
   return { ok: true, message: data };
 }
+
+export async function loadOlderMessagesAction(input: {
+  campaignId: string;
+  beforeCreatedAt: string;
+}): Promise<{
+  ok: boolean;
+  error?: string;
+  messages?: MessageRow[];
+  hasMore?: boolean;
+}> {
+  const supabase = await createServerSupabaseClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { ok: false, error: "Sessão expirada." };
+  }
+
+  const limit = 50;
+  const { data, error } = await supabase
+    .from("messages")
+    .select("*")
+    .eq("campaign_id", input.campaignId)
+    .lt("created_at", input.beforeCreatedAt)
+    .order("created_at", { ascending: false })
+    .limit(limit + 1);
+
+  if (error || !data) {
+    return {
+      ok: false,
+      error: error?.message ?? "Não foi possível carregar mensagens.",
+    };
+  }
+
+  const hasMore = data.length > limit;
+  const page = data.slice(0, limit).reverse();
+
+  return { ok: true, messages: page, hasMore };
+}

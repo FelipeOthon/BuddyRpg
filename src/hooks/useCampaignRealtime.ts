@@ -211,9 +211,16 @@ export function useCampaignRealtime(params: {
         setRemoteRuler(p);
       })
       .on("broadcast", { event: "combat:state" }, (msg) => {
-        const p = msg.payload as CombatStatePayload | undefined;
-        if (!p) return;
-        setCombatState(p);
+        const p = msg.payload as
+          | (CombatStatePayload & { userId?: string })
+          | undefined;
+        if (!p || !p.userId || !gmIdsRef.current.has(p.userId)) return;
+        setCombatState({
+          active: p.active,
+          round: p.round,
+          turnIndex: p.turnIndex,
+          combatants: p.combatants,
+        });
       })
       .subscribe((st) => {
         if (isUnmounted) return;
@@ -321,13 +328,16 @@ export function useCampaignRealtime(params: {
     [currentUserId, currentUsername]
   );
 
-  const broadcastCombatState = useCallback((combat: CombatStatePayload) => {
-    mainChannelRef.current?.send({
-      type: "broadcast",
-      event: "combat:state",
-      payload: combat,
-    });
-  }, []);
+  const broadcastCombatState = useCallback(
+    (combat: CombatStatePayload) => {
+      mainChannelRef.current?.send({
+        type: "broadcast",
+        event: "combat:state",
+        payload: { ...combat, userId: currentUserId },
+      });
+    },
+    [currentUserId]
+  );
 
   return {
     status,
