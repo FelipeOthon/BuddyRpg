@@ -1265,7 +1265,7 @@ export default function BoardCanvas({
         </Layer>
 
         {/* Camada 4B: Névoa de Guerra Estática (sobrepõe iluminação em modo híbrido) */}
-        <Layer opacity={role === "gm" ? 0.48 : 1} listening={false}>
+        <Layer opacity={role === "gm" ? 0.62 : 1} listening={false}>
           <FogLayer
             scene={scene}
             fogShapes={fogShapes}
