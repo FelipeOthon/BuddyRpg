@@ -768,8 +768,8 @@ create trigger trg_broadcast_messages
 
 -- ============================================================================
 -- PolÃ­ticas de RLS em realtime.messages (Canais Privados)
+-- Nota: realtime.messages jÃ¡ vem com RLS ativado pelo Supabase Cloud
 -- ============================================================================
-alter table realtime.messages enable row level security;
 
 drop policy if exists "realtime_campaign_read" on realtime.messages;
 create policy "realtime_campaign_read"
