@@ -1,7 +1,15 @@
 "use client";
 
-import { useTransition } from "react";
-import { Heart, Loader2, Minus, Plus, ScrollText, Trash2, X } from "lucide-react";
+import { useCallback, useEffect, useTransition } from "react";
+import {
+  Heart,
+  Loader2,
+  Minus,
+  Plus,
+  ScrollText,
+  Trash2,
+  X,
+} from "lucide-react";
 import { deleteTokenAction, updateTokenStatsAction } from "@/actions/tokens";
 import { useBoardStore } from "@/stores/boardStore";
 import type { CampaignRole, CharacterRow, Token } from "@/types/domain";
@@ -34,17 +42,65 @@ export default function SelectedTokenHud({
     (t) => t.id === selectedTokenId
   );
 
+  const linkedCharacter = token?.character_id
+    ? characters.find((c) => c.id === token.character_id)
+    : undefined;
+
+  const canEdit = Boolean(
+    token &&
+      !token.id.startsWith("demo-token-") &&
+      (role === "gm" ||
+        token.owner_id === currentUserId ||
+        linkedCharacter?.owner_id === currentUserId)
+  );
+
+  const handleDelete = useCallback(() => {
+    if (!token || token.id.startsWith("demo-token-") || !canEdit) return;
+    if (!window.confirm(`Remover o token "${token.name}" do tabuleiro?`))
+      return;
+
+    const prevToken = token;
+    removeToken(token.id);
+
+    startTransition(async () => {
+      const res = await deleteTokenAction({
+        tokenId: prevToken.id,
+        campaignId,
+      });
+      if (!res.ok) {
+        upsertToken(prevToken);
+        onError?.(res.error ?? "Erro ao excluir token.");
+      }
+    });
+  }, [token, canEdit, removeToken, campaignId, upsertToken, onError]);
+
+  useEffect(() => {
+    if (!token || token.id.startsWith("demo-token-") || !canEdit) return;
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      const target = e.target;
+      if (
+        target instanceof HTMLElement &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.tagName === "SELECT" ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+      if (e.key === "Delete") {
+        e.preventDefault();
+        handleDelete();
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [token, canEdit, handleDelete]);
+
   if (!token || token.id.startsWith("demo-token-")) {
     return null;
   }
-
-  const linkedCharacter = token.character_id
-    ? characters.find((c) => c.id === token.character_id)
-    : undefined;
-  const canEdit =
-    role === "gm" ||
-    token.owner_id === currentUserId ||
-    linkedCharacter?.owner_id === currentUserId;
 
   const adjustHp = (delta: number) => {
     if (!canEdit) return;
@@ -54,7 +110,6 @@ export default function SelectedTokenHud({
     );
     const prevToken = token;
 
-    // Atualização otimista
     upsertToken({
       ...token,
       hp_current: nextHp,
@@ -72,26 +127,6 @@ export default function SelectedTokenHud({
         onError?.(res.error ?? "Erro ao atualizar HP.");
       } else if (res.token) {
         upsertToken(res.token);
-      }
-    });
-  };
-
-  const handleDelete = () => {
-    if (!canEdit) return;
-    if (!window.confirm(`Remover o token "${token.name}" do tabuleiro?`))
-      return;
-
-    const prevToken = token;
-    removeToken(token.id);
-
-    startTransition(async () => {
-      const res = await deleteTokenAction({
-        tokenId: prevToken.id,
-        campaignId,
-      });
-      if (!res.ok) {
-        upsertToken(prevToken);
-        onError?.(res.error ?? "Erro ao excluir token.");
       }
     });
   };
@@ -174,7 +209,7 @@ export default function SelectedTokenHud({
             type="button"
             onClick={handleDelete}
             disabled={isPending}
-            title="Excluir token"
+            title="Excluir token (Delete)"
             className="rounded-lg p-1.5 text-zinc-400 transition hover:bg-red-500/10 hover:text-red-400"
           >
             {isPending ? (

@@ -17,7 +17,17 @@ Este guia resume como utilizar os recursos do **BuddyRPG** durante uma sessão d
 
 ---
 
-## 2. Tabuleiro Interativo e Cenas
+## 2. Tabuleiro Interativo, Atalhos e Cenas
+
+### Atalhos de Teclado no Tabuleiro
+| Tecla | Ação |
+|---|---|
+| `V` | Ferramenta **Selecionar / Mover Token** |
+| `H` | Ferramenta **Mão (Pan)** para arrastar o mapa |
+| `R` | Ferramenta **Régua** para medir distância (compartilhada em tempo real) |
+| `0` | Resetar zoom (`100%`) e centralizar câmera |
+| `Espaço` *(segurar)* | Ativa **Pan temporário** enquanto pressionada |
+| `Delete` | Remove o token selecionado (pede confirmação) |
 
 - **Zoom:** Use a roda do mouse (*scroll*) para aproximar ou afastar o mapa no ponto do cursor.
 - **Pan (Mover câmera):** Segure o **botão do meio do mouse**, ou segure a tecla **Espaço** e arraste, ou selecione a ferramenta **Mão (Pan)** na barra de ferramentas.
@@ -58,3 +68,7 @@ Todas as rolagens são calculadas no servidor com gerador criptográfico (`crypt
 - **Bloqueio / Liberação pelo Mestre:**
   - O Mestre vê todas as fichas da campanha e possui um botão de **Cadeado (`🔒 Bloquear / 🔓 Liberar Edição`)** em cada ficha.
   - Quando bloqueada pelo Mestre, o jogador continua visualizando sua ficha em tempo real, mas não pode alterar seus valores até que o Mestre libere novamente.
+- **Rolagem de Atributo em 1 Clique (`🎲`):**
+  - Dentro do modal da ficha, cada atributo exibe automaticamente seu modificador (ex.: `Força 16 → Mod +3`) e um botão **`🎲`** ao lado. Ao clicar nele, o servidor rola `/r 1d20+3 Força (Nome)` e publica o resultado instantaneamente no Chat da campanha (funciona mesmo quando a ficha está bloqueada para edição).
+- **Vínculo Token ↔ Ficha:**
+  - Ao criar um token na aba **Tokens**, você pode vinculá-lo a uma ficha de personagem. Quando esse token for selecionado no tabuleiro, a barra flutuante exibirá o botão **Ficha** para abrir a ficha correspondente em 1 clique.
