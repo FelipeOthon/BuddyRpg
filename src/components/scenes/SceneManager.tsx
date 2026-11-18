@@ -137,6 +137,32 @@ export default function SceneManager({
         map_width: uploaded.width,
         map_height: uploaded.height,
       });
+
+      // Persiste automaticamente no banco para não perder o mapa ao invocar tokens ou recarregar
+      const res = await updateSceneSettingsAction({
+        sceneId: currentScene.id,
+        campaignId,
+        name,
+        map_url: uploaded.publicUrl,
+        map_width: uploaded.width,
+        map_height: uploaded.height,
+        grid_size: gridSize,
+        grid_opacity: gridOpacity,
+        snap_to_grid: snapToGrid,
+        meters_per_cell: metersPerCell,
+        distance_rule: distanceRule,
+      });
+
+      if (!res.ok) {
+        setError(
+          res.error ??
+            "Mapa enviado, mas não foi possível salvar na cena. Clique em Salvar Cena."
+        );
+      } else if (res.scene) {
+        upsertScene(res.scene);
+        setSavedNotice(true);
+        setTimeout(() => setSavedNotice(false), 2000);
+      }
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Falha no upload do mapa."
