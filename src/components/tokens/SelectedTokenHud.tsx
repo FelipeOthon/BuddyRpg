@@ -132,7 +132,7 @@ export default function SelectedTokenHud({
   };
 
   return (
-    <div className="pointer-events-auto absolute bottom-4 left-1/2 z-20 flex -translate-x-1/2 items-center gap-3 rounded-2xl border border-zinc-700/80 bg-zinc-900/95 px-4 py-2.5 shadow-2xl backdrop-blur">
+    <div className="pointer-events-auto absolute bottom-3 left-1/2 z-20 flex max-w-[94vw] -translate-x-1/2 flex-wrap items-center justify-center gap-2 rounded-2xl border border-zinc-700/80 bg-zinc-900/95 px-3 py-2 shadow-2xl backdrop-blur sm:bottom-4 sm:gap-3 sm:px-4 sm:py-2.5">
       <div className="flex items-center gap-2">
         <div className="flex h-8 w-8 items-center justify-center rounded-full border border-amber-500/40 bg-zinc-800 text-xs font-bold text-amber-300">
           {token.size}x{token.size}

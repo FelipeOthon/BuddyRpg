@@ -47,6 +47,7 @@ export default function BoardCanvas({
   const panStartRef = useRef<{ x: number; y: number; vx: number; vy: number } | null>(
     null
   );
+  const pinchDistRef = useRef<number | null>(null);
   const [localRuler, setLocalRuler] = useState<LocalRulerState | null>(null);
 
   // Token de demonstração local caso a cena ainda não tenha tokens no banco
@@ -196,6 +197,7 @@ export default function BoardCanvas({
   };
 
   const finishInteraction = () => {
+    pinchDistRef.current = null;
     if (isPanning) {
       setIsPanning(false);
       panStartRef.current = null;
@@ -203,6 +205,102 @@ export default function BoardCanvas({
     if (localRuler) {
       onRulerBroadcast?.(localRuler.start, localRuler.end, false);
       setLocalRuler(null);
+    }
+  };
+
+  const handleTouchStart = (e: KonvaEventObject<TouchEvent>) => {
+    const touches = e.evt.touches;
+    const stage = stageRef.current;
+    if (!stage) return;
+
+    if (touches.length === 2) {
+      const dx = touches[0]!.clientX - touches[1]!.clientX;
+      const dy = touches[0]!.clientY - touches[1]!.clientY;
+      pinchDistRef.current = Math.hypot(dx, dy);
+      setIsPanning(false);
+      return;
+    }
+
+    if (touches.length === 1) {
+      const t = touches[0]!;
+      if (tool === "pan") {
+        setIsPanning(true);
+        panStartRef.current = {
+          x: t.clientX,
+          y: t.clientY,
+          vx: viewport.x,
+          vy: viewport.y,
+        };
+        return;
+      }
+
+      if (tool === "ruler") {
+        const pointer = stage.getPointerPosition();
+        if (!pointer) return;
+        const worldPt = screenToWorld(pointer, viewport);
+        setLocalRuler({ start: worldPt, end: worldPt });
+        onRulerBroadcast?.(worldPt, worldPt, true);
+        return;
+      }
+
+      if (e.target === stage) {
+        setSelectedTokenId(null);
+      }
+    }
+  };
+
+  const handleTouchMove = (e: KonvaEventObject<TouchEvent>) => {
+    const touches = e.evt.touches;
+    const stage = stageRef.current;
+    if (!stage) return;
+
+    if (touches.length === 2 && pinchDistRef.current) {
+      e.evt.preventDefault();
+      const t0 = touches[0]!;
+      const t1 = touches[1]!;
+      const dist = Math.hypot(t0.clientX - t1.clientX, t0.clientY - t1.clientY);
+      const scaleBy = dist / pinchDistRef.current;
+      pinchDistRef.current = dist;
+
+      const rect = stage.container().getBoundingClientRect();
+      const centerScreen = {
+        x: (t0.clientX + t1.clientX) / 2 - rect.left,
+        y: (t0.clientY + t1.clientY) / 2 - rect.top,
+      };
+      const nextScale = clamp(
+        Math.round(viewport.scale * scaleBy * 1000) / 1000,
+        0.15,
+        4
+      );
+      const worldPoint = screenToWorld(centerScreen, viewport);
+      setViewport({
+        scale: nextScale,
+        x: centerScreen.x - worldPoint.x * nextScale,
+        y: centerScreen.y - worldPoint.y * nextScale,
+      });
+      return;
+    }
+
+    if (touches.length === 1) {
+      const t = touches[0]!;
+      if (isPanning && panStartRef.current) {
+        const dx = t.clientX - panStartRef.current.x;
+        const dy = t.clientY - panStartRef.current.y;
+        setViewport({
+          ...viewport,
+          x: panStartRef.current.vx + dx,
+          y: panStartRef.current.vy + dy,
+        });
+        return;
+      }
+
+      if (localRuler) {
+        const pointer = stage.getPointerPosition();
+        if (!pointer) return;
+        const worldPt = screenToWorld(pointer, viewport);
+        setLocalRuler((prev) => (prev ? { ...prev, end: worldPt } : null));
+        onRulerBroadcast?.(localRuler.start, worldPt, true);
+      }
     }
   };
 
@@ -250,7 +348,7 @@ export default function BoardCanvas({
     <div
       ref={containerRef}
       onContextMenu={(e) => e.preventDefault()}
-      className={`relative h-full w-full overflow-hidden bg-zinc-950 select-none ${cursorClass}`}
+      className={`relative h-full w-full touch-none overflow-hidden bg-zinc-950 select-none ${cursorClass}`}
     >
       <BoardToolbar scene={scene} isGm={role === "gm"} />
 
@@ -267,6 +365,9 @@ export default function BoardCanvas({
         onMouseMove={handleMouseMove}
         onMouseUp={finishInteraction}
         onMouseLeave={finishInteraction}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={finishInteraction}
       >
         {/* Camada 1: Mapa + Grade (listening=false para performance máxima) */}
         <Layer listening={false}>

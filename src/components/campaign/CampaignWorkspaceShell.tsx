@@ -12,6 +12,8 @@ import {
   Layers,
   Link2,
   MessageSquare,
+  PanelRightClose,
+  PanelRightOpen,
   ScrollText,
   Shield,
   UserCheck,
@@ -70,6 +72,8 @@ export default function CampaignWorkspaceShell({
 }) {
   const isGm = role === "gm";
   const [activeTab, setActiveTab] = useState<SidebarTab>("chat");
+  // null = automático (aberto no PC >= 768px, fechado no mobile < 768px)
+  const [sidebarOpen, setSidebarOpen] = useState<boolean | null>(null);
   const [copied, setCopied] = useState<"code" | "link" | null>(null);
   const [toastError, setToastError] = useState<string | null>(null);
   const [messages, setMessages] = useState<MessageRow[]>(initialMessages);
@@ -269,6 +273,12 @@ export default function CampaignWorkspaceShell({
     [viewedScene, broadcastRuler]
   );
 
+  const toggleSidebar = () => {
+    setSidebarOpen((prev) =>
+      prev === null ? window.innerWidth < 768 : !prev
+    );
+  };
+
   const copyInvite = async (type: "code" | "link") => {
     const value =
       type === "code"
@@ -282,21 +292,22 @@ export default function CampaignWorkspaceShell({
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-zinc-950 text-zinc-100">
       {/* Top Bar da Mesa */}
-      <header className="flex h-13 shrink-0 items-center justify-between border-b border-zinc-800 bg-zinc-900/90 px-4">
-        <div className="flex items-center gap-3">
+      <header className="flex h-13 shrink-0 items-center justify-between gap-2 border-b border-amber-500/20 bg-zinc-900/95 px-2.5 sm:px-4">
+        <div className="flex min-w-0 items-center gap-2 sm:gap-3">
           <Link
             href="/dashboard"
-            className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-950 px-2.5 py-1.5 text-xs font-medium text-zinc-300 transition hover:border-zinc-700 hover:text-white"
+            title="Voltar ao Dashboard"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-950 px-2 py-1.5 text-xs font-medium text-zinc-300 transition hover:border-zinc-700 hover:text-white sm:px-2.5"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
-            Dashboard
+            <span className="hidden sm:inline">Dashboard</span>
           </Link>
-          <div className="h-4 w-px bg-zinc-800" />
+          <div className="hidden h-4 w-px bg-zinc-800 sm:block" />
           <h1 className="truncate text-sm font-bold text-white sm:text-base">
             {campaign.title}
           </h1>
           <span
-            className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${
+            className={`hidden shrink-0 items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium sm:inline-flex ${
               isGm
                 ? "border border-amber-500/30 bg-amber-500/10 text-amber-300"
                 : "border border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
@@ -316,19 +327,26 @@ export default function CampaignWorkspaceShell({
           </span>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex shrink-0 items-center gap-1.5 sm:gap-2.5">
           {/* Status do Canal Privado Realtime */}
           <div
-            className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium ${
+            className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-1 text-[11px] font-medium sm:px-2.5 ${
               status === "connected"
                 ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
                 : status === "error"
                   ? "border-red-500/30 bg-red-500/10 text-red-300"
                   : "border-zinc-700 bg-zinc-800 text-zinc-400"
             }`}
+            title={
+              status === "connected"
+                ? "Tempo Real Ativo"
+                : status === "error"
+                  ? "Realtime Offline"
+                  : "Conectando..."
+            }
           >
             <Wifi className="h-3 w-3" />
-            <span className="hidden sm:inline">
+            <span className="hidden md:inline">
               {status === "connected"
                 ? "Tempo Real Ativo"
                 : status === "error"
@@ -337,7 +355,7 @@ export default function CampaignWorkspaceShell({
             </span>
           </div>
 
-          <div className="hidden items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-950 px-2.5 py-1 text-xs sm:flex">
+          <div className="hidden items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-950 px-2.5 py-1 text-xs md:flex">
             <span className="text-zinc-400">Convite:</span>
             <code className="font-mono font-semibold text-amber-300">
               {campaign.invite_code}
@@ -367,12 +385,61 @@ export default function CampaignWorkspaceShell({
               )}
             </button>
           </div>
+
+          {/* Botão Esconder / Mostrar Menu Lateral (PC & Mobile) */}
+          <button
+            type="button"
+            onClick={toggleSidebar}
+            title={
+              sidebarOpen === false
+                ? "Abrir menu lateral"
+                : "Alternar menu lateral"
+            }
+            className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition ${
+              sidebarOpen !== false
+                ? "border-amber-500/40 bg-amber-500/15 text-amber-200 hover:bg-amber-500/25"
+                : "border-zinc-700 bg-zinc-800 text-zinc-200 hover:border-amber-500/40 hover:text-amber-200"
+            }`}
+          >
+            {sidebarOpen === true ? (
+              <>
+                <PanelRightClose className="h-4 w-4" />
+                <span className="hidden sm:inline">Esconder Menu</span>
+              </>
+            ) : sidebarOpen === false ? (
+              <>
+                <PanelRightOpen className="h-4 w-4" />
+                <span className="hidden sm:inline">Abrir Menu</span>
+              </>
+            ) : (
+              <>
+                <PanelRightOpen className="h-4 w-4 md:hidden" />
+                <PanelRightClose className="hidden h-4 w-4 md:block" />
+                <span className="hidden sm:inline md:hidden">Abrir Menu</span>
+                <span className="hidden md:inline">Esconder Menu</span>
+              </>
+            )}
+          </button>
         </div>
       </header>
 
-      {/* Corpo: Tabuleiro Konva à esquerda + Sidebar à direita */}
-      <div className="flex flex-1 overflow-hidden">
+      {/* Corpo: Tabuleiro Konva à esquerda + Sidebar à direita (Drawer no Mobile / Colapsável no PC) */}
+      <div className="relative flex flex-1 overflow-hidden">
         <section className="relative flex flex-1 overflow-hidden bg-zinc-950">
+          {/* Botão flutuante para reabrir o menu quando escondido */}
+          {sidebarOpen !== true && (
+            <button
+              type="button"
+              onClick={() => setSidebarOpen(true)}
+              title="Abrir Menu Lateral"
+              className={`${
+                sidebarOpen === null ? "flex md:hidden" : "flex"
+              } pointer-events-auto absolute right-3 bottom-4 z-30 items-center gap-1.5 rounded-xl border border-amber-500/40 bg-zinc-950/95 px-3 py-2 text-xs font-bold text-amber-200 shadow-2xl backdrop-blur transition hover:border-amber-400 hover:bg-amber-500/20`}
+            >
+              <PanelRightOpen className="h-4 w-4 text-amber-400" />
+              <span>Menu</span>
+            </button>
+          )}
           {toastError && (
             <div className="pointer-events-auto absolute top-16 left-1/2 z-30 flex -translate-x-1/2 items-center gap-2 rounded-xl border border-red-500/40 bg-zinc-900/95 px-4 py-2.5 text-xs text-red-200 shadow-2xl">
               <AlertCircle className="h-4 w-4 text-red-400" />
@@ -420,8 +487,24 @@ export default function CampaignWorkspaceShell({
           )}
         </section>
 
-        {/* Sidebar Lateral */}
-        <aside className="flex w-80 shrink-0 flex-col border-l border-zinc-800 bg-zinc-900/80 sm:w-96">
+        {/* Backdrop escuro no Mobile quando a Sidebar está aberta */}
+        {sidebarOpen === true && (
+          <div
+            onClick={() => setSidebarOpen(false)}
+            className="fixed inset-x-0 top-13 bottom-0 z-30 bg-black/60 backdrop-blur-[1px] md:hidden"
+          />
+        )}
+
+        {/* Sidebar Lateral (Drawer no Mobile, Painel Colapsável no PC) */}
+        <aside
+          className={`${
+            sidebarOpen === true
+              ? "fixed top-13 right-0 bottom-0 z-40 flex w-[88vw] max-w-sm shadow-2xl md:static md:w-96 md:shadow-none"
+              : sidebarOpen === null
+                ? "hidden md:static md:flex md:w-96"
+                : "hidden"
+          } shrink-0 flex-col border-l border-amber-500/20 bg-zinc-900/95 backdrop-blur`}
+        >
           <nav
             className={`grid ${
               isGm ? "grid-cols-5" : "grid-cols-4"
