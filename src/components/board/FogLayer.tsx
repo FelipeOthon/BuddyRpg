@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef } from "react";
 import type Konva from "konva";
 import { Circle, Group, Line, Rect } from "react-konva";
 import type { Point2D } from "@/lib/board/geometry";
-import { getSmokePatternCanvas } from "@/lib/board/smokeTexture";
+import { getSmokeTextures } from "@/lib/board/smokeTexture";
 import type {
   FogOperation,
   FogShapeData,
@@ -27,10 +27,19 @@ function renderFogShape(params: {
   data: FogShapeData;
   fogColor: string;
   isGm: boolean;
-  smokePattern: HTMLCanvasElement | null;
+  smokeDense: HTMLCanvasElement | null;
+  smokeWisps: HTMLCanvasElement | null;
 }) {
-  const { id, operation, shape_kind, data: d, fogColor, isGm, smokePattern } =
-    params;
+  const {
+    id,
+    operation,
+    shape_kind,
+    data: d,
+    fogColor,
+    isGm,
+    smokeDense,
+    smokeWisps,
+  } = params;
   const isReveal = operation === "reveal";
 
   if (isReveal) {
@@ -79,12 +88,12 @@ function renderFogShape(params: {
     );
   }
 
-  // Modo Cobrir (cover): base opaca + 2 camadas de fumaça volumétrica animada
+  // Modo Cobrir (cover): base opaca + 3 camadas FBM volumétricas em direções distintas
   const borderStroke = isGm ? "rgba(245, 158, 11, 0.35)" : undefined;
   const baseShadow = {
     shadowColor: fogColor,
-    shadowBlur: 22,
-    shadowOpacity: 0.9,
+    shadowBlur: 36,
+    shadowOpacity: 0.95,
   };
 
   if (shape_kind === "rect") {
@@ -106,7 +115,7 @@ function renderFogShape(params: {
           dash={borderStroke ? [8, 6] : undefined}
           {...baseShadow}
         />
-        {smokePattern && (
+        {smokeDense && smokeWisps && (
           <>
             <Rect
               name="fog-smoke-1"
@@ -114,10 +123,10 @@ function renderFogShape(params: {
               y={y}
               width={w}
               height={h}
-              fillPatternImage={smokePattern as unknown as HTMLImageElement}
+              fillPatternImage={smokeDense as unknown as HTMLImageElement}
               fillPatternRepeat="repeat"
-              fillPatternScale={{ x: 1.8, y: 1.8 }}
-              opacity={0.75}
+              fillPatternScale={{ x: 2.1, y: 2.1 }}
+              opacity={0.85}
             />
             <Rect
               name="fog-smoke-2"
@@ -125,10 +134,21 @@ function renderFogShape(params: {
               y={y}
               width={w}
               height={h}
-              fillPatternImage={smokePattern as unknown as HTMLImageElement}
+              fillPatternImage={smokeDense as unknown as HTMLImageElement}
               fillPatternRepeat="repeat"
-              fillPatternScale={{ x: 2.7, y: 2.7 }}
+              fillPatternScale={{ x: 3.2, y: 3.2 }}
               opacity={0.55}
+            />
+            <Rect
+              name="fog-smoke-3"
+              x={x}
+              y={y}
+              width={w}
+              height={h}
+              fillPatternImage={smokeWisps as unknown as HTMLImageElement}
+              fillPatternRepeat="repeat"
+              fillPatternScale={{ x: 1.7, y: 1.7 }}
+              opacity={0.5}
             />
           </>
         )}
@@ -153,27 +173,37 @@ function renderFogShape(params: {
           dash={borderStroke ? [8, 6] : undefined}
           {...baseShadow}
         />
-        {smokePattern && (
+        {smokeDense && smokeWisps && (
           <>
             <Circle
               name="fog-smoke-1"
               x={cx}
               y={cy}
               radius={r}
-              fillPatternImage={smokePattern as unknown as HTMLImageElement}
+              fillPatternImage={smokeDense as unknown as HTMLImageElement}
               fillPatternRepeat="repeat"
-              fillPatternScale={{ x: 1.8, y: 1.8 }}
-              opacity={0.75}
+              fillPatternScale={{ x: 2.1, y: 2.1 }}
+              opacity={0.85}
             />
             <Circle
               name="fog-smoke-2"
               x={cx}
               y={cy}
               radius={r}
-              fillPatternImage={smokePattern as unknown as HTMLImageElement}
+              fillPatternImage={smokeDense as unknown as HTMLImageElement}
               fillPatternRepeat="repeat"
-              fillPatternScale={{ x: 2.7, y: 2.7 }}
+              fillPatternScale={{ x: 3.2, y: 3.2 }}
               opacity={0.55}
+            />
+            <Circle
+              name="fog-smoke-3"
+              x={cx}
+              y={cy}
+              radius={r}
+              fillPatternImage={smokeWisps as unknown as HTMLImageElement}
+              fillPatternRepeat="repeat"
+              fillPatternScale={{ x: 1.7, y: 1.7 }}
+              opacity={0.5}
             />
           </>
         )}
@@ -193,25 +223,34 @@ function renderFogShape(params: {
         dash={borderStroke ? [8, 6] : undefined}
         {...baseShadow}
       />
-      {smokePattern && (
+      {smokeDense && smokeWisps && (
         <>
           <Line
             name="fog-smoke-1"
             points={pts}
             closed
-            fillPatternImage={smokePattern as unknown as HTMLImageElement}
+            fillPatternImage={smokeDense as unknown as HTMLImageElement}
             fillPatternRepeat="repeat"
-            fillPatternScale={{ x: 1.8, y: 1.8 }}
-            opacity={0.75}
+            fillPatternScale={{ x: 2.1, y: 2.1 }}
+            opacity={0.85}
           />
           <Line
             name="fog-smoke-2"
             points={pts}
             closed
-            fillPatternImage={smokePattern as unknown as HTMLImageElement}
+            fillPatternImage={smokeDense as unknown as HTMLImageElement}
             fillPatternRepeat="repeat"
-            fillPatternScale={{ x: 2.7, y: 2.7 }}
+            fillPatternScale={{ x: 3.2, y: 3.2 }}
             opacity={0.55}
+          />
+          <Line
+            name="fog-smoke-3"
+            points={pts}
+            closed
+            fillPatternImage={smokeWisps as unknown as HTMLImageElement}
+            fillPatternRepeat="repeat"
+            fillPatternScale={{ x: 1.7, y: 1.7 }}
+            opacity={0.5}
           />
         </>
       )}
@@ -231,7 +270,7 @@ export default function FogLayer({
   isGm: boolean;
 }) {
   const groupRef = useRef<Konva.Group>(null);
-  const smokePattern = useMemo(() => getSmokePatternCanvas(), []);
+  const smokeTextures = useMemo(() => getSmokeTextures(), []);
 
   const fogColor = scene.fog_color || "#070a12";
   const sceneShapes = fogShapes.filter((s) => s.scene_id === scene.id);
@@ -254,17 +293,24 @@ export default function FogLayer({
       if (layer) {
         const smoke1 = group.find(".fog-smoke-1");
         const smoke2 = group.find(".fog-smoke-2");
+        const smoke3 = group.find(".fog-smoke-3");
 
         for (const node of smoke1) {
           (node as Konva.Shape).fillPatternOffset({
-            x: (elapsed * 14) % 256,
+            x: (elapsed * 16) % 256,
             y: (elapsed * 6) % 256,
           });
         }
         for (const node of smoke2) {
           (node as Konva.Shape).fillPatternOffset({
-            x: (-elapsed * 9) % 256,
-            y: (elapsed * 4) % 256,
+            x: (-elapsed * 11) % 256,
+            y: (elapsed * 8) % 256,
+          });
+        }
+        for (const node of smoke3) {
+          (node as Konva.Shape).fillPatternOffset({
+            x: (elapsed * 7) % 256,
+            y: (-elapsed * 12) % 256,
           });
         }
         layer.batchDraw();
@@ -292,7 +338,8 @@ export default function FogLayer({
               data: (s.data ?? {}) as FogShapeData,
               fogColor,
               isGm,
-              smokePattern,
+              smokeDense: smokeTextures?.dense ?? null,
+              smokeWisps: smokeTextures?.wisps ?? null,
             })
           )}
           {revealShapes.map((s) =>
@@ -303,7 +350,8 @@ export default function FogLayer({
               data: (s.data ?? {}) as FogShapeData,
               fogColor,
               isGm,
-              smokePattern,
+              smokeDense: smokeTextures?.dense ?? null,
+              smokeWisps: smokeTextures?.wisps ?? null,
             })
           )}
         </>
