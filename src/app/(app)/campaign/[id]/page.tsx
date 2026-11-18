@@ -47,28 +47,38 @@ async function CampaignRoomLoader({
     notFound();
   }
 
-  const [{ data: scenes }, { data: tokens }, { data: rawMembers }] =
-    await Promise.all([
-      supabase
-        .from("scenes")
-        .select("*")
-        .eq("campaign_id", id)
-        .order("created_at", { ascending: true }),
-      supabase.from("tokens").select("*").eq("campaign_id", id),
-      supabase
-        .from("campaign_members")
-        .select(
-          `
-          user_id,
-          role,
-          profiles (
-            username
-          )
+  const [
+    { data: scenes },
+    { data: tokens },
+    { data: rawMembers },
+    { data: recentMessages },
+  ] = await Promise.all([
+    supabase
+      .from("scenes")
+      .select("*")
+      .eq("campaign_id", id)
+      .order("created_at", { ascending: true }),
+    supabase.from("tokens").select("*").eq("campaign_id", id),
+    supabase
+      .from("campaign_members")
+      .select(
         `
+        user_id,
+        role,
+        profiles (
+          username
         )
-        .eq("campaign_id", id)
-        .order("joined_at", { ascending: true }),
-    ]);
+      `
+      )
+      .eq("campaign_id", id)
+      .order("joined_at", { ascending: true }),
+    supabase
+      .from("messages")
+      .select("*")
+      .eq("campaign_id", id)
+      .order("created_at", { ascending: false })
+      .limit(100),
+  ]);
 
   const members: CampaignMemberInfo[] = (rawMembers ?? []).map((m) => {
     const p = Array.isArray(m.profiles) ? m.profiles[0] : m.profiles;
@@ -79,6 +89,8 @@ async function CampaignRoomLoader({
     };
   });
 
+  const chronologicalMessages = [...(recentMessages ?? [])].reverse();
+
   return (
     <CampaignWorkspaceShell
       campaign={campaign}
@@ -86,6 +98,7 @@ async function CampaignRoomLoader({
       role={myMembership.role}
       initialScenes={scenes ?? []}
       initialTokens={tokens ?? []}
+      initialMessages={chronologicalMessages}
       members={members}
     />
   );

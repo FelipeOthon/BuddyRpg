@@ -19,6 +19,7 @@ import {
   Wifi,
 } from "lucide-react";
 import BoardClient from "@/components/board/BoardClient";
+import ChatPanel from "@/components/chat/ChatPanel";
 import SceneManager from "@/components/scenes/SceneManager";
 import SelectedTokenHud from "@/components/tokens/SelectedTokenHud";
 import TokenManager from "@/components/tokens/TokenManager";
@@ -26,7 +27,13 @@ import { useCampaignRealtime } from "@/hooks/useCampaignRealtime";
 import type { Point2D } from "@/lib/board/geometry";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { useBoardStore } from "@/stores/boardStore";
-import type { Campaign, CampaignRole, Scene, Token } from "@/types/domain";
+import type {
+  Campaign,
+  CampaignRole,
+  MessageRow,
+  Scene,
+  Token,
+} from "@/types/domain";
 
 export interface CampaignMemberInfo {
   userId: string;
@@ -42,6 +49,7 @@ export default function CampaignWorkspaceShell({
   role,
   initialScenes,
   initialTokens,
+  initialMessages,
   members,
 }: {
   campaign: Campaign;
@@ -49,12 +57,14 @@ export default function CampaignWorkspaceShell({
   role: CampaignRole;
   initialScenes: Scene[];
   initialTokens: Token[];
+  initialMessages: MessageRow[];
   members: CampaignMemberInfo[];
 }) {
   const isGm = role === "gm";
-  const [activeTab, setActiveTab] = useState<SidebarTab>("tokens");
+  const [activeTab, setActiveTab] = useState<SidebarTab>("chat");
   const [copied, setCopied] = useState<"code" | "link" | null>(null);
   const [toastError, setToastError] = useState<string | null>(null);
+  const [messages, setMessages] = useState<MessageRow[]>(initialMessages);
 
   const { scenes, viewedSceneId, hydrateBoard, upsertToken } = useBoardStore();
 
@@ -69,6 +79,28 @@ export default function CampaignWorkspaceShell({
     setToastError(msg);
     setTimeout(() => setToastError(null), 4000);
   }, []);
+
+  const appendOrDedupeMessage = useCallback((msg: MessageRow) => {
+    setMessages((prev) => {
+      if (prev.some((m) => m.id === msg.id)) return prev;
+      return [...prev, msg];
+    });
+  }, []);
+
+  const handleMessageChange = useCallback(
+    (
+      op: "INSERT" | "UPDATE" | "DELETE",
+      record: MessageRow | null,
+      oldRecord: MessageRow | null
+    ) => {
+      if (op === "INSERT" && record) {
+        appendOrDedupeMessage(record);
+      } else if (op === "DELETE" && oldRecord) {
+        setMessages((prev) => prev.filter((m) => m.id !== oldRecord.id));
+      }
+    },
+    [appendOrDedupeMessage]
+  );
 
   const currentUsername = useMemo(() => {
     return (
@@ -88,6 +120,7 @@ export default function CampaignWorkspaceShell({
     currentUsername,
     role,
     gmUserIds,
+    onMessageChange: handleMessageChange,
   });
 
   const effectiveScenes = scenes.length > 0 ? scenes : initialScenes;
@@ -311,18 +344,6 @@ export default function CampaignWorkspaceShell({
           >
             <button
               type="button"
-              onClick={() => setActiveTab("tokens")}
-              className={`flex flex-col items-center gap-1 rounded-lg py-2 text-[11px] font-medium transition ${
-                activeTab === "tokens"
-                  ? "bg-zinc-800 text-amber-400"
-                  : "text-zinc-400 hover:text-white"
-              }`}
-            >
-              <Shield className="h-4 w-4" />
-              Tokens
-            </button>
-            <button
-              type="button"
               onClick={() => setActiveTab("chat")}
               className={`flex flex-col items-center gap-1 rounded-lg py-2 text-[11px] font-medium transition ${
                 activeTab === "chat"
@@ -332,6 +353,18 @@ export default function CampaignWorkspaceShell({
             >
               <MessageSquare className="h-4 w-4" />
               Chat
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("tokens")}
+              className={`flex flex-col items-center gap-1 rounded-lg py-2 text-[11px] font-medium transition ${
+                activeTab === "tokens"
+                  ? "bg-zinc-800 text-amber-400"
+                  : "text-zinc-400 hover:text-white"
+              }`}
+            >
+              <Shield className="h-4 w-4" />
+              Tokens
             </button>
             <button
               type="button"
@@ -374,6 +407,16 @@ export default function CampaignWorkspaceShell({
           </nav>
 
           <div className="flex-1 overflow-y-auto p-4">
+            {activeTab === "chat" && (
+              <ChatPanel
+                campaignId={campaign.id}
+                currentUserId={currentUserId}
+                messages={messages}
+                members={members}
+                onAppendMessage={appendOrDedupeMessage}
+              />
+            )}
+
             {activeTab === "tokens" && viewedScene && (
               <TokenManager
                 campaignId={campaign.id}
@@ -443,14 +486,6 @@ export default function CampaignWorkspaceShell({
                   ))}
                 </ul>
               </div>
-            )}
-
-            {activeTab === "chat" && (
-              <p className="text-xs text-zinc-400">
-                O chat persistente e o rolador de dados (
-                <code className="font-mono">/roll</code>) serão ativados na Fase
-                5.
-              </p>
             )}
 
             {activeTab === "sheets" && (
