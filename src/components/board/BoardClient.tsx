@@ -24,6 +24,7 @@ export default function BoardClient(props: {
   currentUserId: string;
   currentUsername: string;
   role: CampaignRole;
+  gmUserIds?: string[];
   onTokenDragBroadcast?: (tokenId: string, x: number, y: number) => void;
   onTokenDragCommit?: (
     tokenId: string,

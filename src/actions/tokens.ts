@@ -27,6 +27,7 @@ export async function createTokenAction(input: {
   characterId?: string | null;
   posX?: number;
   posY?: number;
+  visionRange?: number;
 }): Promise<TokenActionResult> {
   const parsed = createTokenSchema.safeParse(input);
   if (!parsed.success) {
@@ -79,6 +80,7 @@ export async function createTokenAction(input: {
       size: v.size,
       hp_current: hpCurrent,
       hp_max: hpMax,
+      ...(v.visionRange !== undefined ? { vision_range: v.visionRange } : {}),
     })
     .select("*")
     .single();

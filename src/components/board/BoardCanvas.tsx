@@ -28,12 +28,14 @@ import {
   updateSceneEnvironmentAction,
 } from "@/actions/lighting";
 import { createTokenAction } from "@/actions/tokens";
+import { snapToGrid } from "@/lib/board/geometry";
 import { formatFogColor, parseFogColor } from "@/lib/board/fogColor";
 import {
   rectToFlatPolygon,
   slicePolygonByLine,
 } from "@/lib/board/fogGeometry";
 import { uploadCampaignImage } from "@/lib/utils/storage";
+import type { Json } from "@/types/database.types";
 import type {
   CampaignRole,
   DrawPreviewPayload,
@@ -63,6 +65,7 @@ export default function BoardCanvas({
   currentUserId,
   currentUsername,
   role,
+  gmUserIds = [],
   onTokenDragBroadcast,
   onTokenDragCommit,
   onRulerBroadcast,
@@ -77,6 +80,7 @@ export default function BoardCanvas({
   currentUserId: string;
   currentUsername: string;
   role: CampaignRole;
+  gmUserIds?: string[];
   onTokenDragBroadcast?: (tokenId: string, x: number, y: number) => void;
   onTokenDragCommit?: (
     tokenId: string,
@@ -130,6 +134,11 @@ export default function BoardCanvas({
     y: number;
   } | null>(null);
   const [isDragOverFile, setIsDragOverFile] = useState(false);
+  const [pendingDrop, setPendingDrop] = useState<{
+    file: File;
+    world: Point2D;
+    screen: Point2D;
+  } | null>(null);
   const [tokenDragRuler, setTokenDragRuler] =
     useState<LocalRulerState | null>(null);
   const tokenDragCenterRef = useRef<{
@@ -162,6 +171,7 @@ export default function BoardCanvas({
     selectedElementId,
     drawConfig,
     remoteDrawPreviews,
+    setTool,
     setSelectedTokenId,
     setSelectedElementId,
     upsertElement,
@@ -843,26 +853,15 @@ export default function BoardCanvas({
     onTokenDragCommit?.(tokenId, x, y, prevX, prevY);
   };
 
-  const handleFileDrop = async (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    setIsDragOverFile(false);
-    const file = e.dataTransfer.files?.[0];
-    if (!file || !file.type.startsWith("image/")) return;
-
-    const rect = containerRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    const worldPt = screenToWorld(
-      { x: e.clientX - rect.left, y: e.clientY - rect.top },
-      viewport
-    );
-
+  const createTokenFromFile = async (file: File, worldPt: Point2D) => {
     try {
       const uploaded = await uploadCampaignImage({
         bucket: "tokens",
         campaignId: scene.campaign_id,
         file,
       });
-      const baseName = file.name.replace(/\.[^.]+$/, "").slice(0, 40) || "Token";
+      const baseName =
+        file.name.replace(/\.[^.]+$/, "").slice(0, 40) || "Token";
       const res = await createTokenAction({
         sceneId: scene.id,
         campaignId: scene.campaign_id,
@@ -873,13 +872,90 @@ export default function BoardCanvas({
         hpMax: 20,
         posX: Math.round(worldPt.x - scene.grid_size / 2),
         posY: Math.round(worldPt.y - scene.grid_size / 2),
+        visionRange: 4.5,
       });
       if (res.ok && res.token) {
         upsertToken(res.token);
+        setSelectedTokenId(res.token.id);
       }
     } catch {
       // Silencioso se o formato ou permissão falhar
     }
+  };
+
+  const handleUploadMapProp = async (file: File, worldPt?: Point2D) => {
+    if (role !== "gm") return;
+    try {
+      const uploaded = await uploadCampaignImage({
+        bucket: "maps",
+        campaignId: scene.campaign_id,
+        file,
+      });
+      const g = Math.max(scene.grid_size || 70, 20);
+      const cellsW = Math.min(
+        Math.max(Math.round(uploaded.width / g), 2),
+        16
+      );
+      const propW = cellsW * g;
+      const ratio = uploaded.height / Math.max(uploaded.width, 1);
+      const propH = Math.max(g, Math.round((propW * ratio) / g) * g);
+      const targetCenter =
+        worldPt ??
+        screenToWorld(
+          { x: size.width / 2, y: size.height / 2 },
+          viewport
+        );
+      const snappedPos = snapToGrid(
+        { x: targetCenter.x - propW / 2, y: targetCenter.y - propH / 2 },
+        g,
+        scene.snap_to_grid,
+        scene.grid_offset_x ?? 0,
+        scene.grid_offset_y ?? 0,
+        scene.grid_type ?? "square"
+      );
+
+      const res = await createSceneElementAction({
+        sceneId: scene.id,
+        campaignId: scene.campaign_id,
+        layer: "prop",
+        kind: "image",
+        x: snappedPos.x,
+        y: snappedPos.y,
+        data: {
+          imageUrl: uploaded.publicUrl,
+          width: propW,
+          height: propH,
+          opacity: 1,
+          label: file.name.replace(/\.[^.]+$/, "").slice(0, 40),
+        },
+      });
+      if (res.ok && res.element) {
+        upsertElement(res.element);
+        setTool("select");
+        setSelectedElementId(res.element.id);
+      }
+    } catch {
+      // Silencioso se formato/tamanho exceder
+    }
+  };
+
+  const handleFileDrop = async (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragOverFile(false);
+    const file = e.dataTransfer.files?.[0];
+    if (!file || !file.type.startsWith("image/")) return;
+
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const screenPt = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    const worldPt = screenToWorld(screenPt, viewport);
+
+    if (role === "gm") {
+      setPendingDrop({ file, world: worldPt, screen: screenPt });
+      return;
+    }
+
+    await createTokenFromFile(file, worldPt);
   };
 
   const submitTextDraft = () => {
@@ -1063,6 +1139,37 @@ export default function BoardCanvas({
   const selectedElement =
     elements.find((el) => el.id === selectedElementId) ?? null;
 
+  useEffect(() => {
+    if (!selectedElement) return;
+    const canDelete =
+      role === "gm" ||
+      (selectedElement.created_by === currentUserId &&
+        !selectedElement.is_locked);
+    if (!canDelete) return;
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      const target = e.target;
+      if (
+        target instanceof HTMLElement &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.tagName === "SELECT" ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+      if (e.key === "Delete" || e.key === "Backspace") {
+        e.preventDefault();
+        const elId = selectedElement.id;
+        removeElement(elId);
+        void deleteSceneElementAction({ elementId: elId });
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [selectedElement, role, currentUserId, removeElement]);
+
   const cursorClass =
     isPanning
       ? "cursor-grabbing"
@@ -1106,6 +1213,7 @@ export default function BoardCanvas({
           />
           <DrawingSubToolbar
             sceneId={scene.id}
+            gridSize={scene.grid_size}
             sceneTokens={sceneTokens}
             selectedElement={selectedElement}
             isGm={role === "gm"}
@@ -1118,6 +1226,9 @@ export default function BoardCanvas({
               removeElement(elId);
               void deleteSceneElementAction({ elementId: elId });
             }}
+            onUploadMapProp={(file) => {
+              void handleUploadMapProp(file);
+            }}
             onUpdateElement={(elId, patch) => {
               const current = elements.find((x) => x.id === elId);
               if (current) {
@@ -1128,6 +1239,12 @@ export default function BoardCanvas({
                     : {}),
                   ...(patch.isLocked !== undefined
                     ? { is_locked: patch.isLocked }
+                    : {}),
+                  ...(patch.rotation !== undefined
+                    ? { rotation: patch.rotation }
+                    : {}),
+                  ...(patch.data !== undefined
+                    ? { data: patch.data as unknown as Json }
                     : {}),
                 });
               }
@@ -1197,7 +1314,54 @@ export default function BoardCanvas({
 
       {isDragOverFile && (
         <div className="pointer-events-none absolute inset-4 z-40 flex items-center justify-center rounded-2xl border-2 border-dashed border-amber-400 bg-amber-500/10 text-sm font-bold text-amber-200 backdrop-blur-[1px]">
-          Solte a imagem para invocar um Token nesta posição
+          {role === "gm"
+            ? "Solte a imagem para colocar como Peça de Mapa ou Token"
+            : "Solte a imagem para invocar um Token nesta posição"}
+        </div>
+      )}
+
+      {pendingDrop && (
+        <div
+          className="absolute z-40 w-60 rounded-2xl border border-amber-500/50 bg-zinc-950/95 p-3 text-xs shadow-2xl backdrop-blur"
+          style={{
+            left: Math.min(pendingDrop.screen.x, Math.max(size.width - 260, 16)),
+            top: Math.min(pendingDrop.screen.y, Math.max(size.height - 160, 16)),
+          }}
+        >
+          <p className="mb-2 truncate font-semibold text-amber-200">
+            Como colocar &ldquo;{pendingDrop.file.name}&rdquo;?
+          </p>
+          <div className="space-y-1.5">
+            <button
+              type="button"
+              onClick={() => {
+                const drop = pendingDrop;
+                setPendingDrop(null);
+                void handleUploadMapProp(drop.file, drop.world);
+              }}
+              className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-amber-500 px-3 py-2 font-bold text-zinc-950 transition hover:bg-amber-400"
+            >
+              🗺️ Peça / Mapa no Grid
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const drop = pendingDrop;
+                setPendingDrop(null);
+                void createTokenFromFile(drop.file, drop.world);
+              }}
+              className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 font-semibold text-zinc-200 transition hover:border-amber-500/40 hover:text-white"
+            >
+              🎭 Token de Personagem
+            </button>
+            <button
+              type="button"
+              onClick={() => setPendingDrop(null)}
+              className="w-full rounded-lg py-1 text-[11px] text-zinc-500 hover:text-zinc-300"
+            >
+              Cancelar
+            </button>
+          </div>
         </div>
       )}
 
@@ -1256,9 +1420,67 @@ export default function BoardCanvas({
         onTouchMove={handleTouchMove}
         onTouchEnd={finishInteraction}
       >
-        {/* Camada 1: Mapa + Grade (listening=false para performance máxima) */}
+        {/* Camada 1A: Mapa de Fundo */}
         <Layer listening={false}>
           <MapLayer scene={scene} />
+        </Layer>
+
+        {/* Camada 1B: Peças de Mapa Particionadas / Props (encaixadas e redimensionáveis sob o Grid) */}
+        <Layer>
+          <ElementsLayer
+            elements={elements}
+            tokens={renderedTokens}
+            remoteTokenDrags={remoteTokenDrags}
+            localTokenDragPos={localTokenDragPos}
+            localDraw={null}
+            remoteDrawPreviews={{}}
+            sceneId={scene.id}
+            currentUserId={currentUserId}
+            isGm={role === "gm"}
+            canSelect={tool === "select" && !spaceDown}
+            selectedElementId={selectedElementId}
+            layerFilter="prop"
+            gridSize={scene.grid_size}
+            gridOffsetX={scene.grid_offset_x ?? 0}
+            gridOffsetY={scene.grid_offset_y ?? 0}
+            gridType={scene.grid_type ?? "square"}
+            snapEnabled={scene.snap_to_grid}
+            onSelectElement={setSelectedElementId}
+            onMoveElement={(elId, nx, ny) => {
+              const cur = elements.find((x) => x.id === elId);
+              if (cur) upsertElement({ ...cur, x: nx, y: ny });
+              void updateSceneElementAction({
+                elementId: elId,
+                campaignId: scene.campaign_id,
+                x: nx,
+                y: ny,
+              });
+            }}
+            onTransformElement={(elId, patch) => {
+              const cur = elements.find((x) => x.id === elId);
+              if (cur) {
+                upsertElement({
+                  ...cur,
+                  x: patch.x,
+                  y: patch.y,
+                  rotation: patch.rotation,
+                  data: patch.data as unknown as Json,
+                });
+              }
+              void updateSceneElementAction({
+                elementId: elId,
+                campaignId: scene.campaign_id,
+                x: patch.x,
+                y: patch.y,
+                rotation: patch.rotation,
+                data: patch.data,
+              });
+            }}
+          />
+        </Layer>
+
+        {/* Camada 1C: Grade (acima dos mapas/peças para encaixe preciso) */}
+        <Layer listening={false}>
           <GridLayer scene={scene} />
         </Layer>
 
@@ -1276,6 +1498,12 @@ export default function BoardCanvas({
             isGm={role === "gm"}
             canSelect={tool === "select" && !spaceDown}
             selectedElementId={selectedElementId}
+            layerFilter="overlay"
+            gridSize={scene.grid_size}
+            gridOffsetX={scene.grid_offset_x ?? 0}
+            gridOffsetY={scene.grid_offset_y ?? 0}
+            gridType={scene.grid_type ?? "square"}
+            snapEnabled={scene.snap_to_grid}
             onSelectElement={setSelectedElementId}
             onMoveElement={(elId, nx, ny) => {
               const cur = elements.find((x) => x.id === elId);
@@ -1285,6 +1513,26 @@ export default function BoardCanvas({
                 campaignId: scene.campaign_id,
                 x: nx,
                 y: ny,
+              });
+            }}
+            onTransformElement={(elId, patch) => {
+              const cur = elements.find((x) => x.id === elId);
+              if (cur) {
+                upsertElement({
+                  ...cur,
+                  x: patch.x,
+                  y: patch.y,
+                  rotation: patch.rotation,
+                  data: patch.data as unknown as Json,
+                });
+              }
+              void updateSceneElementAction({
+                elementId: elId,
+                campaignId: scene.campaign_id,
+                x: patch.x,
+                y: patch.y,
+                rotation: patch.rotation,
+                data: patch.data,
               });
             }}
           />
@@ -1350,6 +1598,13 @@ export default function BoardCanvas({
             fogShapes={fogShapes}
             localPreview={localFogPreview}
             isGm={role === "gm"}
+            tokens={renderedTokens}
+            walls={walls}
+            remoteTokenDrags={remoteTokenDrags}
+            localTokenDragPos={localTokenDragPos}
+            gmUserIds={gmUserIds}
+            selectedTokenId={selectedTokenId}
+            gmPreviewVision={gmPreviewVision}
           />
         </Layer>
 

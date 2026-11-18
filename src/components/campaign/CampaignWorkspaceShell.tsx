@@ -648,6 +648,7 @@ export default function CampaignWorkspaceShell({
                 currentUserId={currentUserId}
                 currentUsername={currentUsername}
                 role={role}
+                gmUserIds={gmUserIds}
                 onTokenDragBroadcast={handleTokenDragBroadcast}
                 onTokenDragCommit={handleTokenDragCommit}
                 onRulerBroadcast={handleRulerBroadcast}

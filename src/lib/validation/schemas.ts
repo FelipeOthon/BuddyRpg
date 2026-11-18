@@ -93,6 +93,11 @@ export const createTokenSchema = z.object({
   characterId: z.string().uuid("Personagem inválido.").nullable().optional(),
   posX: z.number().finite().optional(),
   posY: z.number().finite().optional(),
+  visionRange: z
+    .number()
+    .finite()
+    .transform((v) => Math.min(Math.max(v, 0), 120))
+    .optional(),
 });
 
 export const updateTokenStatsSchema = z.object({

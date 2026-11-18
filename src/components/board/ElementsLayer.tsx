@@ -1,14 +1,29 @@
 "use client";
 
-import { Arc, Circle, Group, Line, Rect, Text } from "react-konva";
+import { useEffect, useRef } from "react";
+import type Konva from "konva";
+import {
+  Arc,
+  Circle,
+  Group,
+  Image as KonvaImage,
+  Line,
+  Rect,
+  Text,
+  Transformer,
+} from "react-konva";
+import useImage from "use-image";
+import { useKeyPressed } from "@/hooks/useKeyPressed";
+import { snapToGrid } from "@/lib/board/geometry";
+import type { RemoteDragPosition } from "@/stores/boardStore";
 import type {
   DrawPreviewPayload,
+  GridType,
   SceneElement,
   SceneElementData,
   SceneElementKind,
   Token,
 } from "@/types/domain";
-import type { RemoteDragPosition } from "@/stores/boardStore";
 
 export interface LocalDrawState {
   kind: SceneElementKind;
@@ -16,6 +31,60 @@ export interface LocalDrawState {
   y: number;
   rotation: number;
   data: SceneElementData;
+}
+
+function LoadedElementImage({
+  url,
+  width,
+  height,
+  opacity,
+  isSelected,
+}: {
+  url: string;
+  width: number;
+  height: number;
+  opacity: number;
+  isSelected?: boolean;
+}) {
+  const [image] = useImage(url, "anonymous");
+
+  return (
+    <Group>
+      {image ? (
+        <KonvaImage
+          image={image}
+          x={0}
+          y={0}
+          width={width}
+          height={height}
+          opacity={opacity}
+        />
+      ) : (
+        <Rect
+          x={0}
+          y={0}
+          width={width}
+          height={height}
+          fill="rgba(24, 24, 27, 0.7)"
+          stroke="#52525b"
+          strokeWidth={1.5}
+          dash={[6, 4]}
+        />
+      )}
+      {isSelected && (
+        <Rect
+          x={0}
+          y={0}
+          width={width}
+          height={height}
+          stroke="#f59e0b"
+          strokeWidth={2}
+          dash={[8, 4]}
+          listening={false}
+        />
+      )}
+    </Group>
+  );
 }
 
 function renderShapeGraphic(params: {
@@ -28,6 +97,18 @@ function renderShapeGraphic(params: {
   const fill = data.fill ?? "#f59e0b";
   const strokeWidth = data.strokeWidth ?? 3;
   const opacity = data.opacity ?? 0.35;
+
+  if (kind === "image" && data.imageUrl) {
+    return (
+      <LoadedElementImage
+        url={data.imageUrl}
+        width={Math.max(data.width ?? 280, 20)}
+        height={Math.max(data.height ?? 280, 20)}
+        opacity={data.opacity ?? 1}
+        isSelected={isSelected}
+      />
+    );
+  }
 
   if (kind === "freehand" || kind === "line") {
     return (
@@ -147,8 +228,15 @@ export default function ElementsLayer({
   isGm,
   canSelect,
   selectedElementId,
+  layerFilter = "all",
+  gridSize = 70,
+  gridOffsetX = 0,
+  gridOffsetY = 0,
+  gridType = "square",
+  snapEnabled = true,
   onSelectElement,
   onMoveElement,
+  onTransformElement,
 }: {
   elements: SceneElement[];
   tokens: Token[];
@@ -161,15 +249,59 @@ export default function ElementsLayer({
   isGm: boolean;
   canSelect: boolean;
   selectedElementId: string | null;
+  layerFilter?: "all" | "prop" | "overlay";
+  gridSize?: number;
+  gridOffsetX?: number;
+  gridOffsetY?: number;
+  gridType?: GridType;
+  snapEnabled?: boolean;
   onSelectElement: (id: string | null) => void;
   onMoveElement: (elementId: string, nextX: number, nextY: number) => void;
+  onTransformElement?: (
+    elementId: string,
+    patch: { x: number; y: number; rotation: number; data: SceneElementData }
+  ) => void;
 }) {
-  const sceneElements = elements.filter(
-    (el) => el.scene_id === sceneId && (isGm || !el.is_hidden)
-  );
-  const remotePreviews = Object.values(remoteDrawPreviews).filter(
-    (p) => p.active && p.sceneId === sceneId
-  );
+  const altDown = useKeyPressed("Alt");
+  const shiftDown = useKeyPressed("Shift");
+  const trRef = useRef<Konva.Transformer>(null);
+  const nodeRefs = useRef<Map<string, Konva.Group>>(new Map());
+
+  const sceneElements = elements.filter((el) => {
+    if (el.scene_id !== sceneId) return false;
+    if (!isGm && el.is_hidden) return false;
+    if (layerFilter === "prop") return el.layer === "prop";
+    if (layerFilter === "overlay") return el.layer !== "prop";
+    return true;
+  });
+
+  const remotePreviews =
+    layerFilter === "prop"
+      ? []
+      : Object.values(remoteDrawPreviews).filter(
+          (p) => p.active && p.sceneId === sceneId
+        );
+
+  const selectedTransformable = sceneElements.find((el) => {
+    if (el.id !== selectedElementId) return false;
+    if (el.kind !== "image" && el.kind !== "rect") return false;
+    return isGm || (el.created_by === currentUserId && !el.is_locked);
+  });
+
+  useEffect(() => {
+    const tr = trRef.current;
+    if (!tr) return;
+    if (canSelect && selectedTransformable) {
+      const node = nodeRefs.current.get(selectedTransformable.id);
+      if (node) {
+        tr.nodes([node]);
+        tr.getLayer()?.batchDraw();
+        return;
+      }
+    }
+    tr.nodes([]);
+    tr.getLayer()?.batchDraw();
+  }, [canSelect, selectedTransformable, sceneElements]);
 
   const getAttachmentOffset = (tokenId: string | null): { x: number; y: number } => {
     if (!tokenId) return { x: 0, y: 0 };
@@ -195,21 +327,35 @@ export default function ElementsLayer({
     <Group>
       {sceneElements.map((el) => {
         const data = (el.data ?? {}) as SceneElementData;
-        const canDrag =
+        const canEdit =
           canSelect &&
           !el.attached_to_token_id &&
           (isGm || (el.created_by === currentUserId && !el.is_locked));
         const attachDelta = getAttachmentOffset(el.attached_to_token_id);
+        const shouldSnapProp =
+          el.layer === "prop" && snapEnabled && !altDown && gridSize > 0;
 
         return (
           <Group
             key={el.id}
+            ref={(node) => {
+              if (node) {
+                nodeRefs.current.set(el.id, node);
+              } else {
+                nodeRefs.current.delete(el.id);
+              }
+            }}
             x={el.x + attachDelta.x}
             y={el.y + attachDelta.y}
             rotation={el.rotation}
             opacity={el.is_hidden ? 0.45 : 1}
-            draggable={canDrag}
+            draggable={canEdit}
             listening={canSelect}
+            dragBoundFunc={
+              shouldSnapProp
+                ? (pos) => pos
+                : undefined
+            }
             onClick={(e) => {
               if (!canSelect) return;
               e.cancelBubble = true;
@@ -221,7 +367,67 @@ export default function ElementsLayer({
               onSelectElement(el.id);
             }}
             onDragEnd={(e) => {
-              onMoveElement(el.id, e.target.x(), e.target.y());
+              const rawPos = { x: e.target.x(), y: e.target.y() };
+              const snapped =
+                el.layer === "prop"
+                  ? snapToGrid(
+                      rawPos,
+                      gridSize,
+                      snapEnabled && !altDown,
+                      gridOffsetX,
+                      gridOffsetY,
+                      gridType
+                    )
+                  : rawPos;
+              e.target.position(snapped);
+              onMoveElement(el.id, snapped.x, snapped.y);
+            }}
+            onTransformEnd={(e) => {
+              const node = e.target;
+              const scaleX = node.scaleX();
+              const scaleY = node.scaleY();
+              node.scaleX(1);
+              node.scaleY(1);
+
+              const curW = Math.abs(data.width ?? 280);
+              const curH = Math.abs(data.height ?? 280);
+              let nextW = Math.max(20, Math.round(curW * scaleX));
+              let nextH = Math.max(20, Math.round(curH * scaleY));
+
+              if (shouldSnapProp) {
+                nextW = Math.max(
+                  gridSize,
+                  Math.round(nextW / gridSize) * gridSize
+                );
+                nextH = Math.max(
+                  gridSize,
+                  Math.round(nextH / gridSize) * gridSize
+                );
+              }
+
+              const snappedPos = shouldSnapProp
+                ? snapToGrid(
+                    { x: node.x(), y: node.y() },
+                    gridSize,
+                    true,
+                    gridOffsetX,
+                    gridOffsetY,
+                    gridType
+                  )
+                : { x: Math.round(node.x()), y: Math.round(node.y()) };
+
+              node.position(snappedPos);
+
+              onTransformElement?.(el.id, {
+                x: snappedPos.x,
+                y: snappedPos.y,
+                rotation: Math.round(node.rotation() * 10) / 10,
+                data: {
+                  ...data,
+                  width: nextW,
+                  height: nextH,
+                },
+              });
             }}
           >
             {renderShapeGraphic({
@@ -232,6 +438,25 @@ export default function ElementsLayer({
           </Group>
         );
       })}
+
+      {canSelect && selectedTransformable && (
+        <Transformer
+          ref={trRef}
+          rotateEnabled
+          keepRatio={shiftDown}
+          anchorFill="#f59e0b"
+          anchorStroke="#09090b"
+          anchorSize={9}
+          borderStroke="#f59e0b"
+          borderDash={[6, 4]}
+          boundBoxFunc={(oldBox, newBox) => {
+            if (newBox.width < 20 || newBox.height < 20) {
+              return oldBox;
+            }
+            return newBox;
+          }}
+        />
+      )}
 
       {remotePreviews.map((p) => (
         <Group
@@ -245,7 +470,7 @@ export default function ElementsLayer({
         </Group>
       ))}
 
-      {localDraw && (
+      {layerFilter !== "prop" && localDraw && (
         <Group
           x={localDraw.x}
           y={localDraw.y}

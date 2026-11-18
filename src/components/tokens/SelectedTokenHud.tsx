@@ -146,7 +146,7 @@ export default function SelectedTokenHud({
       ) {
         return;
       }
-      if (e.key === "Delete") {
+      if (e.key === "Delete" || e.key === "Backspace") {
         e.preventDefault();
         handleDelete();
       } else if (e.key.toLowerCase() === "l" && role === "gm") {
@@ -292,6 +292,34 @@ export default function SelectedTokenHud({
       if (!res.ok) {
         upsertToken(prevToken);
         onError?.(res.error ?? "Erro ao alternar tocha/luz.");
+      } else if (res.token) {
+        upsertToken(res.token);
+      }
+    });
+  };
+
+  const cycleFogVision = () => {
+    if (!canEdit) return;
+    const cur = token.vision_range ?? 0;
+    const nextVision =
+      cur <= 0 ? 4.5 : cur <= 5 ? 9 : cur <= 10 ? 15 : 0;
+    const prevToken = token;
+
+    upsertToken({
+      ...token,
+      vision_range: nextVision,
+      updated_at: new Date().toISOString(),
+    });
+
+    startTransition(async () => {
+      const res = await updateTokenStatsAction({
+        tokenId: token.id,
+        campaignId,
+        visionRange: nextVision,
+      });
+      if (!res.ok) {
+        upsertToken(prevToken);
+        onError?.(res.error ?? "Erro ao ajustar visão na névoa.");
       } else if (res.token) {
         upsertToken(res.token);
       }
@@ -456,7 +484,7 @@ export default function SelectedTokenHud({
             type="button"
             disabled={isPending}
             onClick={toggleTorchLight}
-            title="Acender/Apagar Tocha (12m de luz dinâmica)"
+            title="Acender/Apagar Tocha (12m de luz dinâmica e abre névoa)"
             className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-xs font-semibold transition ${
               (token.light_radius ?? 0) > 0
                 ? "border-amber-500/50 bg-amber-500/20 text-amber-300"
@@ -465,6 +493,23 @@ export default function SelectedTokenHud({
           >
             <Flame className="h-3.5 w-3.5" />
             {(token.light_radius ?? 0) > 0 ? "Tocha ON" : "Tocha"}
+          </button>
+
+          <button
+            type="button"
+            disabled={isPending}
+            onClick={cycleFogVision}
+            title="Alcance com que este token abre a Névoa ao andar (clique para alternar)"
+            className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-xs font-semibold transition ${
+              (token.vision_range ?? 0) > 0
+                ? "border-sky-500/50 bg-sky-500/20 text-sky-200"
+                : "border-zinc-700 bg-zinc-800 text-zinc-400 hover:text-white"
+            }`}
+          >
+            <Eye className="h-3.5 w-3.5" />
+            {(token.vision_range ?? 0) > 0
+              ? `Visão ${token.vision_range}m`
+              : "Sem Visão"}
           </button>
 
           {onFxBurst && (
@@ -514,14 +559,15 @@ export default function SelectedTokenHud({
             type="button"
             onClick={handleDelete}
             disabled={isPending}
-            title="Excluir token (Delete)"
-            className="rounded-lg p-1.5 text-zinc-400 transition hover:bg-red-500/10 hover:text-red-400"
+            title="Excluir token do mapa (Delete / Backspace)"
+            className="inline-flex items-center gap-1 rounded-lg border border-rose-500/30 bg-rose-500/10 px-2 py-1 text-xs font-semibold text-rose-300 transition hover:bg-rose-500/20"
           >
             {isPending ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
             ) : (
-              <Trash2 className="h-4 w-4" />
+              <Trash2 className="h-3.5 w-3.5" />
             )}
+            <span className="hidden sm:inline">Excluir</span>
           </button>
         </>
       )}

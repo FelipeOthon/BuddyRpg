@@ -1,19 +1,23 @@
 "use client";
 
+import { useRef } from "react";
 import {
   Circle,
   Eraser,
+  ImagePlus,
   Link2,
   Lock,
   Minus,
   Pencil,
+  Plus,
+  RotateCw,
   Square,
   Trash2,
   Triangle,
   Unlock,
 } from "lucide-react";
 import { useBoardStore } from "@/stores/boardStore";
-import type { SceneElement, Token } from "@/types/domain";
+import type { SceneElement, SceneElementData, Token } from "@/types/domain";
 
 const DRAW_COLORS = [
   "#f59e0b",
@@ -26,6 +30,7 @@ const DRAW_COLORS = [
 
 export default function DrawingSubToolbar({
   sceneId,
+  gridSize,
   sceneTokens,
   selectedElement,
   isGm,
@@ -33,8 +38,10 @@ export default function DrawingSubToolbar({
   onClearDrawings,
   onDeleteElement,
   onUpdateElement,
+  onUploadMapProp,
 }: {
   sceneId: string;
+  gridSize: number;
   sceneTokens: Token[];
   selectedElement: SceneElement | null;
   isGm: boolean;
@@ -43,10 +50,17 @@ export default function DrawingSubToolbar({
   onDeleteElement: (elementId: string) => void;
   onUpdateElement: (
     elementId: string,
-    patch: { attachedToTokenId?: string | null; isLocked?: boolean }
+    patch: {
+      attachedToTokenId?: string | null;
+      isLocked?: boolean;
+      rotation?: number;
+      data?: SceneElementData;
+    }
   ) => void;
+  onUploadMapProp?: (file: File) => void;
 }) {
   const { tool, drawConfig, setDrawConfig } = useBoardStore();
+  const propInputRef = useRef<HTMLInputElement>(null);
 
   const canEditSelected = Boolean(
     selectedElement &&
@@ -58,6 +72,26 @@ export default function DrawingSubToolbar({
   if (tool !== "draw" && !selectedElement) {
     return null;
   }
+
+  const selectedData = (selectedElement?.data ?? {}) as SceneElementData;
+  const isImageProp = selectedElement?.kind === "image";
+
+  const scaleImagePropBy = (deltaCells: number) => {
+    if (!selectedElement || !isImageProp) return;
+    const step = Math.max(gridSize || 70, 20);
+    const curW = Math.max(selectedData.width ?? step * 4, step);
+    const curH = Math.max(selectedData.height ?? step * 4, step);
+    const ratio = curH / curW;
+    const nextW = Math.max(step, Math.round(curW + deltaCells * step));
+    const nextH = Math.max(step, Math.round(nextW * ratio));
+    onUpdateElement(selectedElement.id, {
+      data: {
+        ...selectedData,
+        width: nextW,
+        height: nextH,
+      },
+    });
+  };
 
   return (
     <div className="pointer-events-auto absolute top-14 left-1/2 z-20 flex max-w-[94vw] -translate-x-1/2 flex-wrap items-center gap-1.5 rounded-xl border border-amber-500/30 bg-zinc-950/95 px-2.5 py-1.5 text-xs shadow-2xl backdrop-blur">
@@ -110,6 +144,32 @@ export default function DrawingSubToolbar({
             ))}
           </div>
 
+          {isGm && onUploadMapProp && (
+            <>
+              <div className="mx-0.5 h-4 w-px bg-zinc-800" />
+              <button
+                type="button"
+                onClick={() => propInputRef.current?.click()}
+                title="Colocar uma peça de mapa ou cenário particionado no grid"
+                className="inline-flex items-center gap-1 rounded-lg border border-amber-500/40 bg-amber-500/15 px-2 py-1 font-semibold text-amber-200 transition hover:bg-amber-500/25"
+              >
+                <ImagePlus className="h-3.5 w-3.5" />
+                <span>+ Peça Mapa</span>
+              </button>
+              <input
+                ref={propInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  e.target.value = "";
+                  if (file) onUploadMapProp(file);
+                }}
+                className="hidden"
+              />
+            </>
+          )}
+
           <div className="mx-0.5 h-4 w-px bg-zinc-800" />
 
           <button
@@ -128,31 +188,69 @@ export default function DrawingSubToolbar({
         <>
           {tool === "draw" && <div className="mx-0.5 h-4 w-px bg-zinc-800" />}
           <span className="font-semibold text-amber-300">
-            Item selecionado
+            {isImageProp ? "🗺️ Peça de Mapa" : "Item selecionado"}
           </span>
 
           {canEditSelected && (
             <>
-              <div className="flex items-center gap-1">
-                <Link2 className="h-3.5 w-3.5 text-zinc-400" />
-                <select
-                  value={selectedElement.attached_to_token_id ?? ""}
-                  onChange={(e) =>
-                    onUpdateElement(selectedElement.id, {
-                      attachedToTokenId: e.target.value || null,
-                    })
-                  }
-                  title="Vincular (Attach) a um token para moverem juntos"
-                  className="rounded-lg border border-zinc-800 bg-zinc-900 px-2 py-1 text-[11px] text-zinc-200"
-                >
-                  <option value="">Sem vínculo (Livre)</option>
-                  {sceneTokens.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      Anexar a: {t.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              {isImageProp && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => scaleImagePropBy(-1)}
+                    title="Diminuir 1 quadrado"
+                    className="inline-flex items-center gap-0.5 rounded-lg border border-zinc-700 bg-zinc-900 px-1.5 py-1 text-zinc-200 hover:border-amber-500/40 hover:text-amber-200"
+                  >
+                    <Minus className="h-3 w-3" />
+                    <span className="text-[10px]">1q</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => scaleImagePropBy(1)}
+                    title="Aumentar 1 quadrado"
+                    className="inline-flex items-center gap-0.5 rounded-lg border border-zinc-700 bg-zinc-900 px-1.5 py-1 text-zinc-200 hover:border-amber-500/40 hover:text-amber-200"
+                  >
+                    <Plus className="h-3 w-3" />
+                    <span className="text-[10px]">1q</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onUpdateElement(selectedElement.id, {
+                        rotation: ((selectedElement.rotation ?? 0) + 90) % 360,
+                      })
+                    }
+                    title="Girar peça em 90°"
+                    className="inline-flex items-center gap-1 rounded-lg border border-zinc-700 bg-zinc-900 px-1.5 py-1 text-zinc-200 hover:border-amber-500/40 hover:text-amber-200"
+                  >
+                    <RotateCw className="h-3 w-3" />
+                    <span className="text-[10px]">90°</span>
+                  </button>
+                </>
+              )}
+
+              {!isImageProp && (
+                <div className="flex items-center gap-1">
+                  <Link2 className="h-3.5 w-3.5 text-zinc-400" />
+                  <select
+                    value={selectedElement.attached_to_token_id ?? ""}
+                    onChange={(e) =>
+                      onUpdateElement(selectedElement.id, {
+                        attachedToTokenId: e.target.value || null,
+                      })
+                    }
+                    title="Vincular (Attach) a um token para moverem juntos"
+                    className="rounded-lg border border-zinc-800 bg-zinc-900 px-2 py-1 text-[11px] text-zinc-200"
+                  >
+                    <option value="">Sem vínculo (Livre)</option>
+                    {sceneTokens.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        Anexar a: {t.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               {isGm && (
                 <button
@@ -181,10 +279,11 @@ export default function DrawingSubToolbar({
               <button
                 type="button"
                 onClick={() => onDeleteElement(selectedElement.id)}
-                className="inline-flex items-center gap-1 rounded-lg border border-rose-500/30 bg-rose-500/10 px-2 py-1 text-rose-300 hover:bg-rose-500/20"
+                title="Excluir item selecionado (Delete / Backspace)"
+                className="inline-flex items-center gap-1 rounded-lg border border-rose-500/40 bg-rose-500/15 px-2.5 py-1 font-semibold text-rose-200 hover:bg-rose-500/25"
               >
                 <Trash2 className="h-3.5 w-3.5" />
-                Excluir
+                Excluir (Del)
               </button>
             </>
           )}

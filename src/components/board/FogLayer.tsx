@@ -6,11 +6,15 @@ import { Circle, Group, Line, Rect } from "react-konva";
 import { parseFogColor } from "@/lib/board/fogColor";
 import type { Point2D } from "@/lib/board/geometry";
 import { getSmokeTextures } from "@/lib/board/smokeTexture";
+import { computeVisibilityPolygon } from "@/lib/board/visibility";
+import type { RemoteDragPosition } from "@/stores/boardStore";
 import type {
   FogOperation,
   FogShapeData,
   Scene,
   SceneFogShape,
+  SceneWall,
+  Token,
 } from "@/types/domain";
 
 export interface LocalFogPreview {
@@ -269,11 +273,25 @@ export default function FogLayer({
   fogShapes,
   localPreview,
   isGm,
+  tokens = [],
+  walls = [],
+  remoteTokenDrags = {},
+  localTokenDragPos = null,
+  gmUserIds = [],
+  selectedTokenId = null,
+  gmPreviewVision = false,
 }: {
   scene: Scene;
   fogShapes: SceneFogShape[];
   localPreview: LocalFogPreview | null;
   isGm: boolean;
+  tokens?: Token[];
+  walls?: SceneWall[];
+  remoteTokenDrags?: Record<string, RemoteDragPosition>;
+  localTokenDragPos?: { tokenId: string; x: number; y: number } | null;
+  gmUserIds?: string[];
+  selectedTokenId?: string | null;
+  gmPreviewVision?: boolean;
 }) {
   const groupRef = useRef<Konva.Group>(null);
   const smokeTextures = useMemo(() => getSmokeTextures(), []);
@@ -287,7 +305,104 @@ export default function FogLayer({
   const sceneShapes = fogShapes.filter((s) => s.scene_id === scene.id);
   const coverShapes = sceneShapes.filter((s) => s.operation === "cover");
   const revealShapes = sceneShapes.filter((s) => s.operation === "reveal");
-  const shouldAnimate = scene.fog_enabled && coverShapes.length > 0;
+  const hasCoverShapes = coverShapes.length > 0;
+  const shouldAnimate = scene.fog_enabled && hasCoverShapes;
+
+  const sceneWallSegments = useMemo(
+    () =>
+      walls
+        .filter(
+          (w) =>
+            w.scene_id === scene.id &&
+            (w.wall_type === "wall" || (w.wall_type === "door" && !w.is_open))
+        )
+        .map((w) => ({ x1: w.x1, y1: w.y1, x2: w.x2, y2: w.y2 })),
+    [walls, scene.id]
+  );
+
+  // Tokens de jogadores/personagens (ou com tocha) abrem um pouco a névoa enquanto caminham
+  const visionCutouts = useMemo(() => {
+    if (!scene.fog_enabled || !hasCoverShapes) return [];
+    const gridSize = Math.max(scene.grid_size || 70, 10);
+    const metersPerCell = Math.max(scene.meters_per_cell || 1.5, 0.1);
+    const pxPerMeter = gridSize / metersPerCell;
+    const gmSet = new Set(gmUserIds);
+
+    const list: Array<{
+      id: string;
+      x: number;
+      y: number;
+      radiusPx: number;
+      poly: number[];
+    }> = [];
+
+    for (const t of tokens) {
+      if (t.scene_id !== scene.id) continue;
+      if (t.is_hidden && !(isGm && gmPreviewVision && t.id === selectedTokenId)) {
+        continue;
+      }
+
+      const hasTorch = (t.light_radius ?? 0) > 0;
+      const isPlayerToken =
+        Boolean(t.character_id) ||
+        (t.owner_id !== null && !gmSet.has(t.owner_id));
+      const explicitVision = t.vision_range ?? 0;
+
+      let revealMeters = 0;
+      if (hasTorch) {
+        revealMeters = t.light_radius ?? 12;
+      } else if (isPlayerToken) {
+        revealMeters =
+          explicitVision <= 0
+            ? 0
+            : explicitVision === 18
+              ? 4.5
+              : explicitVision;
+      } else if (explicitVision > 0 && explicitVision !== 18) {
+        revealMeters = explicitVision;
+      } else if (isGm && gmPreviewVision && t.id === selectedTokenId) {
+        revealMeters = Math.min(Math.max(explicitVision || 4.5, 1.5), 9);
+      }
+
+      if (revealMeters <= 0) continue;
+      const radiusPx = Math.max(revealMeters * pxPerMeter, gridSize * 1.2);
+      const half = (Math.min(Math.max(t.size || 1, 1), 4) * gridSize) / 2;
+
+      let tx = t.pos_x;
+      let ty = t.pos_y;
+      if (localTokenDragPos && localTokenDragPos.tokenId === t.id) {
+        tx = localTokenDragPos.x;
+        ty = localTokenDragPos.y;
+      } else if (remoteTokenDrags[t.id]) {
+        tx = remoteTokenDrags[t.id]!.x;
+        ty = remoteTokenDrags[t.id]!.y;
+      }
+
+      const cx = tx + half;
+      const cy = ty + half;
+      const poly = computeVisibilityPolygon(
+        { x: cx, y: cy },
+        radiusPx,
+        sceneWallSegments
+      );
+      list.push({ id: t.id, x: cx, y: cy, radiusPx, poly });
+    }
+    return list;
+  }, [
+    scene.fog_enabled,
+    scene.id,
+    scene.grid_size,
+    scene.meters_per_cell,
+    hasCoverShapes,
+    tokens,
+    isGm,
+    gmPreviewVision,
+    selectedTokenId,
+    gmUserIds,
+    localTokenDragPos,
+    remoteTokenDrags,
+    sceneWallSegments,
+  ]);
 
   // Animação fluida da fumaça diretamente nos nós Konva (zero re-render React)
   useEffect(() => {
@@ -367,6 +482,26 @@ export default function FogLayer({
               smokeWisps: smokeTextures?.wisps ?? null,
             })
           )}
+          {visionCutouts.map((cut) => (
+            <Line
+              key={`tok-vis-${cut.id}`}
+              points={cut.poly}
+              closed
+              globalCompositeOperation="destination-out"
+              fillRadialGradientStartPoint={{ x: cut.x, y: cut.y }}
+              fillRadialGradientEndPoint={{ x: cut.x, y: cut.y }}
+              fillRadialGradientStartRadius={0}
+              fillRadialGradientEndRadius={cut.radiusPx}
+              fillRadialGradientColorStops={[
+                0,
+                "rgba(0,0,0,1)",
+                0.62,
+                "rgba(0,0,0,0.92)",
+                1,
+                "rgba(0,0,0,0)",
+              ]}
+            />
+          ))}
         </>
       )}
 

@@ -92,11 +92,11 @@ export default function WallsLayer({
               </Group>
             )}
 
-            {/* Botão de excluir segmento quando a ferramenta Parede está ativa */}
-            {isWallToolActive && !isDoor && (
+            {/* Botão de excluir segmento/porta quando a ferramenta Parede está ativa */}
+            {isWallToolActive && (
               <Group
-                x={mid.x}
-                y={mid.y}
+                x={isDoor ? mid.x + 18 : mid.x}
+                y={isDoor ? mid.y - 12 : mid.y}
                 onClick={(e) => {
                   e.cancelBubble = true;
                   onDeleteWall(w.id);

@@ -97,6 +97,7 @@ export default function TokenManager({
         ownerId: isGm ? ownerId : currentUserId,
         posX: spawnPos.x,
         posY: spawnPos.y,
+        visionRange: entry.category === "heroes" ? 4.5 : 0,
       });
 
       if (!res.ok || !res.token) {
@@ -154,6 +155,8 @@ export default function TokenManager({
         characterId: characterId || null,
         posX: spawnPos.x,
         posY: spawnPos.y,
+        visionRange:
+          characterId || !isGm || ownerId !== currentUserId ? 4.5 : 0,
       });
 
       if (!res.ok || !res.token) {
