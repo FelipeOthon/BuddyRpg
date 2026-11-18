@@ -29,6 +29,8 @@ export type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 export type Campaign = Database["public"]["Tables"]["campaigns"]["Row"];
 export type CampaignMember =
   Database["public"]["Tables"]["campaign_members"]["Row"];
+export type CampaignTrack =
+  Database["public"]["Tables"]["campaign_tracks"]["Row"];
 export type Scene = Database["public"]["Tables"]["scenes"]["Row"];
 export type SceneElement =
   Database["public"]["Tables"]["scene_elements"]["Row"];
@@ -264,5 +266,26 @@ export interface FxBurstPayload {
   y: number;
   preset: FxBurstPreset;
   radius: number;
+  ts: number;
+}
+
+export type MusicPreset =
+  | "none"
+  | "tavern_bard"
+  | "forest_exploration"
+  | "epic_combat"
+  | "dungeon_suspense"
+  | "tavern_fire"
+  | "sword_coast_rain";
+
+export interface MusicStatePayload {
+  userId?: string;
+  playing: boolean;
+  kind: "preset" | "url";
+  preset?: MusicPreset;
+  trackUrl?: string;
+  title?: string;
+  volume: number;
+  loop: boolean;
   ts: number;
 }

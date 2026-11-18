@@ -8,6 +8,8 @@ import {
   Eye,
   ImagePlus,
   Loader2,
+  Lock,
+  LockOpen,
   Plus,
   Radio,
   Save,
@@ -18,6 +20,7 @@ import {
   activateSceneAction,
   createSceneAction,
   deleteSceneAction,
+  toggleScenePlayerVisibilityAction,
   updateSceneSettingsAction,
 } from "@/actions/scenes";
 import { uploadCampaignImage } from "@/lib/utils/storage";
@@ -250,9 +253,34 @@ export default function SceneManager({
         return;
       }
       scenes.forEach((s) => {
-        upsertScene({ ...s, is_active: s.id === sceneId });
+        upsertScene({
+          ...s,
+          is_active: s.id === sceneId,
+          ...(s.id === sceneId ? { is_player_visible: true } : {}),
+        });
       });
       setViewedSceneId(sceneId);
+    });
+  };
+
+  const handleTogglePlayerVisibility = (scene: Scene) => {
+    setError(null);
+    const nextVisible = !(scene.is_player_visible || scene.is_active);
+    startTransition(async () => {
+      const res = await toggleScenePlayerVisibilityAction({
+        sceneId: scene.id,
+        campaignId,
+        isPlayerVisible: nextVisible,
+      });
+      if (!res.ok) {
+        setError(res.error ?? "Erro ao atualizar acesso dos jogadores.");
+        return;
+      }
+      upsertScene({
+        ...scene,
+        is_player_visible: nextVisible,
+        is_active: nextVisible ? scene.is_active : false,
+      });
     });
   };
 
@@ -289,7 +317,7 @@ export default function SceneManager({
       {/* Criar Nova Cena Secreta */}
       <form onSubmit={handleCreateScene} className="space-y-2">
         <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-400">
-          Nova Cena (Secreta até ativar)
+          Nova Cena (Secreta até liberar ou ativar)
         </label>
         <div className="flex gap-2">
           <input
@@ -351,6 +379,30 @@ export default function SceneManager({
                 </button>
 
                 <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => handleTogglePlayerVisibility(s)}
+                    disabled={isPending}
+                    title={
+                      s.is_player_visible || s.is_active
+                        ? "Liberada para jogadores (clique para bloquear)"
+                        : "Secreta — só o Mestre vê (clique para liberar)"
+                    }
+                    className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-[10px] font-semibold transition ${
+                      s.is_player_visible || s.is_active
+                        ? "border-emerald-500/35 bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25"
+                        : "border-zinc-700 bg-zinc-900 text-zinc-400 hover:border-amber-500/40 hover:text-amber-200"
+                    }`}
+                  >
+                    {s.is_player_visible || s.is_active ? (
+                      <LockOpen className="h-3 w-3" />
+                    ) : (
+                      <Lock className="h-3 w-3" />
+                    )}
+                    {s.is_player_visible || s.is_active
+                      ? "Liberada"
+                      : "Secreta"}
+                  </button>
                   {s.is_active ? (
                     <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">
                       <Radio className="h-2.5 w-2.5" />
@@ -362,7 +414,7 @@ export default function SceneManager({
                         type="button"
                         onClick={() => handleActivateScene(s.id)}
                         disabled={isPending}
-                        className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-[10px] font-semibold text-emerald-300 transition hover:bg-emerald-500/20"
+                        className="rounded-lg border border-sky-500/30 bg-sky-500/10 px-2 py-1 text-[10px] font-semibold text-sky-300 transition hover:bg-sky-500/20"
                       >
                         Ativar
                       </button>

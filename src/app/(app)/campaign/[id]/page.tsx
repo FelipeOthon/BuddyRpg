@@ -53,6 +53,7 @@ async function CampaignRoomLoader({
     { data: sceneElements },
     { data: fogShapes },
     { data: sceneWalls },
+    { data: campaignTracks },
     { data: rawMembers },
     { data: recentMessages },
     { data: characters },
@@ -75,6 +76,11 @@ async function CampaignRoomLoader({
       .order("created_at", { ascending: true }),
     supabase
       .from("scene_walls")
+      .select("*")
+      .eq("campaign_id", id)
+      .order("created_at", { ascending: true }),
+    supabase
+      .from("campaign_tracks")
       .select("*")
       .eq("campaign_id", id)
       .order("created_at", { ascending: true }),
@@ -125,6 +131,7 @@ async function CampaignRoomLoader({
       initialElements={sceneElements ?? []}
       initialFogShapes={fogShapes ?? []}
       initialWalls={sceneWalls ?? []}
+      initialTracks={campaignTracks ?? []}
       initialMessages={chronologicalMessages}
       initialCharacters={characters ?? []}
       members={members}

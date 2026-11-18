@@ -1,9 +1,11 @@
 import { create } from "zustand";
 import type { ViewportTransform } from "@/lib/board/geometry";
 import type {
+  CampaignTrack,
   DrawPreviewPayload,
   FogOperation,
   FxBurstPayload,
+  MusicStatePayload,
   PinnedRuler,
   PointerBroadcastPayload,
   RollResult,
@@ -123,6 +125,11 @@ interface BoardState {
   dice3dEnabled: boolean;
   activeDice3dRoll: ActiveDice3DRoll | null;
   combat: CombatStatePayload;
+  tracks: CampaignTrack[];
+  musicState: MusicStatePayload;
+  localMusicVolume: number;
+  soundMuted: boolean;
+  audioAutoplayBlocked: boolean;
 
   setTool: (tool: BoardTool) => void;
   setViewport: (viewport: ViewportTransform) => void;
@@ -133,6 +140,7 @@ interface BoardState {
     elements?: SceneElement[];
     fogShapes?: SceneFogShape[];
     walls?: SceneWall[];
+    tracks?: CampaignTrack[];
   }) => void;
   setViewedSceneId: (sceneId: string) => void;
   upsertScene: (scene: Scene) => void;
@@ -171,6 +179,12 @@ interface BoardState {
   setDice3dEnabled: (enabled: boolean) => void;
   triggerDice3dRoll: (roll: ActiveDice3DRoll | null) => void;
   setCombatState: (combat: CombatStatePayload) => void;
+  upsertTrack: (track: CampaignTrack) => void;
+  removeTrack: (trackId: string) => void;
+  setMusicState: (music: MusicStatePayload) => void;
+  setLocalMusicVolume: (volume: number) => void;
+  setSoundMuted: (muted: boolean) => void;
+  setAudioAutoplayBlocked: (blocked: boolean) => void;
 }
 
 export const useBoardStore = create<BoardState>((set) => ({
@@ -210,12 +224,24 @@ export const useBoardStore = create<BoardState>((set) => ({
   dice3dEnabled: true,
   activeDice3dRoll: null,
   combat: DEFAULT_COMBAT_STATE,
+  tracks: [],
+  musicState: {
+    playing: false,
+    kind: "preset",
+    preset: "none",
+    volume: 0.7,
+    loop: true,
+    ts: 0,
+  },
+  localMusicVolume: 0.75,
+  soundMuted: false,
+  audioAutoplayBlocked: false,
 
   setTool: (tool) => set({ tool }),
   setViewport: (viewport) => set({ viewport }),
   resetViewport: () => set({ viewport: { x: 40, y: 40, scale: 1 } }),
 
-  hydrateBoard: ({ scenes, tokens, elements, fogShapes, walls }) =>
+  hydrateBoard: ({ scenes, tokens, elements, fogShapes, walls, tracks }) =>
     set((state) => {
       const activeScene =
         scenes.find((s) => s.is_active) ?? scenes[0] ?? null;
@@ -235,6 +261,7 @@ export const useBoardStore = create<BoardState>((set) => ({
         ...(elements !== undefined ? { elements } : {}),
         ...(fogShapes !== undefined ? { fogShapes } : {}),
         ...(walls !== undefined ? { walls } : {}),
+        ...(tracks !== undefined ? { tracks } : {}),
         combat: viewedScene
           ? extractCombatState(viewedScene)
           : DEFAULT_COMBAT_STATE,
@@ -256,13 +283,14 @@ export const useBoardStore = create<BoardState>((set) => ({
 
   upsertScene: (scene) =>
     set((state) => {
-      const exists = state.scenes.some((s) => s.id === scene.id);
-      const nextScenes = exists
+      const existing = state.scenes.find((s) => s.id === scene.id);
+      const nextScenes = existing
         ? state.scenes.map((s) => (s.id === scene.id ? scene : s))
         : [...state.scenes, scene];
 
+      const newlyActivated = Boolean(scene.is_active && !existing?.is_active);
       const nextViewed =
-        scene.is_active || !state.viewedSceneId
+        newlyActivated || !state.viewedSceneId
           ? scene.id
           : state.viewedSceneId;
 
@@ -492,4 +520,23 @@ export const useBoardStore = create<BoardState>((set) => ({
   setDice3dEnabled: (enabled) => set({ dice3dEnabled: enabled }),
   triggerDice3dRoll: (roll) => set({ activeDice3dRoll: roll }),
   setCombatState: (combat) => set({ combat }),
+  upsertTrack: (track) =>
+    set((state) => {
+      const exists = state.tracks.some((t) => t.id === track.id);
+      return {
+        tracks: exists
+          ? state.tracks.map((t) => (t.id === track.id ? track : t))
+          : [...state.tracks, track],
+      };
+    }),
+  removeTrack: (trackId) =>
+    set((state) => ({
+      tracks: state.tracks.filter((t) => t.id !== trackId),
+    })),
+  setMusicState: (musicState) => set({ musicState }),
+  setLocalMusicVolume: (volume) =>
+    set({ localMusicVolume: Math.min(Math.max(volume, 0), 1) }),
+  setSoundMuted: (soundMuted) => set({ soundMuted }),
+  setAudioAutoplayBlocked: (audioAutoplayBlocked) =>
+    set({ audioAutoplayBlocked }),
 }));

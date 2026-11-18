@@ -58,6 +58,25 @@ const safeImageUrlSchema = z
     "URL de imagem inválida."
   );
 
+const safeAudioUrlSchema = z
+  .string()
+  .trim()
+  .max(2000, "URL de áudio muito longa.")
+  .refine(
+    (v) => v.startsWith("https://") || v.startsWith("http://"),
+    "URL de áudio inválida (use https:// ou http://)."
+  );
+
+export const createCampaignTrackSchema = z.object({
+  campaignId: z.string().uuid("Campanha inválida."),
+  title: z
+    .string()
+    .trim()
+    .min(1, "Informe o nome da música.")
+    .max(80, "O nome da música deve ter no máximo 80 caracteres."),
+  url: safeAudioUrlSchema,
+});
+
 export const createTokenSchema = z.object({
   sceneId: z.string().uuid("Cena inválida."),
   campaignId: z.string().uuid("Campanha inválida."),

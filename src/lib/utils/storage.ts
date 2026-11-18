@@ -73,3 +73,61 @@ export async function uploadCampaignImage(params: {
     height: Math.min(Math.max(height, 200), 10000),
   };
 }
+
+const ALLOWED_AUDIO_TYPES = [
+  "audio/mpeg",
+  "audio/mp3",
+  "audio/ogg",
+  "audio/wav",
+  "audio/x-wav",
+  "audio/webm",
+  "audio/mp4",
+  "audio/aac",
+];
+
+const ALLOWED_AUDIO_EXTS = ["mp3", "ogg", "wav", "webm", "m4a", "mp4", "aac"];
+
+export async function uploadCampaignAudio(params: {
+  campaignId: string;
+  file: File;
+}): Promise<{ publicUrl: string; title: string }> {
+  const { campaignId, file } = params;
+  const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+
+  if (
+    (!file.type || !ALLOWED_AUDIO_TYPES.includes(file.type)) &&
+    !ALLOWED_AUDIO_EXTS.includes(ext)
+  ) {
+    throw new Error(
+      "Formato inválido. Envie áudio MP3, OGG, WAV, WebM ou M4A."
+    );
+  }
+
+  const maxBytes = 20 * 1024 * 1024;
+  if (file.size > maxBytes) {
+    throw new Error("O arquivo de áudio deve ter no máximo 20 MB.");
+  }
+
+  const safeExt = ALLOWED_AUDIO_EXTS.includes(ext) ? ext : "mp3";
+  const path = `${campaignId}/${crypto.randomUUID()}.${safeExt}`;
+
+  const supabase = createBrowserSupabaseClient();
+  const { error } = await supabase.storage.from("music").upload(path, file, {
+    cacheControl: "3600",
+    upsert: false,
+    contentType: file.type || "audio/mpeg",
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const {
+    data: { publicUrl },
+  } = supabase.storage.from("music").getPublicUrl(path);
+
+  const cleanTitle =
+    file.name.replace(/\.[^.]+$/, "").trim().slice(0, 80) || "Faixa da Mesa";
+
+  return { publicUrl, title: cleanTitle };
+}

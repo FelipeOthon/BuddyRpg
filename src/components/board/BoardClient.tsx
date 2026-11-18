@@ -5,6 +5,7 @@ import type { Point2D } from "@/lib/board/geometry";
 import type {
   CampaignRole,
   DrawPreviewPayload,
+  MusicStatePayload,
   PinnedRuler,
   Scene,
 } from "@/types/domain";
@@ -42,6 +43,8 @@ export default function BoardClient(props: {
     preview: Omit<DrawPreviewPayload, "userId" | "sceneId">
   ) => void;
   onSyncView?: (x: number, y: number, scale: number) => void;
+  onBroadcastMusicState?: (state: Omit<MusicStatePayload, "userId">) => void;
+  onOpenSceneManager?: () => void;
 }) {
   return <BoardCanvas {...props} />;
 }

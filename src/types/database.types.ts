@@ -129,6 +129,41 @@ export interface Database {
           },
         ];
       };
+      campaign_tracks: {
+        Row: {
+          id: string;
+          campaign_id: string;
+          title: string;
+          url: string;
+          created_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          campaign_id: string;
+          title: string;
+          url: string;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          campaign_id?: string;
+          title?: string;
+          url?: string;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "campaign_tracks_campaign_id_fkey";
+            columns: ["campaign_id"];
+            isOneToOne: false;
+            referencedRelation: "campaigns";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       scenes: {
         Row: {
           id: string;
@@ -146,6 +181,7 @@ export interface Database {
           meters_per_cell: number;
           distance_rule: DistanceRule;
           is_active: boolean;
+          is_player_visible: boolean;
           combat_state: Json | null;
           fog_enabled: boolean;
           fog_mode: FogMode;
@@ -171,6 +207,7 @@ export interface Database {
           meters_per_cell?: number;
           distance_rule?: DistanceRule;
           is_active?: boolean;
+          is_player_visible?: boolean;
           combat_state?: Json | null;
           fog_enabled?: boolean;
           fog_mode?: FogMode;
@@ -196,6 +233,7 @@ export interface Database {
           meters_per_cell?: number;
           distance_rule?: DistanceRule;
           is_active?: boolean;
+          is_player_visible?: boolean;
           combat_state?: Json | null;
           fog_enabled?: boolean;
           fog_mode?: FogMode;
@@ -595,6 +633,10 @@ export interface Database {
       };
       set_active_scene: {
         Args: { target_scene_id: string };
+        Returns: undefined;
+      };
+      set_scene_player_visibility: {
+        Args: { target_scene_id: string; visible: boolean };
         Returns: undefined;
       };
       set_character_edit_lock: {

@@ -44,6 +44,7 @@ export async function createSceneAction(input: {
       campaign_id: v.campaignId,
       name: v.name,
       is_active: false,
+      is_player_visible: false,
     })
     .select("*")
     .single();
@@ -145,6 +146,33 @@ export async function activateSceneAction(input: {
 
   const { error } = await supabase.rpc("set_active_scene", {
     target_scene_id: input.sceneId,
+  });
+
+  if (error) {
+    return { ok: false, error: error.message };
+  }
+
+  revalidatePath(`/campaign/${input.campaignId}`);
+  return { ok: true };
+}
+
+export async function toggleScenePlayerVisibilityAction(input: {
+  sceneId: string;
+  campaignId: string;
+  isPlayerVisible: boolean;
+}): Promise<SceneActionResult> {
+  const supabase = await createServerSupabaseClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { ok: false, error: "Sessão expirada." };
+  }
+
+  const { error } = await supabase.rpc("set_scene_player_visibility", {
+    target_scene_id: input.sceneId,
+    visible: input.isPlayerVisible,
   });
 
   if (error) {

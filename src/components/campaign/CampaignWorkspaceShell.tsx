@@ -31,16 +31,23 @@ import CharactersPanel from "@/components/sheets/CharactersPanel";
 import SelectedTokenHud from "@/components/tokens/SelectedTokenHud";
 import TokenManager from "@/components/tokens/TokenManager";
 import { useCampaignRealtime } from "@/hooks/useCampaignRealtime";
+import {
+  applyMusicPlayback,
+  stopMusicEngine,
+  unlockAudioPlayback,
+} from "@/lib/audio/soundEngine";
 import type { Point2D } from "@/lib/board/geometry";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { useBoardStore } from "@/stores/boardStore";
 import type {
   Campaign,
   CampaignRole,
+  CampaignTrack,
   CharacterRow,
   DrawPreviewPayload,
   FxBurstPreset,
   MessageRow,
+  MusicStatePayload,
   PinnedRuler,
   RollResult,
   Scene,
@@ -67,6 +74,7 @@ export default function CampaignWorkspaceShell({
   initialElements = [],
   initialFogShapes = [],
   initialWalls = [],
+  initialTracks = [],
   initialMessages,
   initialCharacters,
   members,
@@ -79,6 +87,7 @@ export default function CampaignWorkspaceShell({
   initialElements?: SceneElement[];
   initialFogShapes?: SceneFogShape[];
   initialWalls?: SceneWall[];
+  initialTracks?: CampaignTrack[];
   initialMessages: MessageRow[];
   initialCharacters: CharacterRow[];
   members: CampaignMemberInfo[];
@@ -129,6 +138,11 @@ export default function CampaignWorkspaceShell({
     scenes,
     viewedSceneId,
     uiHidden,
+    musicState,
+    localMusicVolume,
+    soundMuted,
+    audioAutoplayBlocked,
+    setAudioAutoplayBlocked,
     hydrateBoard,
     upsertToken,
     triggerDice3dRoll,
@@ -141,6 +155,7 @@ export default function CampaignWorkspaceShell({
       elements: initialElements,
       fogShapes: initialFogShapes,
       walls: initialWalls,
+      tracks: initialTracks,
     });
   }, [
     initialScenes,
@@ -148,8 +163,23 @@ export default function CampaignWorkspaceShell({
     initialElements,
     initialFogShapes,
     initialWalls,
+    initialTracks,
     hydrateBoard,
   ]);
+
+  useEffect(() => {
+    applyMusicPlayback(
+      musicState,
+      soundMuted ? 0 : localMusicVolume,
+      setAudioAutoplayBlocked
+    );
+  }, [musicState, localMusicVolume, soundMuted, setAudioAutoplayBlocked]);
+
+  useEffect(() => {
+    return () => {
+      stopMusicEngine();
+    };
+  }, []);
 
   const showError = useCallback((msg: string) => {
     setToastError(msg);
@@ -284,6 +314,7 @@ export default function CampaignWorkspaceShell({
     broadcastDrawPreview,
     broadcastFxBurst,
     broadcastCombatState,
+    broadcastMusicState,
   } = useCampaignRealtime({
     campaignId: campaign.id,
     currentUserId,
@@ -295,12 +326,17 @@ export default function CampaignWorkspaceShell({
   });
 
   const effectiveScenes = scenes.length > 0 ? scenes : initialScenes;
+  const visibleScenes = useMemo(
+    () =>
+      isGm
+        ? effectiveScenes
+        : effectiveScenes.filter((s) => s.is_player_visible || s.is_active),
+    [isGm, effectiveScenes]
+  );
   const viewedScene =
-    (isGm
-      ? effectiveScenes.find((s) => s.id === viewedSceneId)
-      : undefined) ??
-    effectiveScenes.find((s) => s.is_active) ??
-    effectiveScenes[0] ??
+    visibleScenes.find((s) => s.id === viewedSceneId) ??
+    visibleScenes.find((s) => s.is_active) ??
+    visibleScenes[0] ??
     null;
 
   const openCharacter = useMemo(
@@ -588,6 +624,23 @@ export default function CampaignWorkspaceShell({
             </div>
           )}
 
+          {audioAutoplayBlocked && musicState.playing && !soundMuted && (
+            <button
+              type="button"
+              onClick={() => {
+                void unlockAudioPlayback().then((ok) => {
+                  if (ok) setAudioAutoplayBlocked(false);
+                });
+              }}
+              className="pointer-events-auto absolute top-16 left-1/2 z-30 flex -translate-x-1/2 items-center gap-2 rounded-full border border-amber-500/50 bg-zinc-950/95 px-4 py-2 text-xs font-semibold text-amber-200 shadow-2xl backdrop-blur transition hover:bg-zinc-900"
+            >
+              <span>🔊 Clique para liberar a música da mesa</span>
+              {musicState.title && (
+                <span className="text-amber-400">({musicState.title})</span>
+              )}
+            </button>
+          )}
+
           {viewedScene ? (
             <>
               <BoardClient
@@ -602,6 +655,17 @@ export default function CampaignWorkspaceShell({
                 onPointerBroadcast={handlePointerBroadcast}
                 onDrawPreviewBroadcast={handleDrawPreviewBroadcast}
                 onSyncView={handleSyncView}
+                onBroadcastMusicState={(st: Omit<MusicStatePayload, "userId">) =>
+                  broadcastMusicState(st)
+                }
+                onOpenSceneManager={
+                  isGm
+                    ? () => {
+                        setSidebarOpen(true);
+                        setActiveTab("scenes");
+                      }
+                    : undefined
+                }
               />
               {!uiHidden && (
                 <InitiativeTrackerBar
@@ -627,12 +691,14 @@ export default function CampaignWorkspaceShell({
             <div className="flex flex-1 flex-col items-center justify-center p-6 text-center">
               <Grid className="h-8 w-8 text-zinc-600" />
               <p className="mt-2 text-sm font-medium text-zinc-300">
-                Nenhuma cena ativa no momento
+                {isGm
+                  ? "Nenhuma cena criada no momento"
+                  : "Nenhuma cena liberada pelo Mestre"}
               </p>
               <p className="mt-1 text-xs text-zinc-500">
                 {isGm
-                  ? "Crie ou ative uma cena na aba Cenas ao lado."
-                  : "Aguarde o Mestre ativar uma cena."}
+                  ? "Crie uma cena na aba Cenas ao lado."
+                  : "Aguarde o Mestre liberar ou ativar uma cena."}
               </p>
             </div>
           )}

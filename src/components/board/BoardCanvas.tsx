@@ -38,6 +38,7 @@ import type {
   CampaignRole,
   DrawPreviewPayload,
   FogShapeData,
+  MusicStatePayload,
   PinnedRuler,
   Scene,
   Token,
@@ -69,6 +70,8 @@ export default function BoardCanvas({
   onPointerBroadcast,
   onDrawPreviewBroadcast,
   onSyncView,
+  onBroadcastMusicState,
+  onOpenSceneManager,
 }: {
   scene: Scene;
   currentUserId: string;
@@ -97,6 +100,8 @@ export default function BoardCanvas({
     preview: Omit<DrawPreviewPayload, "userId" | "sceneId">
   ) => void;
   onSyncView?: (x: number, y: number, scale: number) => void;
+  onBroadcastMusicState?: (state: Omit<MusicStatePayload, "userId">) => void;
+  onOpenSceneManager?: () => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<Konva.Stage>(null);
@@ -1092,6 +1097,8 @@ export default function BoardCanvas({
             scene={scene}
             isGm={role === "gm"}
             onSyncView={onSyncView}
+            onBroadcastMusicState={onBroadcastMusicState}
+            onOpenSceneManager={onOpenSceneManager}
             onClearPinnedRulers={() => {
               clearPinnedRulers(scene.id);
               onRulerPinBroadcast?.("clear");

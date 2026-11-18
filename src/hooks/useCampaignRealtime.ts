@@ -15,6 +15,7 @@ import type {
   FxBurstPayload,
   FxBurstPreset,
   MessageRow,
+  MusicStatePayload,
   PinnedRuler,
   PinnedRulerBroadcastPayload,
   PointerBroadcastPayload,
@@ -128,6 +129,7 @@ export function useCampaignRealtime(params: {
     setRemoteDrawPreview,
     setViewport,
     setCombatState,
+    setMusicState,
   } = useBoardStore();
 
   useEffect(() => {
@@ -169,10 +171,16 @@ export function useCampaignRealtime(params: {
           if (oldId) removeScene(oldId);
         } else if (data.record) {
           const scene = data.record as unknown as Scene;
+          const prevScene = useBoardStore
+            .getState()
+            .scenes.find((s) => s.id === scene.id);
+          const newlyAccessible =
+            (scene.is_active && !prevScene?.is_active) ||
+            (scene.is_player_visible && !prevScene?.is_player_visible);
           upsertScene(scene);
 
-          // Se a cena acabou de ser ativada, recarrega os tokens, elementos e névoa dela via REST
-          if (scene.is_active) {
+          // Se a cena acabou de ser ativada ou liberada para jogadores, carrega seus objetos via REST
+          if (newlyAccessible) {
             const [
               { data: sceneTokens },
               { data: sceneEls },
@@ -330,6 +338,21 @@ export function useCampaignRealtime(params: {
           combatants: p.combatants,
         });
       })
+      .on("broadcast", { event: "music:state" }, (msg) => {
+        const p = msg.payload as MusicStatePayload | undefined;
+        if (!p || !p.userId || !gmIdsRef.current.has(p.userId)) return;
+        setMusicState({
+          userId: p.userId,
+          playing: Boolean(p.playing),
+          kind: p.kind === "url" ? "url" : "preset",
+          preset: p.preset,
+          trackUrl: p.trackUrl,
+          title: p.title,
+          volume: typeof p.volume === "number" ? p.volume : 0.7,
+          loop: p.loop ?? true,
+          ts: p.ts ?? Date.now(),
+        });
+      })
       .subscribe((st) => {
         if (isUnmounted) return;
         if (st === "SUBSCRIBED") setStatus("connected");
@@ -395,6 +418,7 @@ export function useCampaignRealtime(params: {
     triggerFxBurst,
     setViewport,
     setCombatState,
+    setMusicState,
   ]);
 
   const lastDragSentRef = useRef(0);
@@ -583,6 +607,21 @@ export function useCampaignRealtime(params: {
     [currentUserId, triggerFxBurst]
   );
 
+  const broadcastMusicState = useCallback(
+    (state: Omit<MusicStatePayload, "userId">) => {
+      const payload: MusicStatePayload = {
+        ...state,
+        userId: currentUserId,
+      };
+      mainChannelRef.current?.send({
+        type: "broadcast",
+        event: "music:state",
+        payload,
+      });
+    },
+    [currentUserId]
+  );
+
   return {
     status,
     broadcastTokenDrag,
@@ -593,5 +632,6 @@ export function useCampaignRealtime(params: {
     broadcastDrawPreview,
     broadcastFxBurst,
     broadcastCombatState,
+    broadcastMusicState,
   };
 }

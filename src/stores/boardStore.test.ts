@@ -19,6 +19,7 @@ function makeScene(overrides: Partial<Scene> = {}): Scene {
     meters_per_cell: 1.5,
     distance_rule: "chebyshev",
     is_active: true,
+    is_player_visible: true,
     combat_state: null,
     fog_enabled: false,
     fog_mode: "static",
@@ -161,6 +162,23 @@ describe("useBoardStore", () => {
     const state = useBoardStore.getState();
     expect(state.viewedSceneId).toBe("scene-2");
     expect(state.tokens.map((t) => t.id)).toEqual(["t2"]);
+  });
+
+  it("keeps current viewed scene when updating an already-active scene, but switches on newly activated scene", () => {
+    const s1 = makeScene({ id: "scene-1", is_active: true, is_player_visible: true });
+    const s2 = makeScene({ id: "scene-2", is_active: false, is_player_visible: true });
+
+    useBoardStore.getState().hydrateBoard({ scenes: [s1, s2], tokens: [] });
+    useBoardStore.getState().setViewedSceneId("scene-2");
+
+    // Atualização na cena 1 já ativa não deve puxar quem está vendo a cena 2
+    useBoardStore.getState().upsertScene({ ...s1, fog_color: "#111111" });
+    expect(useBoardStore.getState().viewedSceneId).toBe("scene-2");
+
+    // Quando uma terceira cena vira ativa pela primeira vez, muda o foco para ela
+    const s3 = makeScene({ id: "scene-3", is_active: true, is_player_visible: true });
+    useBoardStore.getState().upsertScene(s3);
+    expect(useBoardStore.getState().viewedSceneId).toBe("scene-3");
   });
 
   it("manages pinned rulers, remote pointers, and uiHidden", () => {
