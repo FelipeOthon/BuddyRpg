@@ -6,9 +6,14 @@ import {
   Eraser,
   Eye,
   EyeOff,
+  Footprints,
+  Grid,
+  Moon,
+  MousePointer,
   Pentagon,
   Scissors,
   Square,
+  Trash2,
 } from "lucide-react";
 import { useBoardStore } from "@/stores/boardStore";
 import type { FogMode, Scene } from "@/types/domain";
@@ -18,10 +23,15 @@ export default function FogSubToolbar({
   isGm,
   polygonPointCount,
   fogIntensity,
+  exploredCount,
   onFinishPolygon,
   onToggleFogEnabled,
   onChangeFogMode,
   onChangeFogIntensity,
+  onChangeAmbientLight,
+  onEnableDungeonMode,
+  onDeleteSelectedShape,
+  onResetExplored,
   onCoverAll,
   onClearAll,
 }: {
@@ -29,10 +39,15 @@ export default function FogSubToolbar({
   isGm: boolean;
   polygonPointCount: number;
   fogIntensity: number;
+  exploredCount: number;
   onFinishPolygon: () => void;
   onToggleFogEnabled: (enabled: boolean) => void;
   onChangeFogMode: (mode: FogMode) => void;
   onChangeFogIntensity: (opacity: number) => void;
+  onChangeAmbientLight: (light: number) => void;
+  onEnableDungeonMode: () => void;
+  onDeleteSelectedShape: () => void;
+  onResetExplored: () => void;
   onCoverAll: () => void;
   onClearAll: () => void;
 }) {
@@ -40,6 +55,7 @@ export default function FogSubToolbar({
     tool,
     fogToolConfig,
     setFogToolConfig,
+    selectedFogShapeId,
     gmFogOpacity,
     setGmFogOpacity,
   } = useBoardStore();
@@ -74,6 +90,22 @@ export default function FogSubToolbar({
         <option value="hybrid">Híbrida (Ambas)</option>
       </select>
 
+      <button
+        type="button"
+        onClick={onEnableDungeonMode}
+        title="Ativa Névoa Híbrida + Escuridão de Masmorra para tochas e visão brilharem"
+        className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-semibold transition ${
+          scene.fog_enabled &&
+          scene.fog_mode === "hybrid" &&
+          (scene.ambient_light ?? 1) <= 0.25
+            ? "border-indigo-400/60 bg-indigo-500/25 text-indigo-200"
+            : "border-zinc-700 bg-zinc-900 text-indigo-200 hover:border-indigo-400/40"
+        }`}
+      >
+        <Moon className="h-3 w-3" />
+        Masmorra
+      </button>
+
       <div className="mx-0.5 h-4 w-px bg-zinc-800" />
 
       <button
@@ -106,7 +138,8 @@ export default function FogSubToolbar({
 
       {(
         [
-          { mode: "rect", label: "Retângulo", icon: Square },
+          { mode: "rect", label: "Blocos/Retângulo", icon: Square },
+          { mode: "select", label: "Selecionar Bloco", icon: MousePointer },
           { mode: "circle", label: "Círculo", icon: Circle },
           { mode: "polygon", label: "Polígono", icon: Pentagon },
           { mode: "slice", label: "Slice (Cortar)", icon: Scissors },
@@ -127,10 +160,38 @@ export default function FogSubToolbar({
             }`}
           >
             <Icon className="h-3.5 w-3.5" />
-            <span className="hidden md:inline">{item.label}</span>
+            <span className="hidden lg:inline">{item.label}</span>
           </button>
         );
       })}
+
+      <button
+        type="button"
+        onClick={() =>
+          setFogToolConfig({ snapToGrid: !fogToolConfig.snapToGrid })
+        }
+        title="Encaixar blocos de névoa exatamente nos quadrados do grid"
+        className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-semibold transition ${
+          fogToolConfig.snapToGrid
+            ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-200"
+            : "border-zinc-700 bg-zinc-900 text-zinc-400"
+        }`}
+      >
+        <Grid className="h-3 w-3" />
+        Blocos {fogToolConfig.snapToGrid ? "ON" : "OFF"}
+      </button>
+
+      {selectedFogShapeId && (
+        <button
+          type="button"
+          onClick={onDeleteSelectedShape}
+          title="Excluir bloco de névoa selecionado (Delete)"
+          className="inline-flex items-center gap-1 rounded-lg border border-rose-500/50 bg-rose-500/20 px-2 py-1 font-bold text-rose-200 hover:bg-rose-500/30"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+          Excluir Bloco
+        </button>
+      )}
 
       {fogToolConfig.mode === "polygon" && polygonPointCount >= 6 && (
         <button
@@ -152,6 +213,18 @@ export default function FogSubToolbar({
         Cobrir Tudo
       </button>
 
+      {exploredCount > 0 && (
+        <button
+          type="button"
+          onClick={onResetExplored}
+          title="Apagar o rastro das áreas já exploradas pelos tokens"
+          className="inline-flex items-center gap-1 rounded-lg border border-zinc-700 bg-zinc-900 px-2 py-1 text-[11px] font-medium text-sky-200 hover:bg-zinc-800"
+        >
+          <Footprints className="h-3 w-3" />
+          Resetar Rastro
+        </button>
+      )}
+
       <button
         type="button"
         onClick={onClearAll}
@@ -165,6 +238,26 @@ export default function FogSubToolbar({
 
       <div
         className="flex items-center gap-1.5"
+        title="Luz Ambiente / Escuridão da Cena (0% breu · 100% claro)"
+      >
+        <Moon className="h-3 w-3 text-indigo-300" />
+        <span className="text-[11px] text-zinc-400">Luz:</span>
+        <input
+          type="range"
+          min={0}
+          max={1}
+          step={0.05}
+          value={scene.ambient_light ?? 1}
+          onChange={(e) => onChangeAmbientLight(Number(e.target.value))}
+          className="w-16 accent-indigo-400"
+        />
+        <span className="w-8 font-mono text-[10px] text-indigo-200">
+          {Math.round((scene.ambient_light ?? 1) * 100)}%
+        </span>
+      </div>
+
+      <div
+        className="flex items-center gap-1.5"
         title="Intensidade da Névoa para toda a mesa (5% quase invisível · 100% fechada)"
       >
         <span className="text-[11px] text-zinc-400">Intensidade:</span>
@@ -175,7 +268,7 @@ export default function FogSubToolbar({
           step={0.05}
           value={fogIntensity}
           onChange={(e) => onChangeFogIntensity(Number(e.target.value))}
-          className="w-20 accent-amber-400"
+          className="w-16 accent-amber-400"
         />
         <span className="w-8 font-mono text-[10px] text-amber-200">
           {Math.round(fogIntensity * 100)}%

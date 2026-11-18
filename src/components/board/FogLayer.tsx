@@ -7,7 +7,7 @@ import { parseFogColor } from "@/lib/board/fogColor";
 import type { Point2D } from "@/lib/board/geometry";
 import { getSmokeTextures } from "@/lib/board/smokeTexture";
 import { computeVisibilityPolygon } from "@/lib/board/visibility";
-import type { RemoteDragPosition } from "@/stores/boardStore";
+import type { ExploredSpot, RemoteDragPosition } from "@/stores/boardStore";
 import type {
   FogOperation,
   FogShapeData,
@@ -33,6 +33,9 @@ function renderFogShape(params: {
   fogColor: string;
   backingOpacity: number;
   isGm: boolean;
+  isSelected?: boolean;
+  canSelect?: boolean;
+  onSelect?: (id: string) => void;
   smokeDense: HTMLCanvasElement | null;
   smokeWisps: HTMLCanvasElement | null;
 }) {
@@ -44,6 +47,9 @@ function renderFogShape(params: {
     fogColor,
     backingOpacity,
     isGm,
+    isSelected,
+    canSelect,
+    onSelect,
     smokeDense,
     smokeWisps,
   } = params;
@@ -96,7 +102,24 @@ function renderFogShape(params: {
   }
 
   // Modo Cobrir (cover): base escura + 3 camadas FBM volumétricas em direções distintas
-  const borderStroke = isGm ? "rgba(245, 158, 11, 0.35)" : undefined;
+  const borderStroke = isSelected
+    ? "#38bdf8"
+    : isGm
+      ? "rgba(245, 158, 11, 0.35)"
+      : undefined;
+  const selectHandlers = canSelect
+    ? {
+        listening: true,
+        onClick: (e: Konva.KonvaEventObject<MouseEvent>) => {
+          e.cancelBubble = true;
+          onSelect?.(id);
+        },
+        onTap: (e: Konva.KonvaEventObject<TouchEvent>) => {
+          e.cancelBubble = true;
+          onSelect?.(id);
+        },
+      }
+    : { listening: false };
   const baseShadow = {
     shadowColor: fogColor,
     shadowBlur: 36,
@@ -110,7 +133,7 @@ function renderFogShape(params: {
     const h = Math.abs(d.height ?? 0);
 
     return (
-      <Group key={id}>
+      <Group key={id} {...selectHandlers}>
         <Rect
           x={x}
           y={y}
@@ -119,7 +142,7 @@ function renderFogShape(params: {
           fill={fogColor}
           opacity={backingOpacity}
           stroke={borderStroke}
-          strokeWidth={borderStroke ? 1.5 : 0}
+          strokeWidth={isSelected ? 3 : borderStroke ? 1.5 : 0}
           dash={borderStroke ? [8, 6] : undefined}
           {...baseShadow}
         />
@@ -170,7 +193,7 @@ function renderFogShape(params: {
     const r = Math.max(d.radius ?? 0, 2);
 
     return (
-      <Group key={id}>
+      <Group key={id} {...selectHandlers}>
         <Circle
           x={cx}
           y={cy}
@@ -178,7 +201,7 @@ function renderFogShape(params: {
           fill={fogColor}
           opacity={backingOpacity}
           stroke={borderStroke}
-          strokeWidth={borderStroke ? 1.5 : 0}
+          strokeWidth={isSelected ? 3 : borderStroke ? 1.5 : 0}
           dash={borderStroke ? [8, 6] : undefined}
           {...baseShadow}
         />
@@ -222,14 +245,14 @@ function renderFogShape(params: {
 
   const pts = d.points ?? [];
   return (
-    <Group key={id}>
+    <Group key={id} {...selectHandlers}>
       <Line
         points={pts}
         closed
         fill={fogColor}
         opacity={backingOpacity}
         stroke={borderStroke}
-        strokeWidth={borderStroke ? 1.5 : 0}
+        strokeWidth={isSelected ? 3 : borderStroke ? 1.5 : 0}
         dash={borderStroke ? [8, 6] : undefined}
         {...baseShadow}
       />
@@ -280,6 +303,10 @@ export default function FogLayer({
   gmUserIds = [],
   selectedTokenId = null,
   gmPreviewVision = false,
+  exploredSpots = [],
+  canSelectFog = false,
+  selectedFogShapeId = null,
+  onSelectFogShape,
 }: {
   scene: Scene;
   fogShapes: SceneFogShape[];
@@ -292,6 +319,10 @@ export default function FogLayer({
   gmUserIds?: string[];
   selectedTokenId?: string | null;
   gmPreviewVision?: boolean;
+  exploredSpots?: ExploredSpot[];
+  canSelectFog?: boolean;
+  selectedFogShapeId?: string | null;
+  onSelectFogShape?: (shapeId: string | null) => void;
 }) {
   const groupRef = useRef<Konva.Group>(null);
   const smokeTextures = useMemo(() => getSmokeTextures(), []);
@@ -453,7 +484,7 @@ export default function FogLayer({
   }
 
   return (
-    <Group ref={groupRef} listening={false}>
+    <Group ref={groupRef} listening={canSelectFog}>
       {scene.fog_enabled && (
         <>
           {coverShapes.map((s) =>
@@ -465,6 +496,9 @@ export default function FogLayer({
               fogColor,
               backingOpacity,
               isGm,
+              isSelected: selectedFogShapeId === s.id,
+              canSelect: canSelectFog,
+              onSelect: onSelectFogShape,
               smokeDense: smokeTextures?.dense ?? null,
               smokeWisps: smokeTextures?.wisps ?? null,
             })
@@ -482,6 +516,29 @@ export default function FogLayer({
               smokeWisps: smokeTextures?.wisps ?? null,
             })
           )}
+          {/* Rastro de áreas já exploradas pelos personagens (penumbra) */}
+          {exploredSpots.map((sp, idx) => (
+            <Circle
+              key={`exp-${idx}`}
+              x={sp.x}
+              y={sp.y}
+              radius={sp.radiusPx}
+              globalCompositeOperation="destination-out"
+              opacity={0.56}
+              fillRadialGradientStartPoint={{ x: 0, y: 0 }}
+              fillRadialGradientEndPoint={{ x: 0, y: 0 }}
+              fillRadialGradientStartRadius={0}
+              fillRadialGradientEndRadius={sp.radiusPx}
+              fillRadialGradientColorStops={[
+                0,
+                "rgba(0,0,0,1)",
+                0.7,
+                "rgba(0,0,0,0.85)",
+                1,
+                "rgba(0,0,0,0)",
+              ]}
+            />
+          ))}
           {visionCutouts.map((cut) => (
             <Line
               key={`tok-vis-${cut.id}`}

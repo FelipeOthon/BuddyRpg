@@ -178,3 +178,24 @@ export async function clearSceneFogAction(input: {
 
   return { ok: true };
 }
+
+export async function deleteFogShapeAction(input: {
+  shapeId: string;
+}): Promise<FogActionResult> {
+  const supabase = await createServerSupabaseClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "Sessão expirada." };
+
+  const { error } = await supabase
+    .from("scene_fog_shapes")
+    .delete()
+    .eq("id", input.shapeId);
+
+  if (error) {
+    return { ok: false, error: error.message };
+  }
+
+  return { ok: true };
+}

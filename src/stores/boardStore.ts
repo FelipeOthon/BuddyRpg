@@ -31,7 +31,14 @@ export type BoardTool =
 
 export interface FogToolConfig {
   operation: FogOperation;
-  mode: "rect" | "circle" | "polygon" | "slice";
+  mode: "rect" | "circle" | "polygon" | "slice" | "select";
+  snapToGrid: boolean;
+}
+
+export interface ExploredSpot {
+  x: number;
+  y: number;
+  radiusPx: number;
 }
 
 export interface DrawConfig {
@@ -106,6 +113,8 @@ interface BoardState {
   elements: SceneElement[];
   fogShapes: SceneFogShape[];
   fogToolConfig: FogToolConfig;
+  selectedFogShapeId: string | null;
+  exploredMemory: Record<string, ExploredSpot[]>;
   gmFogOpacity: number;
   walls: SceneWall[];
   wallToolType: WallType;
@@ -154,6 +163,9 @@ interface BoardState {
   removeFogShape: (shapeId: string) => void;
   clearFogForScene: (sceneId: string) => void;
   setFogToolConfig: (patch: Partial<FogToolConfig>) => void;
+  setSelectedFogShapeId: (shapeId: string | null) => void;
+  recordExploredSpot: (sceneId: string, spot: ExploredSpot, minStepPx?: number) => void;
+  clearExploredMemory: (sceneId: string) => void;
   setGmFogOpacity: (opacity: number) => void;
   upsertWall: (wall: SceneWall) => void;
   removeWall: (wallId: string) => void;
@@ -198,7 +210,10 @@ export const useBoardStore = create<BoardState>((set) => ({
   fogToolConfig: {
     operation: "cover",
     mode: "rect",
+    snapToGrid: true,
   },
+  selectedFogShapeId: null,
+  exploredMemory: {},
   gmFogOpacity: 0.62,
   walls: [],
   wallToolType: "wall",
@@ -410,15 +425,50 @@ export const useBoardStore = create<BoardState>((set) => ({
   removeFogShape: (shapeId) =>
     set((state) => ({
       fogShapes: state.fogShapes.filter((s) => s.id !== shapeId),
+      selectedFogShapeId:
+        state.selectedFogShapeId === shapeId ? null : state.selectedFogShapeId,
     })),
   clearFogForScene: (sceneId) =>
-    set((state) => ({
-      fogShapes: state.fogShapes.filter((s) => s.scene_id !== sceneId),
-    })),
+    set((state) => {
+      const nextMem = { ...state.exploredMemory };
+      delete nextMem[sceneId];
+      return {
+        fogShapes: state.fogShapes.filter((s) => s.scene_id !== sceneId),
+        selectedFogShapeId: null,
+        exploredMemory: nextMem,
+      };
+    }),
   setFogToolConfig: (patch) =>
     set((state) => ({
       fogToolConfig: { ...state.fogToolConfig, ...patch },
     })),
+  setSelectedFogShapeId: (selectedFogShapeId) => set({ selectedFogShapeId }),
+  recordExploredSpot: (sceneId, spot, minStepPx = 30) =>
+    set((state) => {
+      const cur = state.exploredMemory[sceneId] ?? [];
+      const minSq = minStepPx * minStepPx;
+      for (let i = cur.length - 1; i >= 0; i--) {
+        const s = cur[i]!;
+        const dx = s.x - spot.x;
+        const dy = s.y - spot.y;
+        if (dx * dx + dy * dy < minSq && Math.abs(s.radiusPx - spot.radiusPx) < 12) {
+          return state;
+        }
+      }
+      const nextList = cur.length >= 260 ? [...cur.slice(-259), spot] : [...cur, spot];
+      return {
+        exploredMemory: {
+          ...state.exploredMemory,
+          [sceneId]: nextList,
+        },
+      };
+    }),
+  clearExploredMemory: (sceneId) =>
+    set((state) => {
+      const next = { ...state.exploredMemory };
+      delete next[sceneId];
+      return { exploredMemory: next };
+    }),
   setGmFogOpacity: (opacity) =>
     set({
       gmFogOpacity: Math.min(Math.max(Math.round(opacity * 100) / 100, 0.05), 1),

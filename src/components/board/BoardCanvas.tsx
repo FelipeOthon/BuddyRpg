@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Eye } from "lucide-react";
-import { Layer, Stage } from "react-konva";
+import { Layer, Rect, Stage } from "react-konva";
 import type Konva from "konva";
 import type { KonvaEventObject } from "konva/lib/Node";
 import { clamp, screenToWorld, type Point2D } from "@/lib/board/geometry";
@@ -17,6 +17,7 @@ import {
 import {
   clearSceneFogAction,
   createFogShapeAction,
+  deleteFogShapeAction,
   replaceFogShapesAction,
   updateSceneFogSettingsAction,
 } from "@/actions/fog";
@@ -154,6 +155,7 @@ export default function BoardCanvas({
 
   const spaceDown = useKeyPressed(" ");
   const shiftDown = useKeyPressed("Shift");
+  const altDown = useKeyPressed("Alt");
   const {
     tool,
     viewport,
@@ -162,6 +164,11 @@ export default function BoardCanvas({
     elements,
     fogShapes,
     fogToolConfig,
+    selectedFogShapeId,
+    setSelectedFogShapeId,
+    exploredMemory,
+    recordExploredSpot,
+    clearExploredMemory,
     gmFogOpacity,
     setGmFogOpacity,
     walls,
@@ -358,6 +365,12 @@ export default function BoardCanvas({
     }
 
     if (isLeftClick && tool === "fog" && role === "gm") {
+      if (fogToolConfig.mode === "select") {
+        if (e.target === stage) {
+          setSelectedFogShapeId(null);
+        }
+        return;
+      }
       const pointer = stage.getPointerPosition();
       if (!pointer) return;
       const worldPt = screenToWorld(pointer, viewport);
@@ -371,11 +384,24 @@ export default function BoardCanvas({
           points: nextPts,
         });
       } else {
+        const g = Math.max(scene.grid_size || 70, 10);
+        const ox = scene.grid_offset_x ?? 0;
+        const oy = scene.grid_offset_y ?? 0;
+        const snappedStart =
+          fogToolConfig.mode === "rect" && fogToolConfig.snapToGrid && !altDown
+            ? {
+                x: Math.floor((worldPt.x - ox) / g) * g + ox,
+                y: Math.floor((worldPt.y - oy) / g) * g + oy,
+              }
+            : worldPt;
         setLocalFogPreview({
           mode: fogToolConfig.mode,
           operation: fogToolConfig.operation,
-          start: worldPt,
-          end: worldPt,
+          start: snappedStart,
+          end:
+            fogToolConfig.mode === "rect" && fogToolConfig.snapToGrid && !altDown
+              ? { x: snappedStart.x + g, y: snappedStart.y + g }
+              : worldPt,
         });
       }
       return;
@@ -430,6 +456,36 @@ export default function BoardCanvas({
       const pointer = stage.getPointerPosition();
       if (!pointer) return;
       const worldPt = screenToWorld(pointer, viewport);
+      if (
+        localFogPreview.mode === "rect" &&
+        fogToolConfig.snapToGrid &&
+        !altDown &&
+        localFogPreview.start
+      ) {
+        const g = Math.max(scene.grid_size || 70, 10);
+        const ox = scene.grid_offset_x ?? 0;
+        const oy = scene.grid_offset_y ?? 0;
+        const rawEndX =
+          worldPt.x >= localFogPreview.start.x
+            ? Math.ceil((worldPt.x - ox) / g) * g + ox
+            : Math.floor((worldPt.x - ox) / g) * g + ox;
+        const rawEndY =
+          worldPt.y >= localFogPreview.start.y
+            ? Math.ceil((worldPt.y - oy) / g) * g + oy
+            : Math.floor((worldPt.y - oy) / g) * g + oy;
+        const snappedEnd = {
+          x:
+            rawEndX === localFogPreview.start.x
+              ? localFogPreview.start.x + g
+              : rawEndX,
+          y:
+            rawEndY === localFogPreview.start.y
+              ? localFogPreview.start.y + g
+              : rawEndY,
+        };
+        setLocalFogPreview((prev) => (prev ? { ...prev, end: snappedEnd } : null));
+        return;
+      }
       setLocalFogPreview((prev) => (prev ? { ...prev, end: worldPt } : null));
       return;
     }
@@ -815,8 +871,42 @@ export default function BoardCanvas({
     }
   };
 
+  const maybeRecordExploration = (tokenId: string, x: number, y: number) => {
+    if (!scene.fog_enabled) return;
+    const tok = renderedTokens.find((t) => t.id === tokenId);
+    if (!tok) return;
+    const hasTorch = (tok.light_radius ?? 0) > 0;
+    const isPlayerTok =
+      Boolean(tok.character_id) ||
+      (tok.owner_id !== null && !gmUserIds.includes(tok.owner_id));
+    const explicitVision = tok.vision_range ?? 0;
+    const meters = hasTorch
+      ? (tok.light_radius ?? 12)
+      : isPlayerTok
+        ? explicitVision <= 0
+          ? 0
+          : explicitVision === 18
+            ? 4.5
+            : explicitVision
+        : explicitVision > 0 && explicitVision !== 18
+          ? explicitVision
+          : 0;
+    if (meters <= 0) return;
+
+    const g = Math.max(scene.grid_size || 70, 10);
+    const mpc = Math.max(scene.meters_per_cell || 1.5, 0.1);
+    const radiusPx = Math.max((meters * g) / mpc, g * 1.2);
+    const half = (Math.min(Math.max(tok.size || 1, 1), 4) * g) / 2;
+    recordExploredSpot(
+      scene.id,
+      { x: x + half, y: y + half, radiusPx },
+      g * 0.45
+    );
+  };
+
   const handleTokenDragMove = (tokenId: string, x: number, y: number) => {
     setLocalTokenDragPos({ tokenId, x, y });
+    maybeRecordExploration(tokenId, x, y);
     if (tokenDragCenterRef.current) {
       const { origin, halfSize } = tokenDragCenterRef.current;
       setTokenDragRuler({
@@ -829,6 +919,7 @@ export default function BoardCanvas({
   };
 
   const handleTokenDragEnd = (tokenId: string, x: number, y: number) => {
+    maybeRecordExploration(tokenId, x, y);
     setDraggingLocalTokenId(null);
     setLocalTokenDragPos(null);
     tokenDragCenterRef.current = null;
@@ -862,6 +953,17 @@ export default function BoardCanvas({
       });
       const baseName =
         file.name.replace(/\.[^.]+$/, "").slice(0, 40) || "Token";
+      const snappedPos = snapToGrid(
+        {
+          x: worldPt.x - scene.grid_size / 2,
+          y: worldPt.y - scene.grid_size / 2,
+        },
+        scene.grid_size,
+        scene.snap_to_grid,
+        scene.grid_offset_x ?? 0,
+        scene.grid_offset_y ?? 0,
+        scene.grid_type ?? "square"
+      );
       const res = await createTokenAction({
         sceneId: scene.id,
         campaignId: scene.campaign_id,
@@ -870,8 +972,8 @@ export default function BoardCanvas({
         size: 1,
         hpCurrent: 20,
         hpMax: 20,
-        posX: Math.round(worldPt.x - scene.grid_size / 2),
-        posY: Math.round(worldPt.y - scene.grid_size / 2),
+        posX: snappedPos.x,
+        posY: snappedPos.y,
         visionRange: 4.5,
       });
       if (res.ok && res.token) {
@@ -1093,6 +1195,73 @@ export default function BoardCanvas({
     }, 220);
   };
 
+  const handleDeleteSelectedFogShape = () => {
+    if (role !== "gm" || !selectedFogShapeId) return;
+    const targetId = selectedFogShapeId;
+    removeFogShape(targetId);
+    void deleteFogShapeAction({ shapeId: targetId });
+  };
+
+  useEffect(() => {
+    if (role !== "gm" || tool !== "fog" || !selectedFogShapeId) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      const target = e.target;
+      if (
+        target instanceof HTMLElement &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.tagName === "SELECT" ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+      if (e.key === "Delete" || e.key === "Backspace") {
+        e.preventDefault();
+        const targetId = selectedFogShapeId;
+        removeFogShape(targetId);
+        void deleteFogShapeAction({ shapeId: targetId });
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [role, tool, selectedFogShapeId, removeFogShape]);
+
+  const handleChangeAmbientLight = (light: number) => {
+    if (role !== "gm") return;
+    upsertScene({ ...scene, ambient_light: light });
+    if (envSaveTimerRef.current) clearTimeout(envSaveTimerRef.current);
+    const targetSceneId = scene.id;
+    const targetCampaignId = scene.campaign_id;
+    envSaveTimerRef.current = setTimeout(() => {
+      void updateSceneEnvironmentAction({
+        sceneId: targetSceneId,
+        campaignId: targetCampaignId,
+        ambientLight: light,
+      });
+    }, 200);
+  };
+
+  const handleEnableDungeonMode = () => {
+    if (role !== "gm") return;
+    upsertScene({
+      ...scene,
+      fog_enabled: true,
+      fog_mode: "hybrid",
+      ambient_light: 0.14,
+    });
+    void updateSceneFogSettingsAction({
+      sceneId: scene.id,
+      campaignId: scene.campaign_id,
+      fogEnabled: true,
+      fogMode: "hybrid",
+    });
+    void updateSceneEnvironmentAction({
+      sceneId: scene.id,
+      campaignId: scene.campaign_id,
+      ambientLight: 0.14,
+    });
+  };
+
   const handleCoverAllFog = () => {
     if (role !== "gm") return;
     const existingIds = fogShapes
@@ -1260,10 +1429,15 @@ export default function BoardCanvas({
             isGm={role === "gm"}
             polygonPointCount={fogPolygonPoints.length}
             fogIntensity={sceneFogOpacity}
+            exploredCount={(exploredMemory[scene.id] ?? []).length}
             onFinishPolygon={finishFogPolygon}
             onToggleFogEnabled={handleToggleFogEnabled}
             onChangeFogMode={handleChangeFogMode}
             onChangeFogIntensity={handleChangeFogIntensity}
+            onChangeAmbientLight={handleChangeAmbientLight}
+            onEnableDungeonMode={handleEnableDungeonMode}
+            onDeleteSelectedShape={handleDeleteSelectedFogShape}
+            onResetExplored={() => clearExploredMemory(scene.id)}
             onCoverAll={handleCoverAllFog}
             onClearAll={handleClearAllFog}
           />
@@ -1540,6 +1714,38 @@ export default function BoardCanvas({
 
         {/* Camada 3: Tokens */}
         <Layer>
+          {localTokenDragPos &&
+            scene.snap_to_grid &&
+            !altDown &&
+            (() => {
+              const draggedTok = renderedTokens.find(
+                (t) => t.id === localTokenDragPos.tokenId
+              );
+              if (!draggedTok) return null;
+              const cellPx =
+                Math.min(Math.max(draggedTok.size || 1, 1), 4) * scene.grid_size;
+              const snappedTarget = snapToGrid(
+                { x: localTokenDragPos.x, y: localTokenDragPos.y },
+                scene.grid_size,
+                true,
+                scene.grid_offset_x ?? 0,
+                scene.grid_offset_y ?? 0,
+                scene.grid_type ?? "square"
+              );
+              return (
+                <Rect
+                  x={snappedTarget.x}
+                  y={snappedTarget.y}
+                  width={cellPx}
+                  height={cellPx}
+                  fill="rgba(245, 158, 11, 0.14)"
+                  stroke="#fbbf24"
+                  strokeWidth={2}
+                  dash={[6, 4]}
+                  listening={false}
+                />
+              );
+            })()}
           {renderedTokens.map((token) => {
             const remoteDrag = remoteTokenDrags[token.id];
             const displayX = remoteDrag ? remoteDrag.x : token.pos_x;
@@ -1591,7 +1797,9 @@ export default function BoardCanvas({
               ? Math.max(0.05, Math.min(1, sceneFogOpacity * gmFogOpacity))
               : sceneFogOpacity
           }
-          listening={false}
+          listening={
+            role === "gm" && tool === "fog" && fogToolConfig.mode === "select"
+          }
         >
           <FogLayer
             scene={scene}
@@ -1605,6 +1813,12 @@ export default function BoardCanvas({
             gmUserIds={gmUserIds}
             selectedTokenId={selectedTokenId}
             gmPreviewVision={gmPreviewVision}
+            exploredSpots={exploredMemory[scene.id] ?? []}
+            canSelectFog={
+              role === "gm" && tool === "fog" && fogToolConfig.mode === "select"
+            }
+            selectedFogShapeId={selectedFogShapeId}
+            onSelectFogShape={setSelectedFogShapeId}
           />
         </Layer>
 

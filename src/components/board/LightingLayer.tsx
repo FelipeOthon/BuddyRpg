@@ -179,7 +179,8 @@ export default function LightingLayer({
             key={`glow-${src.id}`}
             points={src.poly}
             closed
-            opacity={0.18}
+            opacity={ambientLight < 0.7 ? 0.28 : 0.16}
+            globalCompositeOperation="screen"
             fillRadialGradientStartPoint={{ x: src.x, y: src.y }}
             fillRadialGradientEndPoint={{ x: src.x, y: src.y }}
             fillRadialGradientStartRadius={0}
@@ -187,7 +188,7 @@ export default function LightingLayer({
             fillRadialGradientColorStops={[
               0,
               src.lightColor,
-              0.65,
+              0.45,
               src.lightColor,
               1,
               "rgba(0,0,0,0)",

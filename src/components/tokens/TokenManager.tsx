@@ -97,7 +97,10 @@ export default function TokenManager({
         y: scene.grid_size * (2 + Math.floor(sceneTokens.length / 6)),
       },
       scene.grid_size,
-      scene.snap_to_grid
+      scene.snap_to_grid,
+      scene.grid_offset_x ?? 0,
+      scene.grid_offset_y ?? 0,
+      scene.grid_type ?? "square"
     );
 
   const handleSpawnBestiaryEntry = (entry: BestiaryEntry) => {
