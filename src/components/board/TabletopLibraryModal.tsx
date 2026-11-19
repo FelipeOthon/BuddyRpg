@@ -4,13 +4,17 @@ import { useEffect, useState } from "react";
 import {
   Armchair,
   Check,
+  Layers,
   Map as MapIcon,
+  Maximize2,
+  Minimize2,
   Plus,
   Sparkles,
   UserPlus,
   Wand2,
   X,
 } from "lucide-react";
+import SceneManager from "../scenes/SceneManager";
 import {
   CURATED_ADVENTURE_ITEMS,
   CURATED_BATTLEMAPS,
@@ -28,15 +32,25 @@ import {
   buildAiTokenUrl,
 } from "@/lib/board/mapGenerator";
 
-type LibraryTab = "maps" | "furniture" | "tokens" | "vfx" | "ai";
+export type LibraryTab =
+  | "maps"
+  | "furniture"
+  | "tokens"
+  | "vfx"
+  | "ai"
+  | "scenes";
 type AiMode = "map" | "token" | "item";
 
 export default function TabletopLibraryModal({
+  campaignId,
+  initialTab = "furniture",
   onClose,
   onPlaceProp,
   onPlaceMapPiece,
   onPlaceToken,
 }: {
+  campaignId: string;
+  initialTab?: LibraryTab;
   onClose: () => void;
   onPlaceProp: (payload: {
     imageUrl: string;
@@ -57,7 +71,8 @@ export default function TabletopLibraryModal({
     size: number;
   }) => void;
 }) {
-  const [tab, setTab] = useState<LibraryTab>("furniture");
+  const [tab, setTab] = useState<LibraryTab>(initialTab);
+  const [expanded, setExpanded] = useState(false);
   const [mapCat, setMapCat] = useState<string>("Todos");
   const [vfxCat, setVfxCat] = useState<string>("Todos");
   const [propCat, setPropCat] = useState<string>("Todos");
@@ -180,28 +195,47 @@ export default function TabletopLibraryModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-3 backdrop-blur-sm sm:p-5"
+      className={
+        expanded
+          ? "fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-3 backdrop-blur-sm sm:p-5"
+          : "pointer-events-auto fixed top-16 left-3 z-50 flex max-h-[82vh] w-[min(94vw,680px)] flex-col sm:left-14"
+      }
       role="dialog"
       aria-label="Biblioteca da Mesa"
     >
-      <div className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-amber-500/40 bg-zinc-950 shadow-2xl">
+      <div
+        className={`flex flex-col overflow-hidden rounded-2xl border border-amber-500/40 bg-zinc-950/95 shadow-2xl backdrop-blur ${
+          expanded ? "max-h-[92vh] w-full max-w-5xl" : "max-h-[82vh] w-full"
+        }`}
+      >
         {/* Cabeçalho */}
-        <div className="flex items-center justify-between border-b border-zinc-800 px-5 py-3.5">
+        <div className="flex items-center justify-between border-b border-zinc-800 px-4 py-3">
           <div>
-            <h2 className="font-display text-base font-extrabold text-amber-100 sm:text-lg">
-              🎒 Biblioteca &amp; Estúdio da Mesa
+            <h2 className="font-display text-base font-extrabold text-amber-100">
+              🎒 Biblioteca, Cenas &amp; Estúdio
             </h2>
             <p className="text-[11px] text-zinc-400">
-              Clique em qualquer item para inserir direto no tabuleiro (móvel e
-              encaixado na grade)
+              Janela flutuante: clique para inserir e arraste direto no mapa ao lado
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             {addedToast && (
               <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/20 px-2.5 py-1 text-[11px] font-bold text-emerald-300">
-                <Check className="h-3 w-3" /> {addedToast} adicionado!
+                <Check className="h-3 w-3" /> {addedToast}
               </span>
             )}
+            <button
+              type="button"
+              onClick={() => setExpanded((v) => !v)}
+              title={expanded ? "Modo flutuante (ver mapa)" : "Expandir tela cheia"}
+              className="rounded-xl border border-zinc-800 bg-zinc-900 p-2 text-zinc-400 hover:text-amber-200"
+            >
+              {expanded ? (
+                <Minimize2 className="h-4 w-4" />
+              ) : (
+                <Maximize2 className="h-4 w-4" />
+              )}
+            </button>
             <button
               type="button"
               onClick={onClose}
@@ -214,14 +248,15 @@ export default function TabletopLibraryModal({
         </div>
 
         {/* Abas */}
-        <div className="grid grid-cols-2 gap-1.5 border-b border-zinc-800 bg-zinc-950/90 p-2 sm:grid-cols-5">
+        <div className="grid grid-cols-3 gap-1.5 border-b border-zinc-800 bg-zinc-950/90 p-2 sm:grid-cols-6">
           {(
             [
               { id: "furniture", label: "Móveis & Itens", icon: Armchair },
               { id: "tokens", label: "Personagens", icon: UserPlus },
               { id: "maps", label: `Mapas (${CURATED_BATTLEMAPS.length})`, icon: MapIcon },
               { id: "vfx", label: `VFX (${CURATED_VFX_ANIMATIONS.length})`, icon: Sparkles },
-              { id: "ai", label: "Criar com IA", icon: Wand2 },
+              { id: "ai", label: "Criar IA", icon: Wand2 },
+              { id: "scenes", label: "Cenas", icon: Layers },
             ] as const
           ).map((item) => {
             const Icon = item.icon;
@@ -596,6 +631,8 @@ export default function TabletopLibraryModal({
               )}
             </div>
           )}
+
+          {tab === "scenes" && <SceneManager campaignId={campaignId} />}
         </div>
       </div>
     </div>

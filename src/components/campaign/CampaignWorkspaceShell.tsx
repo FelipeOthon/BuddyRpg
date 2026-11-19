@@ -9,7 +9,6 @@ import {
   Copy,
   Crown,
   Grid,
-  Layers,
   Link2,
   MessageSquare,
   PanelRightClose,
@@ -27,7 +26,6 @@ import BoardClient from "@/components/board/BoardClient";
 import Dice3DOverlay from "@/components/board/Dice3DOverlay";
 import InitiativeTrackerBar from "@/components/board/InitiativeTrackerBar";
 import ChatPanel from "@/components/chat/ChatPanel";
-import SceneManager from "@/components/scenes/SceneManager";
 import CharacterSheetModal from "@/components/sheets/CharacterSheetModal";
 import CharactersPanel from "@/components/sheets/CharactersPanel";
 import SelectedTokenHud from "@/components/tokens/SelectedTokenHud";
@@ -66,7 +64,7 @@ export interface CampaignMemberInfo {
   role: CampaignRole;
 }
 
-type SidebarTab = "tokens" | "chat" | "sheets" | "scenes" | "members";
+type SidebarTab = "tokens" | "chat" | "sheets" | "members";
 
 export default function CampaignWorkspaceShell({
   campaign,
@@ -738,14 +736,6 @@ export default function CampaignWorkspaceShell({
                 onBroadcastMusicState={(st: Omit<MusicStatePayload, "userId">) =>
                   broadcastMusicState(st)
                 }
-                onOpenSceneManager={
-                  isGm
-                    ? () => {
-                        setSidebarOpen(true);
-                        setActiveTab("scenes");
-                      }
-                    : undefined
-                }
               />
               {!uiHidden && (
                 <InitiativeTrackerBar
@@ -829,11 +819,7 @@ export default function CampaignWorkspaceShell({
           } shrink-0 flex-col border-l border-amber-500/20 bg-zinc-900/95 backdrop-blur`}
         >
           <div className="flex items-center border-b border-zinc-800 bg-zinc-950/60 p-1">
-            <nav
-              className={`grid flex-1 ${
-                isGm ? "grid-cols-5" : "grid-cols-4"
-              }`}
-            >
+            <nav className="grid flex-1 grid-cols-4">
             <button
               type="button"
               onClick={() => setActiveTab("chat")}
@@ -870,20 +856,6 @@ export default function CampaignWorkspaceShell({
               <ScrollText className="h-4 w-4" />
               Fichas
             </button>
-            {isGm && (
-              <button
-                type="button"
-                onClick={() => setActiveTab("scenes")}
-                className={`flex flex-col items-center gap-1 rounded-lg py-2 text-[11px] font-medium transition ${
-                  activeTab === "scenes"
-                    ? "bg-zinc-800 text-amber-400"
-                    : "text-zinc-400 hover:text-white"
-                }`}
-              >
-                <Layers className="h-4 w-4" />
-                Cenas
-              </button>
-            )}
             <button
               type="button"
               onClick={() => setActiveTab("members")}
@@ -945,10 +917,6 @@ export default function CampaignWorkspaceShell({
                 onRemoveCharacter={removeCharacter}
                 onOpenCharacter={(c) => setOpenCharacterId(c.id)}
               />
-            )}
-
-            {activeTab === "scenes" && isGm && (
-              <SceneManager campaignId={campaign.id} />
             )}
 
             {activeTab === "members" && (

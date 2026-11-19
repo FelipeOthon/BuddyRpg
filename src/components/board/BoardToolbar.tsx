@@ -62,7 +62,7 @@ import { useBoardStore, type BoardTool } from "@/stores/boardStore";
 import { CURATED_VFX_ANIMATIONS } from "@/lib/board/curatedAssets";
 import DmScreenModal from "./DmScreenModal";
 import QuickDiceRoller from "./QuickDiceRoller";
-import TabletopLibraryModal from "./TabletopLibraryModal";
+import TabletopLibraryModal, { type LibraryTab } from "./TabletopLibraryModal";
 import type { MusicPreset, MusicStatePayload, Scene } from "@/types/domain";
 
 function buildMusicPayload(
@@ -161,6 +161,8 @@ export default function BoardToolbar({
   const [vfxMenuOpen, setVfxMenuOpen] = useState(false);
   const [dmScreenOpen, setDmScreenOpen] = useState(false);
   const [libraryOpen, setLibraryOpen] = useState(false);
+  const [libraryInitialTab, setLibraryInitialTab] =
+    useState<LibraryTab>("furniture");
   const [musicUploading, setMusicUploading] = useState(false);
   const [trackTitle, setTrackTitle] = useState("");
   const [trackUrlInput, setTrackUrlInput] = useState("");
@@ -849,73 +851,91 @@ export default function BoardToolbar({
           </div>
         </div>
 
-      {/* Centro: Seletor de Cenas + Biblioteca + VFX + Escudo 5e lado a lado */}
-      <div className="pointer-events-auto flex flex-wrap items-center justify-center gap-1.5">
-        <div ref={sceneMenuRef} className="relative">
-        <button
-          type="button"
-          onClick={() => setSceneMenuOpen((v) => !v)}
-          title="Trocar de cena ou gerenciar acesso dos jogadores"
-          className={`flex items-center gap-2 rounded-xl border px-3 py-1.5 text-xs text-zinc-200 shadow-xl backdrop-blur transition ${
-            sceneMenuOpen
-              ? "border-amber-400 bg-zinc-900 text-amber-100"
-              : "border-amber-500/30 bg-zinc-950/90 hover:border-amber-400/60"
-              }`}
-          >
-            <Grid className="h-3.5 w-3.5 text-amber-400" />
-            <span className="max-w-[140px] truncate font-display font-bold text-amber-100">
-              {scene.name}
-            </span>
-            {isGm && (
-              <span
-                className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold ${scene.is_player_visible || scene.is_active
-                  ? "bg-emerald-500/15 text-emerald-300"
-                  : "bg-amber-500/20 text-amber-300"
-                  }`}
-              >
-                {scene.is_player_visible || scene.is_active ? (
-                  <>
-                    <LockOpen className="h-2.5 w-2.5" />
-                    Liberada
-                  </>
-                ) : (
-                  <>
-                    <Lock className="h-2.5 w-2.5" />
-                    Só GM
-                  </>
-                )}
-              </span>
-            )}
-            <span className="hidden items-center gap-2 text-zinc-300 lg:inline-flex">
-              <span className="text-zinc-600">·</span>
-              <span>{scene.grid_size}px</span>
-              <span className="text-zinc-600">·</span>
-              <span>{scene.meters_per_cell}m/q</span>
-              <span className="text-zinc-600">·</span>
-              <span className="inline-flex items-center gap-1 text-zinc-400">
-                <Magnet className="h-3 w-3 text-emerald-400" />
-                {scene.snap_to_grid ? "Snap ON" : "Snap OFF"}
-              </span>
-            </span>
-            <ChevronDown
-              className={`h-3.5 w-3.5 text-zinc-400 transition-transform ${sceneMenuOpen ? "rotate-180 text-amber-300" : ""
+        {/* Centro: Seletor de Cenas + Biblioteca + VFX + Escudo 5e lado a lado */}
+        <div className="pointer-events-auto flex flex-wrap items-center justify-center gap-1.5">
+          <div ref={sceneMenuRef} className="relative">
+            <button
+              type="button"
+              onClick={() => setSceneMenuOpen((v) => !v)}
+              title="Trocar de cena ou gerenciar acesso dos jogadores"
+              className={`flex items-center gap-2 rounded-xl border px-3 py-1.5 text-xs text-zinc-200 shadow-xl backdrop-blur transition ${sceneMenuOpen
+                ? "border-amber-400 bg-zinc-900 text-amber-100"
+                : "border-amber-500/30 bg-zinc-950/90 hover:border-amber-400/60"
                 }`}
-            />
-          </button>
+            >
+              <Grid className="h-3.5 w-3.5 text-amber-400" />
+              <span className="max-w-[140px] truncate font-display font-bold text-amber-100">
+                {scene.name}
+              </span>
+              {isGm && (
+                <span
+                  className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold ${scene.is_player_visible || scene.is_active
+                    ? "bg-emerald-500/15 text-emerald-300"
+                    : "bg-amber-500/20 text-amber-300"
+                    }`}
+                >
+                  {scene.is_player_visible || scene.is_active ? (
+                    <>
+                      <LockOpen className="h-2.5 w-2.5" />
+                      Liberada
+                    </>
+                  ) : (
+                    <>
+                      <Lock className="h-2.5 w-2.5" />
+                      Só GM
+                    </>
+                  )}
+                </span>
+              )}
+              <span className="hidden items-center gap-2 text-zinc-300 lg:inline-flex">
+                <span className="text-zinc-600">·</span>
+                <span>{scene.grid_size}px</span>
+                <span className="text-zinc-600">·</span>
+                <span>{scene.meters_per_cell}m/q</span>
+                <span className="text-zinc-600">·</span>
+                <span className="inline-flex items-center gap-1 text-zinc-400">
+                  <Magnet className="h-3 w-3 text-emerald-400" />
+                  {scene.snap_to_grid ? "Snap ON" : "Snap OFF"}
+                </span>
+              </span>
+              <ChevronDown
+                className={`h-3.5 w-3.5 text-zinc-400 transition-transform ${sceneMenuOpen ? "rotate-180 text-amber-300" : ""
+                  }`}
+              />
+            </button>
 
-          {sceneMenuOpen && (
-            <div className="absolute top-full left-1/2 z-50 mt-2 w-80 max-w-[92vw] -translate-x-1/2 rounded-2xl border border-amber-500/35 bg-zinc-950/95 p-3 text-xs shadow-2xl backdrop-blur">
-              <div className="mb-2 flex items-center justify-between border-b border-zinc-800/80 pb-2">
-                <div className="flex items-center gap-1.5 font-semibold text-amber-200">
-                  <Layers className="h-3.5 w-3.5 text-amber-400" />
-                  <span>Cenas ({availableScenes.length})</span>
+            {sceneMenuOpen && (
+              <div className="absolute top-full left-1/2 z-50 mt-2 w-80 max-w-[92vw] -translate-x-1/2 rounded-2xl border border-amber-500/35 bg-zinc-950/95 p-3 text-xs shadow-2xl backdrop-blur">
+                <div className="mb-2 flex items-center justify-between border-b border-zinc-800/80 pb-2">
+                  <div className="flex items-center gap-1.5 font-semibold text-amber-200">
+                    <Layers className="h-3.5 w-3.5 text-amber-400" />
+                    <span>Cenas ({availableScenes.length})</span>
+                  </div>
+                  {isGm && onOpenSceneManager && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSceneMenuOpen(false);
+                        onOpenSceneManager();
+                      }}
+                      className="inline-flex items-center gap-1 rounded-lg border border-zinc-800 bg-zinc-900 px-2 py-1 text-[11px] font-medium text-zinc-300 transition hover:border-amber-500/40 hover:text-amber-200"
+                    >
+                      <Settings2 className="h-3 w-3" />
+                      Configurar Mapa
+                    </button>
+                  )}
                 </div>
-                {isGm && onOpenSceneManager && (
+                {isGm && (
                   <button
                     type="button"
                     onClick={() => {
                       setSceneMenuOpen(false);
-                      onOpenSceneManager();
+                      if (onPlaceProp && onPlaceMapPiece && onPlaceToken) {
+                        setLibraryInitialTab("scenes");
+                        setLibraryOpen(true);
+                      } else {
+                        onOpenSceneManager?.();
+                      }
                     }}
                     className="inline-flex items-center gap-1 rounded-lg border border-zinc-800 bg-zinc-900 px-2 py-1 text-[11px] font-medium text-zinc-300 transition hover:border-amber-500/40 hover:text-amber-200"
                   >
@@ -923,173 +943,169 @@ export default function BoardToolbar({
                     Configurar Mapa
                   </button>
                 )}
-              </div>
 
-              {sceneMenuError && (
-                <div className="mb-2 rounded-lg border border-red-500/30 bg-red-500/10 px-2.5 py-1.5 text-[11px] text-red-200">
-                  {sceneMenuError}
-                </div>
-              )}
-
-              <div className="max-h-64 space-y-1.5 overflow-y-auto pr-0.5">
-                {availableScenes.map((s) => {
-                  const isViewing = s.id === scene.id;
-                  const unlocked = Boolean(s.is_player_visible || s.is_active);
-                  return (
-                    <div
-                      key={s.id}
-                      className={`flex items-center justify-between gap-2 rounded-xl border px-2.5 py-2 transition ${isViewing
-                        ? "border-amber-500/60 bg-amber-500/15"
-                        : "border-zinc-800/90 bg-zinc-900/70 hover:border-zinc-700"
-                        }`}
-                    >
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setViewedSceneId(s.id);
-                          if (!isGm) setSceneMenuOpen(false);
-                        }}
-                        className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                <div className="max-h-64 space-y-1.5 overflow-y-auto pr-0.5">
+                  {availableScenes.map((s) => {
+                    const isViewing = s.id === scene.id;
+                    const unlocked = Boolean(s.is_player_visible || s.is_active);
+                    return (
+                      <div
+                        key={s.id}
+                        className={`flex items-center justify-between gap-2 rounded-xl border px-2.5 py-2 transition ${isViewing
+                          ? "border-amber-500/60 bg-amber-500/15"
+                          : "border-zinc-800/90 bg-zinc-900/70 hover:border-zinc-700"
+                          }`}
                       >
-                        <span
-                          className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${isViewing
-                            ? "border-amber-400 bg-amber-400/20 text-amber-300"
-                            : "border-zinc-700 text-transparent"
-                            }`}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setViewedSceneId(s.id);
+                            if (!isGm) setSceneMenuOpen(false);
+                          }}
+                          className="flex min-w-0 flex-1 items-center gap-2 text-left"
                         >
-                          <Check className="h-2.5 w-2.5" />
-                        </span>
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate font-semibold text-white">
-                            {s.name}
-                          </p>
-                          <p className="text-[10px] text-zinc-400">
-                            {s.grid_size}px · {s.meters_per_cell}m
-                            {s.is_active ? " · Principal" : ""}
-                          </p>
-                        </div>
-                      </button>
-
-                      {isGm ? (
-                        <div className="flex shrink-0 items-center gap-1">
-                          <button
-                            type="button"
-                            disabled={sceneBusy}
-                            onClick={() => void handleToggleSceneAccess(s)}
-                            title={
-                              unlocked
-                                ? "Liberada para jogadores (clique para bloquear)"
-                                : "Secreta — só o Mestre vê (clique para liberar aos jogadores)"
-                            }
-                            className={`inline-flex items-center gap-1 rounded-lg border px-1.5 py-1 text-[10px] font-semibold transition ${unlocked
-                              ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25"
-                              : "border-zinc-700 bg-zinc-900 text-zinc-400 hover:border-amber-500/40 hover:text-amber-200"
+                          <span
+                            className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${isViewing
+                              ? "border-amber-400 bg-amber-400/20 text-amber-300"
+                              : "border-zinc-700 text-transparent"
                               }`}
                           >
-                            {unlocked ? (
-                              <LockOpen className="h-3 w-3" />
-                            ) : (
-                              <Lock className="h-3 w-3" />
-                            )}
-                            <span>{unlocked ? "Liberada" : "Secreta"}</span>
-                          </button>
+                            <Check className="h-2.5 w-2.5" />
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate font-semibold text-white">
+                              {s.name}
+                            </p>
+                            <p className="text-[10px] text-zinc-400">
+                              {s.grid_size}px · {s.meters_per_cell}m
+                              {s.is_active ? " · Principal" : ""}
+                            </p>
+                          </div>
+                        </button>
 
-                          {s.is_active ? (
-                            <span
-                              title="Cena principal ativa para a mesa"
-                              className="inline-flex items-center gap-1 rounded-lg bg-emerald-500/20 px-1.5 py-1 text-[10px] font-bold text-emerald-300"
-                            >
-                              <Radio className="h-2.5 w-2.5" />
-                              Ativa
-                            </span>
-                          ) : (
+                        {isGm ? (
+                          <div className="flex shrink-0 items-center gap-1">
                             <button
                               type="button"
                               disabled={sceneBusy}
-                              onClick={() => void handleActivateScene(s)}
-                              title="Ativar cena e puxar jogadores para ela"
-                              className="rounded-lg border border-sky-500/30 bg-sky-500/10 px-1.5 py-1 text-[10px] font-semibold text-sky-300 transition hover:bg-sky-500/20"
+                              onClick={() => void handleToggleSceneAccess(s)}
+                              title={
+                                unlocked
+                                  ? "Liberada para jogadores (clique para bloquear)"
+                                  : "Secreta — só o Mestre vê (clique para liberar aos jogadores)"
+                              }
+                              className={`inline-flex items-center gap-1 rounded-lg border px-1.5 py-1 text-[10px] font-semibold transition ${unlocked
+                                ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25"
+                                : "border-zinc-700 bg-zinc-900 text-zinc-400 hover:border-amber-500/40 hover:text-amber-200"
+                                }`}
                             >
-                              Ativar
+                              {unlocked ? (
+                                <LockOpen className="h-3 w-3" />
+                              ) : (
+                                <Lock className="h-3 w-3" />
+                              )}
+                              <span>{unlocked ? "Liberada" : "Secreta"}</span>
                             </button>
-                          )}
-                        </div>
-                      ) : (
-                        s.is_active && (
-                          <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">
-                            <Radio className="h-2.5 w-2.5" />
-                            Principal
-                          </span>
-                        )
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
 
-              {isGm && (
-                <div className="mt-2.5 space-y-2 border-t border-zinc-800/80 pt-2.5">
-                  {onUploadMapProps && (
-                    <>
+                            {s.is_active ? (
+                              <span
+                                title="Cena principal ativa para a mesa"
+                                className="inline-flex items-center gap-1 rounded-lg bg-emerald-500/20 px-1.5 py-1 text-[10px] font-bold text-emerald-300"
+                              >
+                                <Radio className="h-2.5 w-2.5" />
+                                Ativa
+                              </span>
+                            ) : (
+                              <button
+                                type="button"
+                                disabled={sceneBusy}
+                                onClick={() => void handleActivateScene(s)}
+                                title="Ativar cena e puxar jogadores para ela"
+                                className="rounded-lg border border-sky-500/30 bg-sky-500/10 px-1.5 py-1 text-[10px] font-semibold text-sky-300 transition hover:bg-sky-500/20"
+                              >
+                                Ativar
+                              </button>
+                            )}
+                          </div>
+                        ) : (
+                          s.is_active && (
+                            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">
+                              <Radio className="h-2.5 w-2.5" />
+                              Principal
+                            </span>
+                          )
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {isGm && (
+                  <div className="mt-2.5 space-y-2 border-t border-zinc-800/80 pt-2.5">
+                    {onUploadMapProps && (
+                      <>
+                        <input
+                          ref={mapPropsInputRef}
+                          type="file"
+                          multiple
+                          accept="image/png,image/jpeg,image/webp,image/gif"
+                          className="hidden"
+                          onChange={(e) => {
+                            const list = e.target.files
+                              ? Array.from(e.target.files)
+                              : [];
+                            e.target.value = "";
+                            if (list.length > 0) {
+                              setSceneMenuOpen(false);
+                              onUploadMapProps(list);
+                            }
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => mapPropsInputRef.current?.click()}
+                          className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-amber-500/40 bg-amber-500/10 px-2.5 py-1.5 text-[11px] font-semibold text-amber-200 transition hover:bg-amber-500/20"
+                        >
+                          <Upload className="h-3.5 w-3.5 text-amber-400" />
+                          Subir Mapas / Peças (vários)
+                        </button>
+                      </>
+                    )}
+                    <form
+                      onSubmit={(e) => void handleCreateQuickScene(e)}
+                      className="flex items-center gap-1.5"
+                    >
                       <input
-                        ref={mapPropsInputRef}
-                        type="file"
-                        multiple
-                        accept="image/png,image/jpeg,image/webp,image/gif"
-                        className="hidden"
-                        onChange={(e) => {
-                          const list = e.target.files
-                            ? Array.from(e.target.files)
-                            : [];
-                          e.target.value = "";
-                          if (list.length > 0) {
-                            setSceneMenuOpen(false);
-                            onUploadMapProps(list);
-                          }
-                        }}
+                        type="text"
+                        value={newSceneName}
+                        onChange={(e) => setNewSceneName(e.target.value)}
+                        placeholder="Nova cena (nasce secreta)..."
+                        className="min-w-0 flex-1 rounded-lg border border-zinc-800 bg-zinc-900 px-2.5 py-1.5 text-[11px] text-white placeholder-zinc-500 outline-none focus:border-amber-500"
                       />
                       <button
-                        type="button"
-                        onClick={() => mapPropsInputRef.current?.click()}
-                        className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-amber-500/40 bg-amber-500/10 px-2.5 py-1.5 text-[11px] font-semibold text-amber-200 transition hover:bg-amber-500/20"
+                        type="submit"
+                        disabled={sceneBusy}
+                        className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-amber-500 px-2.5 py-1.5 text-[11px] font-bold text-zinc-950 transition hover:bg-amber-400 disabled:opacity-50"
                       >
-                        <Upload className="h-3.5 w-3.5 text-amber-400" />
-                        Subir Mapas / Peças (vários)
+                        <Plus className="h-3.5 w-3.5" />
+                        Criar
                       </button>
-                    </>
-                  )}
-                  <form
-                    onSubmit={(e) => void handleCreateQuickScene(e)}
-                    className="flex items-center gap-1.5"
-                  >
-                    <input
-                      type="text"
-                      value={newSceneName}
-                      onChange={(e) => setNewSceneName(e.target.value)}
-                      placeholder="Nova cena (nasce secreta)..."
-                      className="min-w-0 flex-1 rounded-lg border border-zinc-800 bg-zinc-900 px-2.5 py-1.5 text-[11px] text-white placeholder-zinc-500 outline-none focus:border-amber-500"
-                    />
-                    <button
-                      type="submit"
-                      disabled={sceneBusy}
-                      className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-amber-500 px-2.5 py-1.5 text-[11px] font-bold text-zinc-950 transition hover:bg-amber-400 disabled:opacity-50"
-                    >
-                      <Plus className="h-3.5 w-3.5" />
-                      Criar
-                    </button>
-                  </form>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
+                    </form>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
 
-        {/* Biblioteca Unificada (Móveis, Itens, Personagens, Mapas, VFX & IA) */}
+        {/* Biblioteca Unificada (Móveis, Itens, Personagens, Mapas, VFX, IA & Cenas) */}
         {isGm && onPlaceProp && onPlaceMapPiece && onPlaceToken && (
           <button
             type="button"
-            onClick={() => setLibraryOpen(true)}
-            title="Abrir Biblioteca da Mesa (Móveis, Itens, Personagens, Mapas, VFX e IA)"
+            onClick={() => {
+              setLibraryInitialTab("furniture");
+              setLibraryOpen(true);
+            }}
+            title="Abrir Biblioteca da Mesa (Móveis, Itens, Personagens, Mapas, VFX, IA e Cenas)"
             className="inline-flex items-center gap-1.5 rounded-xl border border-amber-500/40 bg-zinc-950/90 px-2.5 py-1.5 text-xs font-bold text-amber-200 shadow-xl backdrop-blur transition hover:border-amber-400 hover:bg-amber-500/20"
           >
             <Package className="h-3.5 w-3.5 text-amber-400" />
@@ -1102,17 +1118,32 @@ export default function BoardToolbar({
           <div ref={vfxMenuRef} className="relative">
             <button
               type="button"
-              onClick={() => setVfxMenuOpen((v) => !v)}
-              title="Colocar efeitos animados no mapa (Fogueiras, Braseiros, Vagalumes, Brilhos)"
-              className={`inline-flex items-center gap-1 rounded-xl border px-2.5 py-1.5 text-xs font-semibold shadow-xl backdrop-blur transition ${
-                vfxMenuOpen
+              onClick={() => setLibraryOpen(true)}
+              title="Abrir Biblioteca da Mesa (Móveis, Itens, Personagens, Mapas, VFX e IA)"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-amber-500/40 bg-zinc-950/90 px-2.5 py-1.5 text-xs font-bold text-amber-200 shadow-xl backdrop-blur transition hover:border-amber-400 hover:bg-amber-500/20"
+            >
+              <Package className="h-3.5 w-3.5 text-amber-400" />
+              <span className="hidden sm:inline">Biblioteca</span>
+            </button>
+          )}
+
+          {/* Atalho Rápido de Efeitos VFX Animados (.webm) */}
+          {isGm && onPlaceVfxProp && (
+            <div ref={vfxMenuRef} className="relative">
+              <button
+                type="button"
+                onClick={() => setVfxMenuOpen((v) => !v)}
+                title="Colocar efeitos animados no mapa (Fogueiras, Braseiros, Vagalumes, Brilhos)"
+                className={`inline-flex items-center gap-1 rounded-xl border px-2.5 py-1.5 text-xs font-semibold shadow-xl backdrop-blur transition ${vfxMenuOpen
                   ? "border-amber-400 bg-zinc-900 text-amber-200"
                   : "border-amber-500/30 bg-zinc-950/90 text-zinc-200 hover:border-amber-400/60"
-              }`}
-            >
-              <Sparkles className="h-3.5 w-3.5 text-amber-400" />
-              <span className="hidden sm:inline">VFX</span>
-            </button>
+                  }`}
+              >
+                <Shield className="h-3.5 w-3.5 text-amber-400" />
+                <span className="hidden md:inline">Escudo 5e</span>
+              </button>
+          )}
+            </div>
 
             {vfxMenuOpen && (
               <div className="absolute top-full right-0 z-50 mt-2 w-72 rounded-2xl border border-amber-500/40 bg-zinc-950/95 p-2 text-xs shadow-2xl backdrop-blur">
@@ -1125,6 +1156,7 @@ export default function BoardToolbar({
                       type="button"
                       onClick={() => {
                         setVfxMenuOpen(false);
+                        setLibraryInitialTab("vfx");
                         setLibraryOpen(true);
                       }}
                       className="text-[10px] font-semibold text-sky-300 hover:underline"
@@ -1152,19 +1184,38 @@ export default function BoardToolbar({
                   ))}
                 </div>
               </div>
-            )}
-          </div>
+              <div className="max-h-64 space-y-1 overflow-y-auto pr-0.5">
+                {CURATED_VFX_ANIMATIONS.map((vfx) => (
+                  <button
+                    key={vfx.id}
+                    type="button"
+                    onClick={() => {
+                      onPlaceVfxProp(vfx.url, vfx.label, vfx.defaultCells);
+                      setVfxMenuOpen(false);
+                    }}
+                    className="flex w-full items-center justify-between rounded-lg border border-zinc-800/80 bg-zinc-900/70 px-2.5 py-1.5 text-left text-[11px] text-zinc-200 transition hover:border-amber-500/40 hover:bg-zinc-800"
+                  >
+                    <span>{vfx.label}</span>
+                    <span className="text-[10px] text-zinc-500">
+                      {vfx.category}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
         )}
 
-        {isGm && (
+        {/* Controles de Zoom */}
+        <div className="pointer-events-auto flex items-center gap-1 rounded-xl border border-amber-500/30 bg-zinc-950/90 p-1 shadow-xl backdrop-blur">
           <button
             type="button"
             onClick={() => setDmScreenOpen(true)}
             title="Abrir Escudo do Mestre (Tabelas D&D 5e)"
             className="inline-flex items-center gap-1 rounded-xl border border-amber-500/30 bg-zinc-950/90 px-2.5 py-1.5 text-xs font-semibold text-zinc-200 shadow-xl backdrop-blur transition hover:border-amber-400/60 hover:text-amber-200"
           >
-            <Shield className="h-3.5 w-3.5 text-amber-400" />
-            <span className="hidden md:inline">Escudo 5e</span>
+            <ZoomOut className="h-3.5 w-3.5" />
           </button>
         )}
       </div>
@@ -1174,6 +1225,9 @@ export default function BoardToolbar({
       )}
       {libraryOpen && onPlaceProp && onPlaceMapPiece && onPlaceToken && (
         <TabletopLibraryModal
+          key={libraryInitialTab}
+          campaignId={scene.campaign_id}
+          initialTab={libraryInitialTab}
           onClose={() => setLibraryOpen(false)}
           onPlaceProp={onPlaceProp}
           onPlaceMapPiece={onPlaceMapPiece}
@@ -1230,6 +1284,9 @@ export default function BoardToolbar({
           )}
       {libraryOpen && onPlaceProp && onPlaceMapPiece && onPlaceToken && (
         <TabletopLibraryModal
+          key={libraryInitialTab}
+          campaignId={scene.campaign_id}
+          initialTab={libraryInitialTab}
           onClose={() => setLibraryOpen(false)}
           onPlaceProp={onPlaceProp}
           onPlaceMapPiece={onPlaceMapPiece}
