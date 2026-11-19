@@ -38,13 +38,19 @@ export async function createSceneAction(input: {
     return { ok: false, error: "Sessão expirada." };
   }
 
+  const { count } = await supabase
+    .from("scenes")
+    .select("id", { count: "exact", head: true })
+    .eq("campaign_id", v.campaignId);
+  const isFirstScene = (count ?? 0) === 0;
+
   const { data, error } = await supabase
     .from("scenes")
     .insert({
       campaign_id: v.campaignId,
       name: v.name,
-      is_active: false,
-      is_player_visible: false,
+      is_active: isFirstScene,
+      is_player_visible: isFirstScene,
     })
     .select("*")
     .single();

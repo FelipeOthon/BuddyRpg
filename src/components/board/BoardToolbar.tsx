@@ -334,13 +334,13 @@ export default function BoardToolbar({
 
   const handleCreateQuickScene = async (e: React.FormEvent) => {
     e.preventDefault();
-    const trimmed = newSceneName.trim();
-    if (!isGm || !trimmed || sceneBusy) return;
+    if (!isGm || sceneBusy) return;
+    const targetName = newSceneName.trim() || `Cena ${scenes.length + 1}`;
     setSceneMenuError(null);
     setSceneBusy(true);
     const res = await createSceneAction({
       campaignId: scene.campaign_id,
-      name: trimmed,
+      name: targetName,
     });
     setSceneBusy(false);
     if (!res.ok || !res.scene) {
@@ -1040,7 +1040,7 @@ export default function BoardToolbar({
                   />
                   <button
                     type="submit"
-                    disabled={sceneBusy || !newSceneName.trim()}
+                    disabled={sceneBusy}
                     className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-amber-500 px-2.5 py-1.5 text-[11px] font-bold text-zinc-950 transition hover:bg-amber-400 disabled:opacity-50"
                   >
                     <Plus className="h-3.5 w-3.5" />

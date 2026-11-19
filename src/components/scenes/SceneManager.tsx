@@ -136,13 +136,14 @@ export default function SceneManager({
 
   const handleCreateScene = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newSceneName.trim()) return;
+    const targetName =
+      newSceneName.trim() || `Cena ${scenes.length + 1}`;
     setError(null);
 
     startTransition(async () => {
       const res = await createSceneAction({
         campaignId,
-        name: newSceneName,
+        name: targetName,
       });
       if (!res.ok || !res.scene) {
         setError(res.error ?? "Erro ao criar cena.");

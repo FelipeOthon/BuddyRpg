@@ -21,6 +21,7 @@ import {
   Wifi,
 } from "lucide-react";
 import { loadOlderMessagesAction, sendChatMessageAction } from "@/actions/chat";
+import { createSceneAction } from "@/actions/scenes";
 import BoardClient from "@/components/board/BoardClient";
 import Dice3DOverlay from "@/components/board/Dice3DOverlay";
 import InitiativeTrackerBar from "@/components/board/InitiativeTrackerBar";
@@ -144,9 +145,12 @@ export default function CampaignWorkspaceShell({
     audioAutoplayBlocked,
     setAudioAutoplayBlocked,
     hydrateBoard,
+    upsertScene,
+    setViewedSceneId,
     upsertToken,
     triggerDice3dRoll,
   } = useBoardStore();
+  const autoCreatedSceneRef = useRef(false);
 
   useEffect(() => {
     hydrateBoard({
@@ -166,6 +170,22 @@ export default function CampaignWorkspaceShell({
     initialTracks,
     hydrateBoard,
   ]);
+
+  useEffect(() => {
+    if (!isGm || scenes.length > 0 || autoCreatedSceneRef.current) return;
+    autoCreatedSceneRef.current = true;
+    void createSceneAction({
+      campaignId: campaign.id,
+      name: "Cena 1",
+    }).then((res) => {
+      if (res.ok && res.scene) {
+        upsertScene(res.scene);
+        setViewedSceneId(res.scene.id);
+      } else {
+        autoCreatedSceneRef.current = false;
+      }
+    });
+  }, [isGm, scenes.length, campaign.id, upsertScene, setViewedSceneId]);
 
   useEffect(() => {
     applyMusicPlayback(
@@ -705,14 +725,35 @@ export default function CampaignWorkspaceShell({
               <Grid className="h-8 w-8 text-zinc-600" />
               <p className="mt-2 text-sm font-medium text-zinc-300">
                 {isGm
-                  ? "Nenhuma cena criada no momento"
+                  ? "Preparando quadriculado da cena..."
                   : "Nenhuma cena liberada pelo Mestre"}
               </p>
               <p className="mt-1 text-xs text-zinc-500">
                 {isGm
-                  ? "Crie uma cena na aba Cenas ao lado."
+                  ? "Você pode criar uma cena imediatamente abaixo ou na aba Cenas."
                   : "Aguarde o Mestre liberar ou ativar uma cena."}
               </p>
+              {isGm && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    void createSceneAction({
+                      campaignId: campaign.id,
+                      name: `Cena ${scenes.length + 1}`,
+                    }).then((res) => {
+                      if (res.ok && res.scene) {
+                        upsertScene(res.scene);
+                        setViewedSceneId(res.scene.id);
+                      } else if (!res.ok) {
+                        showError(res.error ?? "Erro ao criar cena.");
+                      }
+                    });
+                  }}
+                  className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-amber-500 px-4 py-2 text-xs font-bold text-zinc-950 transition hover:bg-amber-400"
+                >
+                  + Criar Quadriculado Agora
+                </button>
+              )}
             </div>
           )}
         </section>
