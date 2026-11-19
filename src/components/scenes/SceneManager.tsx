@@ -547,35 +547,37 @@ export default function SceneManager({
             )}
           </div>
 
-          {/* Dimensões do Tabuleiro */}
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="mb-1 block text-[11px] text-zinc-400">
-                Largura (px)
-              </label>
-              <input
-                type="number"
-                min={200}
-                max={10000}
-                value={mapWidth}
-                onChange={(e) => setMapWidth(Number(e.target.value))}
-                className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-2.5 py-1.5 text-xs text-white"
-              />
+          {/* Dimensões do Mapa de Fundo (somente quando há imagem principal; o quadriculado é infinito) */}
+          {mapUrl && (
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="mb-1 block text-[11px] text-zinc-400">
+                  Largura do Mapa (px)
+                </label>
+                <input
+                  type="number"
+                  min={200}
+                  max={10000}
+                  value={mapWidth}
+                  onChange={(e) => setMapWidth(Number(e.target.value))}
+                  className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-2.5 py-1.5 text-xs text-white"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-[11px] text-zinc-400">
+                  Altura do Mapa (px)
+                </label>
+                <input
+                  type="number"
+                  min={200}
+                  max={10000}
+                  value={mapHeight}
+                  onChange={(e) => setMapHeight(Number(e.target.value))}
+                  className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-2.5 py-1.5 text-xs text-white"
+                />
+              </div>
             </div>
-            <div>
-              <label className="mb-1 block text-[11px] text-zinc-400">
-                Altura (px)
-              </label>
-              <input
-                type="number"
-                min={200}
-                max={10000}
-                value={mapHeight}
-                onChange={(e) => setMapHeight(Number(e.target.value))}
-                className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-2.5 py-1.5 text-xs text-white"
-              />
-            </div>
-          </div>
+          )}
 
           {/* Tamanho da Célula e Opacidade da Grade */}
           <div className="grid grid-cols-2 gap-2">

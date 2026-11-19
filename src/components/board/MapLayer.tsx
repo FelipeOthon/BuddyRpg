@@ -1,6 +1,6 @@
 "use client";
 
-import { Group, Image as KonvaImage, Rect } from "react-konva";
+import { Group, Image as KonvaImage } from "react-konva";
 import useImage from "use-image";
 import type { Scene } from "@/types/domain";
 
@@ -36,30 +36,19 @@ export default function MapLayer({
 }) {
   const width = scene.map_width || 2000;
   const height = scene.map_height || 2000;
-  const showBackdrop = mode === "full" || mode === "backdrop";
   const showImage = mode === "full" || mode === "image";
+
+  if (!showImage || !scene.map_url) {
+    return null;
+  }
 
   return (
     <Group listening={false}>
-      {showBackdrop && (
-        <Rect
-          x={0}
-          y={0}
-          width={width}
-          height={height}
-          fill="#13151a"
-          stroke="#27272a"
-          strokeWidth={2}
-          listening={false}
-        />
-      )}
-      {showImage && scene.map_url && (
-        <LoadedMapImage
-          url={scene.map_url}
-          width={width}
-          height={height}
-        />
-      )}
+      <LoadedMapImage
+        url={scene.map_url}
+        width={width}
+        height={height}
+      />
     </Group>
   );
 }
