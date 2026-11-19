@@ -19,6 +19,7 @@ export interface SceneActionResult {
 export async function createSceneAction(input: {
   campaignId: string;
   name: string;
+  onlyIfEmpty?: boolean;
 }): Promise<SceneActionResult> {
   const parsed = createSceneSchema.safeParse(input);
   if (!parsed.success) {
@@ -38,10 +39,17 @@ export async function createSceneAction(input: {
     return { ok: false, error: "Sessão expirada." };
   }
 
-  const { count } = await supabase
+  const { data: existingScenes, count } = await supabase
     .from("scenes")
-    .select("id", { count: "exact", head: true })
-    .eq("campaign_id", v.campaignId);
+    .select("*", { count: "exact" })
+    .eq("campaign_id", v.campaignId)
+    .order("created_at", { ascending: true })
+    .limit(1);
+
+  if (v.onlyIfEmpty && existingScenes && existingScenes.length > 0) {
+    return { ok: true, scene: existingScenes[0] };
+  }
+
   const isFirstScene = (count ?? 0) === 0;
 
   const { data, error } = await supabase

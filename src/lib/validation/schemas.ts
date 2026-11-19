@@ -160,6 +160,7 @@ export const createSceneSchema = z.object({
     .trim()
     .min(1, "O nome da cena deve ter entre 1 e 80 caracteres.")
     .max(80, "O nome da cena deve ter entre 1 e 80 caracteres."),
+  onlyIfEmpty: z.boolean().optional(),
 });
 
 export const updateSceneSettingsSchema = z.object({

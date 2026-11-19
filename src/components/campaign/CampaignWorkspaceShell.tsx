@@ -172,11 +172,19 @@ export default function CampaignWorkspaceShell({
   ]);
 
   useEffect(() => {
-    if (!isGm || scenes.length > 0 || autoCreatedSceneRef.current) return;
+    if (
+      !isGm ||
+      initialScenes.length > 0 ||
+      scenes.length > 0 ||
+      autoCreatedSceneRef.current
+    ) {
+      return;
+    }
     autoCreatedSceneRef.current = true;
     void createSceneAction({
       campaignId: campaign.id,
       name: "Cena 1",
+      onlyIfEmpty: true,
     }).then((res) => {
       if (res.ok && res.scene) {
         upsertScene(res.scene);
@@ -185,7 +193,14 @@ export default function CampaignWorkspaceShell({
         autoCreatedSceneRef.current = false;
       }
     });
-  }, [isGm, scenes.length, campaign.id, upsertScene, setViewedSceneId]);
+  }, [
+    isGm,
+    initialScenes.length,
+    scenes.length,
+    campaign.id,
+    upsertScene,
+    setViewedSceneId,
+  ]);
 
   useEffect(() => {
     applyMusicPlayback(
