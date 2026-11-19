@@ -195,16 +195,18 @@ export default function TabletopLibraryModal({
 
   return (
     <div
+      onWheel={(e) => e.stopPropagation()}
+      onMouseDown={(e) => e.stopPropagation()}
       className={
         expanded
-          ? "fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-3 backdrop-blur-sm sm:p-5"
+          ? "pointer-events-auto fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-3 backdrop-blur-sm sm:p-5"
           : "pointer-events-auto fixed top-16 left-3 z-50 flex max-h-[82vh] w-[min(94vw,680px)] flex-col sm:left-14"
       }
       role="dialog"
       aria-label="Biblioteca da Mesa"
     >
       <div
-        className={`flex flex-col overflow-hidden rounded-2xl border border-amber-500/40 bg-zinc-950/95 shadow-2xl backdrop-blur ${
+        className={`flex min-h-0 flex-col overflow-hidden rounded-2xl border border-amber-500/40 bg-zinc-950/95 shadow-2xl backdrop-blur ${
           expanded ? "max-h-[92vh] w-full max-w-5xl" : "max-h-[82vh] w-full"
         }`}
       >
@@ -280,7 +282,7 @@ export default function TabletopLibraryModal({
         </div>
 
         {/* Conteúdo */}
-        <div className="flex-1 space-y-4 overflow-y-auto p-4 sm:p-5">
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4 sm:p-5">
           {tab === "furniture" && (
             <>
               <div className="flex flex-wrap gap-1.5">

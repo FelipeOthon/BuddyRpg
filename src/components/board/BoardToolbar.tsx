@@ -911,12 +911,17 @@ export default function BoardToolbar({
                     <Layers className="h-3.5 w-3.5 text-amber-400" />
                     <span>Cenas ({availableScenes.length})</span>
                   </div>
-                  {isGm && onOpenSceneManager && (
+                  {isGm && (
                     <button
                       type="button"
                       onClick={() => {
                         setSceneMenuOpen(false);
-                        onOpenSceneManager();
+                        if (onPlaceProp && onPlaceMapPiece && onPlaceToken) {
+                          setLibraryInitialTab("scenes");
+                          setLibraryOpen(true);
+                        } else {
+                          onOpenSceneManager?.();
+                        }
                       }}
                       className="inline-flex items-center gap-1 rounded-lg border border-zinc-800 bg-zinc-900 px-2 py-1 text-[11px] font-medium text-zinc-300 transition hover:border-amber-500/40 hover:text-amber-200"
                     >
@@ -925,23 +930,11 @@ export default function BoardToolbar({
                     </button>
                   )}
                 </div>
-                {isGm && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSceneMenuOpen(false);
-                      if (onPlaceProp && onPlaceMapPiece && onPlaceToken) {
-                        setLibraryInitialTab("scenes");
-                        setLibraryOpen(true);
-                      } else {
-                        onOpenSceneManager?.();
-                      }
-                    }}
-                    className="inline-flex items-center gap-1 rounded-lg border border-zinc-800 bg-zinc-900 px-2 py-1 text-[11px] font-medium text-zinc-300 transition hover:border-amber-500/40 hover:text-amber-200"
-                  >
-                    <Settings2 className="h-3 w-3" />
-                    Configurar Mapa
-                  </button>
+
+                {sceneMenuError && (
+                  <div className="mb-2 rounded-lg border border-red-500/30 bg-red-500/10 px-2.5 py-1.5 text-[11px] text-red-200">
+                    {sceneMenuError}
+                  </div>
                 )}
 
                 <div className="max-h-64 space-y-1.5 overflow-y-auto pr-0.5">
@@ -1097,29 +1090,15 @@ export default function BoardToolbar({
             )}
           </div>
 
-        {/* Biblioteca Unificada (Móveis, Itens, Personagens, Mapas, VFX, IA & Cenas) */}
-        {isGm && onPlaceProp && onPlaceMapPiece && onPlaceToken && (
-          <button
-            type="button"
-            onClick={() => {
-              setLibraryInitialTab("furniture");
-              setLibraryOpen(true);
-            }}
-            title="Abrir Biblioteca da Mesa (Móveis, Itens, Personagens, Mapas, VFX, IA e Cenas)"
-            className="inline-flex items-center gap-1.5 rounded-xl border border-amber-500/40 bg-zinc-950/90 px-2.5 py-1.5 text-xs font-bold text-amber-200 shadow-xl backdrop-blur transition hover:border-amber-400 hover:bg-amber-500/20"
-          >
-            <Package className="h-3.5 w-3.5 text-amber-400" />
-            <span className="hidden sm:inline">Biblioteca</span>
-          </button>
-        )}
-
-        {/* Atalho Rápido de Efeitos VFX Animados (.webm) */}
-        {isGm && onPlaceVfxProp && (
-          <div ref={vfxMenuRef} className="relative">
+          {/* Biblioteca Unificada (Móveis, Itens, Personagens, Mapas, VFX, IA & Cenas) */}
+          {isGm && onPlaceProp && onPlaceMapPiece && onPlaceToken && (
             <button
               type="button"
-              onClick={() => setLibraryOpen(true)}
-              title="Abrir Biblioteca da Mesa (Móveis, Itens, Personagens, Mapas, VFX e IA)"
+              onClick={() => {
+                setLibraryInitialTab("furniture");
+                setLibraryOpen(true);
+              }}
+              title="Abrir Biblioteca da Mesa (Móveis, Itens, Personagens, Mapas, VFX, IA e Cenas)"
               className="inline-flex items-center gap-1.5 rounded-xl border border-amber-500/40 bg-zinc-950/90 px-2.5 py-1.5 text-xs font-bold text-amber-200 shadow-xl backdrop-blur transition hover:border-amber-400 hover:bg-amber-500/20"
             >
               <Package className="h-3.5 w-3.5 text-amber-400" />
@@ -1134,117 +1113,82 @@ export default function BoardToolbar({
                 type="button"
                 onClick={() => setVfxMenuOpen((v) => !v)}
                 title="Colocar efeitos animados no mapa (Fogueiras, Braseiros, Vagalumes, Brilhos)"
-                className={`inline-flex items-center gap-1 rounded-xl border px-2.5 py-1.5 text-xs font-semibold shadow-xl backdrop-blur transition ${vfxMenuOpen
-                  ? "border-amber-400 bg-zinc-900 text-amber-200"
-                  : "border-amber-500/30 bg-zinc-950/90 text-zinc-200 hover:border-amber-400/60"
-                  }`}
+                className={`inline-flex items-center gap-1 rounded-xl border px-2.5 py-1.5 text-xs font-semibold shadow-xl backdrop-blur transition ${
+                  vfxMenuOpen
+                    ? "border-amber-400 bg-zinc-900 text-amber-200"
+                    : "border-amber-500/30 bg-zinc-950/90 text-zinc-200 hover:border-amber-400/60"
+                }`}
               >
-                <Shield className="h-3.5 w-3.5 text-amber-400" />
-                <span className="hidden md:inline">Escudo 5e</span>
+                <Sparkles className="h-3.5 w-3.5 text-amber-400" />
+                <span className="hidden sm:inline">VFX</span>
               </button>
-          )}
-            </div>
 
-            {vfxMenuOpen && (
-              <div className="absolute top-full right-0 z-50 mt-2 w-72 rounded-2xl border border-amber-500/40 bg-zinc-950/95 p-2 text-xs shadow-2xl backdrop-blur">
-                <div className="mb-1.5 flex items-center justify-between border-b border-zinc-800 pb-1">
-                  <p className="text-[11px] font-bold text-amber-200">
-                    Animações VFX ({CURATED_VFX_ANIMATIONS.length})
-                  </p>
-                  {onPlaceProp && onPlaceMapPiece && onPlaceToken && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setVfxMenuOpen(false);
-                        setLibraryInitialTab("vfx");
-                        setLibraryOpen(true);
-                      }}
-                      className="text-[10px] font-semibold text-sky-300 hover:underline"
-                    >
-                      Ver prévia →
-                    </button>
-                  )}
+              {vfxMenuOpen && (
+                <div className="absolute top-full right-0 z-50 mt-2 w-72 rounded-2xl border border-amber-500/40 bg-zinc-950/95 p-2 text-xs shadow-2xl backdrop-blur">
+                  <div className="mb-1.5 flex items-center justify-between border-b border-zinc-800 pb-1">
+                    <p className="text-[11px] font-bold text-amber-200">
+                      Animações VFX ({CURATED_VFX_ANIMATIONS.length})
+                    </p>
+                    {onPlaceProp && onPlaceMapPiece && onPlaceToken && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setVfxMenuOpen(false);
+                          setLibraryInitialTab("vfx");
+                          setLibraryOpen(true);
+                        }}
+                        className="text-[10px] font-semibold text-sky-300 hover:underline"
+                      >
+                        Ver prévia →
+                      </button>
+                    )}
+                  </div>
+                  <div className="max-h-64 space-y-1 overflow-y-auto pr-0.5">
+                    {CURATED_VFX_ANIMATIONS.map((vfx) => (
+                      <button
+                        key={vfx.id}
+                        type="button"
+                        onClick={() => {
+                          onPlaceVfxProp(vfx.url, vfx.label, vfx.defaultCells);
+                          setVfxMenuOpen(false);
+                        }}
+                        className="flex w-full items-center justify-between rounded-lg border border-zinc-800/80 bg-zinc-900/70 px-2.5 py-1.5 text-left text-[11px] text-zinc-200 transition hover:border-amber-500/40 hover:bg-zinc-800"
+                      >
+                        <span>{vfx.label}</span>
+                        <span className="text-[10px] text-zinc-500">
+                          {vfx.category}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
-                <div className="max-h-64 space-y-1 overflow-y-auto pr-0.5">
-                  {CURATED_VFX_ANIMATIONS.map((vfx) => (
-                    <button
-                      key={vfx.id}
-                      type="button"
-                      onClick={() => {
-                        onPlaceVfxProp(vfx.url, vfx.label, vfx.defaultCells);
-                        setVfxMenuOpen(false);
-                      }}
-                      className="flex w-full items-center justify-between rounded-lg border border-zinc-800/80 bg-zinc-900/70 px-2.5 py-1.5 text-left text-[11px] text-zinc-200 transition hover:border-amber-500/40 hover:bg-zinc-800"
-                    >
-                      <span>{vfx.label}</span>
-                      <span className="text-[10px] text-zinc-500">
-                        {vfx.category}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="max-h-64 space-y-1 overflow-y-auto pr-0.5">
-                {CURATED_VFX_ANIMATIONS.map((vfx) => (
-                  <button
-                    key={vfx.id}
-                    type="button"
-                    onClick={() => {
-                      onPlaceVfxProp(vfx.url, vfx.label, vfx.defaultCells);
-                      setVfxMenuOpen(false);
-                    }}
-                    className="flex w-full items-center justify-between rounded-lg border border-zinc-800/80 bg-zinc-900/70 px-2.5 py-1.5 text-left text-[11px] text-zinc-200 transition hover:border-amber-500/40 hover:bg-zinc-800"
-                  >
-                    <span>{vfx.label}</span>
-                    <span className="text-[10px] text-zinc-500">
-                      {vfx.category}
-                    </span>
-                  </button>
-                ))}
-              </div>
+              )}
             </div>
+          )}
+
+          {isGm && (
+            <button
+              type="button"
+              onClick={() => setDmScreenOpen(true)}
+              title="Abrir Escudo do Mestre (Tabelas D&D 5e)"
+              className="inline-flex items-center gap-1 rounded-xl border border-amber-500/30 bg-zinc-950/90 px-2.5 py-1.5 text-xs font-semibold text-zinc-200 shadow-xl backdrop-blur transition hover:border-amber-400/60 hover:text-amber-200"
+            >
+              <Shield className="h-3.5 w-3.5 text-amber-400" />
+              <span className="hidden md:inline">Escudo 5e</span>
+            </button>
           )}
         </div>
-        )}
 
         {/* Controles de Zoom */}
         <div className="pointer-events-auto flex items-center gap-1 rounded-xl border border-amber-500/30 bg-zinc-950/90 p-1 shadow-xl backdrop-blur">
           <button
             type="button"
-            onClick={() => setDmScreenOpen(true)}
-            title="Abrir Escudo do Mestre (Tabelas D&D 5e)"
-            className="inline-flex items-center gap-1 rounded-xl border border-amber-500/30 bg-zinc-950/90 px-2.5 py-1.5 text-xs font-semibold text-zinc-200 shadow-xl backdrop-blur transition hover:border-amber-400/60 hover:text-amber-200"
+            onClick={() => zoomBy(1 / 1.15)}
+            title="Afastar (-)"
+            className="rounded-lg p-1.5 text-zinc-300 transition hover:bg-zinc-800 hover:text-amber-200"
           >
             <ZoomOut className="h-3.5 w-3.5" />
           </button>
-        )}
-      </div>
-
-      {dmScreenOpen && (
-        <DmScreenModal onClose={() => setDmScreenOpen(false)} />
-      )}
-      {libraryOpen && onPlaceProp && onPlaceMapPiece && onPlaceToken && (
-        <TabletopLibraryModal
-          key={libraryInitialTab}
-          campaignId={scene.campaign_id}
-          initialTab={libraryInitialTab}
-          onClose={() => setLibraryOpen(false)}
-          onPlaceProp={onPlaceProp}
-          onPlaceMapPiece={onPlaceMapPiece}
-          onPlaceToken={onPlaceToken}
-        />
-      )}
-
-      {/* Controles de Zoom */}
-      <div className="pointer-events-auto flex items-center gap-1 rounded-xl border border-amber-500/30 bg-zinc-950/90 p-1 shadow-xl backdrop-blur">
-        <button
-          type="button"
-          onClick={() => zoomBy(1 / 1.15)}
-          title="Afastar (-)"
-          className="rounded-lg p-1.5 text-zinc-300 transition hover:bg-zinc-800 hover:text-amber-200"
-        >
-          <ZoomOut className="h-3.5 w-3.5" />
-        </button>
           <button
             type="button"
             onClick={resetViewport}
@@ -1282,17 +1226,6 @@ export default function BoardToolbar({
               <Radio className="h-3.5 w-3.5" />
             </button>
           )}
-      {libraryOpen && onPlaceProp && onPlaceMapPiece && onPlaceToken && (
-        <TabletopLibraryModal
-          key={libraryInitialTab}
-          campaignId={scene.campaign_id}
-          initialTab={libraryInitialTab}
-          onClose={() => setLibraryOpen(false)}
-          onPlaceProp={onPlaceProp}
-          onPlaceMapPiece={onPlaceMapPiece}
-          onPlaceToken={onPlaceToken}
-        />
-      )}
 
           <button
             type="button"
@@ -1305,65 +1238,80 @@ export default function BoardToolbar({
         </div>
       </div>
 
+      {dmScreenOpen && (
+        <DmScreenModal onClose={() => setDmScreenOpen(false)} />
+      )}
+      {libraryOpen && onPlaceProp && onPlaceMapPiece && onPlaceToken && (
+        <TabletopLibraryModal
+          key={libraryInitialTab}
+          campaignId={scene.campaign_id}
+          initialTab={libraryInitialTab}
+          onClose={() => setLibraryOpen(false)}
+          onPlaceProp={onPlaceProp}
+          onPlaceMapPiece={onPlaceMapPiece}
+          onPlaceToken={onPlaceToken}
+        />
+      )}
+
       {/* Dock Vertical Esquerda (Ferramentas VTT + Dados Rápidos) */}
-      <div className="pointer-events-none absolute top-14 left-3 z-20 flex flex-col items-start gap-2">
-        <div className="pointer-events-auto flex flex-col gap-1 rounded-xl border border-amber-500/30 bg-zinc-950/90 p-1 shadow-xl backdrop-blur">
-          {tools.map((t) => {
-            const Icon = t.icon;
-            const active = tool === t.id;
-            return (
-              <button
-                key={t.id}
-                type="button"
-                onClick={() => setTool(t.id)}
-                title={`${t.label} (${t.shortcut})`}
-                className={`relative flex h-8 w-8 items-center justify-center rounded-lg transition ${active
-                  ? "bg-gradient-to-br from-amber-400 to-amber-600 text-zinc-950 shadow"
-                  : "text-zinc-300 hover:bg-zinc-800 hover:text-amber-200"
-                  }`}
-              >
-                <Icon className="h-4 w-4" />
-                <span
-                  className={`pointer-events-none absolute right-0.5 bottom-0 text-[8px] font-bold ${active ? "text-zinc-950/80" : "text-zinc-500"
+          <div className="pointer-events-none absolute top-14 left-3 z-20 flex flex-col items-start gap-2">
+            <div className="pointer-events-auto flex flex-col gap-1 rounded-xl border border-amber-500/30 bg-zinc-950/90 p-1 shadow-xl backdrop-blur">
+              {tools.map((t) => {
+                const Icon = t.icon;
+                const active = tool === t.id;
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => setTool(t.id)}
+                    title={`${t.label} (${t.shortcut})`}
+                    className={`relative flex h-8 w-8 items-center justify-center rounded-lg transition ${active
+                      ? "bg-gradient-to-br from-amber-400 to-amber-600 text-zinc-950 shadow"
+                      : "text-zinc-300 hover:bg-zinc-800 hover:text-amber-200"
+                      }`}
+                  >
+                    <Icon className="h-4 w-4" />
+                    <span
+                      className={`pointer-events-none absolute right-0.5 bottom-0 text-[8px] font-bold ${active ? "text-zinc-950/80" : "text-zinc-500"
+                        }`}
+                    >
+                      {t.shortcut}
+                    </span>
+                  </button>
+                );
+              })}
+
+              {tool === "ruler" && (
+                <button
+                  type="button"
+                  onClick={() => setRulerPinMode(!rulerPinMode)}
+                  title="Fixar réguas no mapa ao soltar (ou segure Shift)"
+                  className={`flex h-8 w-8 items-center justify-center rounded-lg border transition ${rulerPinMode
+                    ? "border-purple-500/50 bg-purple-500/25 text-purple-200"
+                    : "border-zinc-800 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
                     }`}
                 >
-                  {t.shortcut}
-                </span>
-              </button>
-            );
-          })}
+                  <Pin className="h-3.5 w-3.5" />
+                </button>
+              )}
 
-          {tool === "ruler" && (
-            <button
-              type="button"
-              onClick={() => setRulerPinMode(!rulerPinMode)}
-              title="Fixar réguas no mapa ao soltar (ou segure Shift)"
-              className={`flex h-8 w-8 items-center justify-center rounded-lg border transition ${rulerPinMode
-                ? "border-purple-500/50 bg-purple-500/25 text-purple-200"
-                : "border-zinc-800 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
-                }`}
-            >
-              <Pin className="h-3.5 w-3.5" />
-            </button>
-          )}
+              {scenePinnedCount > 0 && onClearPinnedRulers && (
+                <button
+                  type="button"
+                  onClick={onClearPinnedRulers}
+                  title={`Limpar ${scenePinnedCount} régua(s) fixada(s)`}
+                  className="relative flex h-8 w-8 items-center justify-center rounded-lg border border-rose-500/30 bg-rose-500/15 text-rose-300 transition hover:bg-rose-500/25"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  <span className="absolute -top-1 -right-1 flex h-3.5 min-w-[14px] items-center justify-center rounded-full bg-rose-500 px-0.5 text-[9px] font-bold text-white">
+                    {scenePinnedCount}
+                  </span>
+                </button>
+              )}
+            </div>
 
-          {scenePinnedCount > 0 && onClearPinnedRulers && (
-            <button
-              type="button"
-              onClick={onClearPinnedRulers}
-              title={`Limpar ${scenePinnedCount} régua(s) fixada(s)`}
-              className="relative flex h-8 w-8 items-center justify-center rounded-lg border border-rose-500/30 bg-rose-500/15 text-rose-300 transition hover:bg-rose-500/25"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-              <span className="absolute -top-1 -right-1 flex h-3.5 min-w-[14px] items-center justify-center rounded-full bg-rose-500 px-0.5 text-[9px] font-bold text-white">
-                {scenePinnedCount}
-              </span>
-            </button>
-          )}
-        </div>
-
-        {onQuickRoll && <QuickDiceRoller onRoll={onQuickRoll} />}
-      </div>
-    </>
-  );
+            {onQuickRoll && <QuickDiceRoller onRoll={onQuickRoll} />}
+          </div>
+        </>
+        );
 }
