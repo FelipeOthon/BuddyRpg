@@ -80,6 +80,7 @@ export default function BoardToolbar({
   onClearPinnedRulers,
   onBroadcastMusicState,
   onOpenSceneManager,
+  onUploadMapProps,
 }: {
   scene: Scene;
   isGm: boolean;
@@ -88,6 +89,7 @@ export default function BoardToolbar({
   onClearPinnedRulers?: () => void;
   onBroadcastMusicState?: (state: Omit<MusicStatePayload, "userId">) => void;
   onOpenSceneManager?: () => void;
+  onUploadMapProps?: (files: File[]) => void;
 }) {
   const {
     tool,
@@ -121,6 +123,7 @@ export default function BoardToolbar({
   const [sceneBusy, setSceneBusy] = useState(false);
   const [sceneMenuError, setSceneMenuError] = useState<string | null>(null);
   const sceneMenuRef = useRef<HTMLDivElement>(null);
+  const mapPropsInputRef = useRef<HTMLInputElement>(null);
 
   const [musicMenuOpen, setMusicMenuOpen] = useState(false);
   const [musicUploading, setMusicUploading] = useState(false);
@@ -978,26 +981,57 @@ export default function BoardToolbar({
             </div>
 
             {isGm && (
-              <form
-                onSubmit={(e) => void handleCreateQuickScene(e)}
-                className="mt-2.5 flex items-center gap-1.5 border-t border-zinc-800/80 pt-2.5"
-              >
-                <input
-                  type="text"
-                  value={newSceneName}
-                  onChange={(e) => setNewSceneName(e.target.value)}
-                  placeholder="Nova cena (nasce secreta)..."
-                  className="min-w-0 flex-1 rounded-lg border border-zinc-800 bg-zinc-900 px-2.5 py-1.5 text-[11px] text-white placeholder-zinc-500 outline-none focus:border-amber-500"
-                />
-                <button
-                  type="submit"
-                  disabled={sceneBusy || !newSceneName.trim()}
-                  className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-amber-500 px-2.5 py-1.5 text-[11px] font-bold text-zinc-950 transition hover:bg-amber-400 disabled:opacity-50"
+              <div className="mt-2.5 space-y-2 border-t border-zinc-800/80 pt-2.5">
+                {onUploadMapProps && (
+                  <>
+                    <input
+                      ref={mapPropsInputRef}
+                      type="file"
+                      multiple
+                      accept="image/png,image/jpeg,image/webp"
+                      className="hidden"
+                      onChange={(e) => {
+                        const list = e.target.files
+                          ? Array.from(e.target.files)
+                          : [];
+                        e.target.value = "";
+                        if (list.length > 0) {
+                          setSceneMenuOpen(false);
+                          onUploadMapProps(list);
+                        }
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => mapPropsInputRef.current?.click()}
+                      className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-amber-500/40 bg-amber-500/10 px-2.5 py-1.5 text-[11px] font-semibold text-amber-200 transition hover:bg-amber-500/20"
+                    >
+                      <Upload className="h-3.5 w-3.5 text-amber-400" />
+                      Subir Mapas / Peças (vários)
+                    </button>
+                  </>
+                )}
+                <form
+                  onSubmit={(e) => void handleCreateQuickScene(e)}
+                  className="flex items-center gap-1.5"
                 >
-                  <Plus className="h-3.5 w-3.5" />
-                  Criar
-                </button>
-              </form>
+                  <input
+                    type="text"
+                    value={newSceneName}
+                    onChange={(e) => setNewSceneName(e.target.value)}
+                    placeholder="Nova cena (nasce secreta)..."
+                    className="min-w-0 flex-1 rounded-lg border border-zinc-800 bg-zinc-900 px-2.5 py-1.5 text-[11px] text-white placeholder-zinc-500 outline-none focus:border-amber-500"
+                  />
+                  <button
+                    type="submit"
+                    disabled={sceneBusy || !newSceneName.trim()}
+                    className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-amber-500 px-2.5 py-1.5 text-[11px] font-bold text-zinc-950 transition hover:bg-amber-400 disabled:opacity-50"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    Criar
+                  </button>
+                </form>
+              </div>
             )}
           </div>
         )}

@@ -21,6 +21,9 @@ export default function LightingLayer({
   fogShapes = [],
   exploredSpots = [],
   gmFogOpacity = 0.62,
+  canSelectDarkness = false,
+  selectedFogShapeId = null,
+  onSelectFogShape,
   remoteTokenDrags,
   localTokenDragPos,
   currentUserId,
@@ -34,6 +37,9 @@ export default function LightingLayer({
   fogShapes?: SceneFogShape[];
   exploredSpots?: ExploredSpot[];
   gmFogOpacity?: number;
+  canSelectDarkness?: boolean;
+  selectedFogShapeId?: string | null;
+  onSelectFogShape?: (id: string | null) => void;
   remoteTokenDrags: Record<string, RemoteDragPosition>;
   localTokenDragPos?: { tokenId: string; x: number; y: number } | null;
   currentUserId: string;
@@ -144,16 +150,33 @@ export default function LightingLayer({
 
   const mapW = scene.map_width || 2000;
   const mapH = scene.map_height || 2000;
-  const rawDarkness = Math.max(0.96 - ambientLight * 0.96, 0);
-  const darknessOpacity =
+  // ambient_light >= 0.99 = Escuridão OFF; ~0.98 = apenas blocos pintados; <= 0.96 = escuridão global
+  const isDarknessEnabled = ambientLight < 0.99;
+  const rawGlobalDarkness =
+    ambientLight >= 0.97 ? 0 : Math.max(0.92 - ambientLight * 0.92, 0);
+  const globalDarknessOpacity =
     isGm && !gmPreviewVision
-      ? Math.min(rawDarkness, Math.max(0.05, gmFogOpacity))
-      : rawDarkness;
-  const revealShapes = fogShapes.filter(
-    (s) => s.scene_id === scene.id && s.operation === "reveal"
+      ? Math.min(rawGlobalDarkness, Math.max(0.05, gmFogOpacity))
+      : rawGlobalDarkness;
+
+  const darknessShapes = fogShapes.filter(
+    (s) =>
+      s.scene_id === scene.id &&
+      (s.data as FogShapeData | null)?.layer === "darkness"
   );
+  const darknessCoverShapes = darknessShapes.filter(
+    (s) => s.operation === "cover"
+  );
+  const darknessRevealShapes = darknessShapes.filter(
+    (s) => s.operation === "reveal"
+  );
+  const blockDarknessOpacity =
+    isGm && !gmPreviewVision ? Math.max(0.14, gmFogOpacity * 0.85) : 0.82;
+  const hasAnyDarkness =
+    isDarknessEnabled &&
+    (globalDarknessOpacity > 0.01 || darknessCoverShapes.length > 0);
   const hasTorches = sources.some((s) => s.isLight);
-  const shouldAnimate = shouldRender && (darknessOpacity > 0.01 || hasTorches);
+  const shouldAnimate = shouldRender && (hasAnyDarkness || hasTorches);
 
   useEffect(() => {
     if (!shouldAnimate) return;
@@ -198,57 +221,200 @@ export default function LightingLayer({
 
     rafId = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(rafId);
-  }, [shouldAnimate, ambientLight]);
+  }, [shouldAnimate, ambientLight, darknessCoverShapes.length]);
 
   if (!shouldRender) return null;
 
   return (
-    <Group ref={groupRef} listening={false}>
-      {darknessOpacity > 0.01 && (
+    <Group ref={groupRef} listening={canSelectDarkness}>
+      {hasAnyDarkness && (
         <Group>
-          {/* Base abissal de escuridão profunda */}
-          <Rect
-            x={0}
-            y={0}
-            width={mapW}
-            height={mapH}
-            fill="#020308"
-            opacity={darknessOpacity * 0.92}
-          />
-          {/* Textura FBM orgânica de sombras em movimento */}
-          {shadowTextures?.shadow && (
+          {/* Escuridão Global (quando Escuridão Global está ativa) */}
+          {globalDarknessOpacity > 0.01 && (
             <>
               <Rect
-                name="dark-shadow-1"
                 x={0}
                 y={0}
                 width={mapW}
                 height={mapH}
-                fillPatternImage={
-                  shadowTextures.shadow as unknown as HTMLImageElement
-                }
-                fillPatternRepeat="repeat"
-                fillPatternScale={{ x: 2.6, y: 2.6 }}
-                opacity={darknessOpacity * 0.78}
+                fill="#040312"
+                opacity={globalDarknessOpacity * 0.84}
+                listening={false}
               />
-              <Rect
-                name="dark-shadow-2"
-                x={0}
-                y={0}
-                width={mapW}
-                height={mapH}
-                fillPatternImage={
-                  shadowTextures.shadow as unknown as HTMLImageElement
-                }
-                fillPatternRepeat="repeat"
-                fillPatternScale={{ x: 4.1, y: 4.1 }}
-                opacity={darknessOpacity * 0.45}
-              />
+              {shadowTextures?.shadow && (
+                <>
+                  <Rect
+                    name="dark-shadow-1"
+                    x={0}
+                    y={0}
+                    width={mapW}
+                    height={mapH}
+                    fillPatternImage={
+                      shadowTextures.shadow as unknown as HTMLImageElement
+                    }
+                    fillPatternRepeat="repeat"
+                    fillPatternScale={{ x: 2.6, y: 2.6 }}
+                    opacity={globalDarknessOpacity * 0.78}
+                    listening={false}
+                  />
+                  <Rect
+                    name="dark-shadow-2"
+                    x={0}
+                    y={0}
+                    width={mapW}
+                    height={mapH}
+                    fillPatternImage={
+                      shadowTextures.shadow as unknown as HTMLImageElement
+                    }
+                    fillPatternRepeat="repeat"
+                    fillPatternScale={{ x: 4.1, y: 4.1 }}
+                    opacity={globalDarknessOpacity * 0.45}
+                    listening={false}
+                  />
+                </>
+              )}
             </>
           )}
 
-          {/* Áreas reveladas manualmente pelo Mestre (mesmo comportamento da névoa) */}
-          {revealShapes.map((s) => {
+          {/* Blocos individuais de Escuridão (fundem em tonalidade índigo-violeta sobre a névoa) */}
+          {darknessCoverShapes.map((s) => {
+            const d = (s.data ?? {}) as FogShapeData;
+            const isSel = selectedFogShapeId === s.id;
+            const stroke = isSel
+              ? "#38bdf8"
+              : isGm
+                ? "rgba(129, 140, 248, 0.45)"
+                : undefined;
+            const selectProps = canSelectDarkness
+              ? {
+                  listening: true,
+                  onClick: (e: Konva.KonvaEventObject<MouseEvent>) => {
+                    e.cancelBubble = true;
+                    onSelectFogShape?.(s.id);
+                  },
+                  onTap: (e: Konva.KonvaEventObject<TouchEvent>) => {
+                    e.cancelBubble = true;
+                    onSelectFogShape?.(s.id);
+                  },
+                }
+              : { listening: false };
+
+            if (s.shape_kind === "rect") {
+              const rx =
+                d.width && d.width < 0 ? (d.x ?? 0) + d.width : (d.x ?? 0);
+              const ry =
+                d.height && d.height < 0 ? (d.y ?? 0) + d.height : (d.y ?? 0);
+              const rw = Math.abs(d.width ?? 0);
+              const rh = Math.abs(d.height ?? 0);
+              return (
+                <Group key={`dark-blk-${s.id}`} {...selectProps}>
+                  <Rect
+                    x={rx}
+                    y={ry}
+                    width={rw}
+                    height={rh}
+                    fill="#0c0720"
+                    opacity={blockDarknessOpacity * 0.78}
+                    stroke={stroke}
+                    strokeWidth={isSel ? 3 : stroke ? 1.5 : 0}
+                    dash={stroke ? [8, 6] : undefined}
+                    shadowColor="#050314"
+                    shadowBlur={28}
+                    shadowOpacity={0.9}
+                  />
+                  {shadowTextures?.shadow && (
+                    <Rect
+                      name="dark-shadow-1"
+                      x={rx}
+                      y={ry}
+                      width={rw}
+                      height={rh}
+                      fillPatternImage={
+                        shadowTextures.shadow as unknown as HTMLImageElement
+                      }
+                      fillPatternRepeat="repeat"
+                      fillPatternScale={{ x: 2.3, y: 2.3 }}
+                      opacity={blockDarknessOpacity}
+                      listening={false}
+                    />
+                  )}
+                </Group>
+              );
+            }
+
+            if (s.shape_kind === "circle") {
+              const cx = d.x ?? 0;
+              const cy = d.y ?? 0;
+              const r = Math.max(d.radius ?? 0, 2);
+              return (
+                <Group key={`dark-blk-${s.id}`} {...selectProps}>
+                  <Circle
+                    x={cx}
+                    y={cy}
+                    radius={r}
+                    fill="#0c0720"
+                    opacity={blockDarknessOpacity * 0.78}
+                    stroke={stroke}
+                    strokeWidth={isSel ? 3 : stroke ? 1.5 : 0}
+                    dash={stroke ? [8, 6] : undefined}
+                    shadowColor="#050314"
+                    shadowBlur={28}
+                    shadowOpacity={0.9}
+                  />
+                  {shadowTextures?.shadow && (
+                    <Circle
+                      name="dark-shadow-1"
+                      x={cx}
+                      y={cy}
+                      radius={r}
+                      fillPatternImage={
+                        shadowTextures.shadow as unknown as HTMLImageElement
+                      }
+                      fillPatternRepeat="repeat"
+                      fillPatternScale={{ x: 2.3, y: 2.3 }}
+                      opacity={blockDarknessOpacity}
+                      listening={false}
+                    />
+                  )}
+                </Group>
+              );
+            }
+
+            const pts = d.points ?? [];
+            return (
+              <Group key={`dark-blk-${s.id}`} {...selectProps}>
+                <Line
+                  points={pts}
+                  closed
+                  fill="#0c0720"
+                  opacity={blockDarknessOpacity * 0.78}
+                  stroke={stroke}
+                  strokeWidth={isSel ? 3 : stroke ? 1.5 : 0}
+                  dash={stroke ? [8, 6] : undefined}
+                  shadowColor="#050314"
+                  shadowBlur={28}
+                  shadowOpacity={0.9}
+                />
+                {shadowTextures?.shadow && (
+                  <Line
+                    name="dark-shadow-1"
+                    points={pts}
+                    closed
+                    fillPatternImage={
+                      shadowTextures.shadow as unknown as HTMLImageElement
+                    }
+                    fillPatternRepeat="repeat"
+                    fillPatternScale={{ x: 2.3, y: 2.3 }}
+                    opacity={blockDarknessOpacity}
+                    listening={false}
+                  />
+                )}
+              </Group>
+            );
+          })}
+
+          {/* Áreas de Escuridão reveladas manualmente pelo Mestre */}
+          {darknessRevealShapes.map((s) => {
             const d = (s.data ?? {}) as FogShapeData;
             const revealProps = {
               fill: "#000000",

@@ -20,6 +20,7 @@ import type {
 export interface LocalFogPreview {
   mode: "rect" | "circle" | "polygon" | "slice";
   operation: FogOperation;
+  layer?: "fog" | "darkness";
   start?: Point2D;
   end?: Point2D;
   points?: number[];
@@ -333,7 +334,11 @@ export default function FogLayer({
   // Em intensidades menores que 100%, reduz o fundo escuro para destacar os redemoinhos de fumaça
   const backingOpacity =
     sceneFogOpacity >= 0.99 ? 1 : Math.max(0.28, sceneFogOpacity * 0.72);
-  const sceneShapes = fogShapes.filter((s) => s.scene_id === scene.id);
+  const sceneShapes = fogShapes.filter(
+    (s) =>
+      s.scene_id === scene.id &&
+      ((s.data as FogShapeData | null)?.layer ?? "fog") !== "darkness"
+  );
   const coverShapes = sceneShapes.filter((s) => s.operation === "cover");
   const revealShapes = sceneShapes.filter((s) => s.operation === "reveal");
   const hasCoverShapes = coverShapes.length > 0;
@@ -593,10 +598,18 @@ export default function FogLayer({
             height={Math.abs(localPreview.end.y - localPreview.start.y)}
             fill={
               localPreview.operation === "cover"
-                ? "rgba(245, 158, 11, 0.25)"
+                ? localPreview.layer === "darkness"
+                  ? "rgba(99, 102, 241, 0.28)"
+                  : "rgba(245, 158, 11, 0.25)"
                 : "rgba(16, 185, 129, 0.25)"
             }
-            stroke={localPreview.operation === "cover" ? "#f59e0b" : "#10b981"}
+            stroke={
+              localPreview.operation === "cover"
+                ? localPreview.layer === "darkness"
+                  ? "#818cf8"
+                  : "#f59e0b"
+                : "#10b981"
+            }
             strokeWidth={2}
             dash={[6, 4]}
           />
@@ -616,10 +629,18 @@ export default function FogLayer({
             )}
             fill={
               localPreview.operation === "cover"
-                ? "rgba(245, 158, 11, 0.25)"
+                ? localPreview.layer === "darkness"
+                  ? "rgba(99, 102, 241, 0.28)"
+                  : "rgba(245, 158, 11, 0.25)"
                 : "rgba(16, 185, 129, 0.25)"
             }
-            stroke={localPreview.operation === "cover" ? "#f59e0b" : "#10b981"}
+            stroke={
+              localPreview.operation === "cover"
+                ? localPreview.layer === "darkness"
+                  ? "#818cf8"
+                  : "#f59e0b"
+                : "#10b981"
+            }
             strokeWidth={2}
             dash={[6, 4]}
           />
@@ -632,7 +653,13 @@ export default function FogLayer({
         localPreview.points.length >= 2 && (
           <Line
             points={localPreview.points}
-            stroke={localPreview.operation === "cover" ? "#f59e0b" : "#10b981"}
+            stroke={
+              localPreview.operation === "cover"
+                ? localPreview.layer === "darkness"
+                  ? "#818cf8"
+                  : "#f59e0b"
+                : "#10b981"
+            }
             strokeWidth={2}
             dash={[6, 4]}
           />

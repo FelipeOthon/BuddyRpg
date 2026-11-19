@@ -10,6 +10,8 @@ import {
   Loader2,
   Lock,
   LockOpen,
+  Minus,
+  MousePointer,
   Plus,
   Radio,
   Save,
@@ -17,15 +19,27 @@ import {
   Wand2,
 } from "lucide-react";
 import {
+  createSceneElementAction,
+  deleteSceneElementAction,
+  updateSceneElementAction,
+} from "@/actions/elements";
+import {
   activateSceneAction,
   createSceneAction,
   deleteSceneAction,
   toggleScenePlayerVisibilityAction,
   updateSceneSettingsAction,
 } from "@/actions/scenes";
+import { screenToWorld, snapToGrid as snapPointToGrid } from "@/lib/board/geometry";
 import { uploadCampaignImage } from "@/lib/utils/storage";
 import { useBoardStore } from "@/stores/boardStore";
-import type { DistanceRule, GridType, Scene } from "@/types/domain";
+import type {
+  DistanceRule,
+  GridType,
+  Scene,
+  SceneElement,
+  SceneElementData,
+} from "@/types/domain";
 import MapAlignmentModal from "./MapAlignmentModal";
 import MapStudioModal from "./MapStudioModal";
 
@@ -40,6 +54,13 @@ export default function SceneManager({
     setViewedSceneId,
     upsertScene,
     removeScene,
+    elements,
+    upsertElement,
+    removeElement,
+    setSelectedElementId,
+    setTool,
+    viewport,
+    setViewport,
   } = useBoardStore();
 
   const currentScene =
@@ -52,6 +73,7 @@ export default function SceneManager({
   const [error, setError] = useState<string | null>(null);
   const [savedNotice, setSavedNotice] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [isUploadingProps, setIsUploadingProps] = useState(false);
   const [isMapStudioOpen, setIsMapStudioOpen] = useState(false);
   const [isAlignmentOpen, setIsAlignmentOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -658,6 +680,294 @@ export default function SceneManager({
             {savedNotice ? "Configurações Salvas!" : "Salvar Cena"}
           </button>
         </form>
+      )}
+
+      {/* Mapas e Peças Encaixáveis nesta Cena */}
+      {currentScene && (
+        <div className="space-y-3 rounded-2xl border border-zinc-800 bg-zinc-950/80 p-4">
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <h4 className="text-xs font-bold uppercase tracking-wider text-amber-400">
+                Mapas & Peças na Cena
+              </h4>
+              <p className="mt-0.5 text-[11px] text-zinc-400">
+                Suba várias imagens, encaixe uma ao lado da outra e redimensione.
+              </p>
+            </div>
+          </div>
+
+          <label className="flex cursor-pointer items-center justify-center gap-1.5 rounded-xl border border-dashed border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-200 transition hover:border-amber-400 hover:bg-amber-500/20">
+            {isUploadingProps ? (
+              <>
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                Enviando peças...
+              </>
+            ) : (
+              <>
+                <ImagePlus className="h-3.5 w-3.5 text-amber-400" />
+                + Adicionar Mapas / Peças (vários)
+              </>
+            )}
+            <input
+              type="file"
+              multiple
+              accept="image/png,image/jpeg,image/webp"
+              disabled={isUploadingProps}
+              onChange={async (e) => {
+                const list = e.target.files ? Array.from(e.target.files) : [];
+                e.target.value = "";
+                if (list.length === 0 || !currentScene) return;
+                setError(null);
+                setIsUploadingProps(true);
+                try {
+                  const g = Math.max(currentScene.grid_size || 70, 20);
+                  const ox = currentScene.grid_offset_x ?? 0;
+                  const oy = currentScene.grid_offset_y ?? 0;
+                  const gType = currentScene.grid_type ?? "square";
+                  const center = screenToWorld(
+                    {
+                      x:
+                        typeof window !== "undefined"
+                          ? window.innerWidth * 0.42
+                          : 500,
+                      y:
+                        typeof window !== "undefined"
+                          ? window.innerHeight * 0.45
+                          : 400,
+                    },
+                    viewport
+                  );
+                  let cursorX = snapPointToGrid(
+                    { x: center.x - g * 3, y: center.y - g * 3 },
+                    g,
+                    currentScene.snap_to_grid,
+                    ox,
+                    oy,
+                    gType
+                  ).x;
+                  const baseY = snapPointToGrid(
+                    { x: center.x - g * 3, y: center.y - g * 3 },
+                    g,
+                    currentScene.snap_to_grid,
+                    ox,
+                    oy,
+                    gType
+                  ).y;
+
+                  for (const file of list) {
+                    if (!file.type.startsWith("image/")) continue;
+                    const uploaded = await uploadCampaignImage({
+                      bucket: "maps",
+                      campaignId,
+                      file,
+                    });
+                    const cellsW = Math.min(
+                      Math.max(Math.round(uploaded.width / g), 2),
+                      16
+                    );
+                    const propW = cellsW * g;
+                    const ratio = uploaded.height / Math.max(uploaded.width, 1);
+                    const propH = Math.max(
+                      g,
+                      Math.round((propW * ratio) / g) * g
+                    );
+                    const res = await createSceneElementAction({
+                      sceneId: currentScene.id,
+                      campaignId,
+                      layer: "prop",
+                      kind: "image",
+                      x: cursorX,
+                      y: baseY,
+                      data: {
+                        imageUrl: uploaded.publicUrl,
+                        width: propW,
+                        height: propH,
+                        opacity: 1,
+                        label: file.name.replace(/\.[^.]+$/, "").slice(0, 40),
+                      },
+                    });
+                    if (res.ok && res.element) {
+                      upsertElement(res.element);
+                      setTool("select");
+                      setSelectedElementId(res.element.id);
+                    }
+                    cursorX += propW;
+                  }
+                } catch (err) {
+                  setError(
+                    err instanceof Error
+                      ? err.message
+                      : "Falha ao subir mapa/peça."
+                  );
+                } finally {
+                  setIsUploadingProps(false);
+                }
+              }}
+              className="hidden"
+            />
+          </label>
+
+          {(() => {
+            const sceneProps = elements.filter(
+              (el) =>
+                el.scene_id === currentScene.id &&
+                el.layer === "prop" &&
+                el.kind === "image"
+            );
+            const g = Math.max(currentScene.grid_size || 70, 20);
+
+            if (sceneProps.length === 0) {
+              return (
+                <p className="rounded-xl border border-zinc-800/80 bg-zinc-900/50 px-3 py-2 text-[11px] text-zinc-500">
+                  Nenhuma peça/mapa solto nesta cena ainda. Use o botão acima para
+                  montar mapas encaixados!
+                </p>
+              );
+            }
+
+            const resizePropCells = (
+              el: SceneElement,
+              deltaW: number,
+              deltaH: number
+            ) => {
+              const d = (el.data ?? {}) as SceneElementData;
+              const curCellsW = Math.max(1, Math.round((d.width ?? g * 2) / g));
+              const curCellsH = Math.max(1, Math.round((d.height ?? g * 2) / g));
+              const nextCellsW = Math.min(Math.max(curCellsW + deltaW, 1), 40);
+              const nextCellsH = Math.min(Math.max(curCellsH + deltaH, 1), 40);
+              const nextData: SceneElementData = {
+                ...d,
+                width: nextCellsW * g,
+                height: nextCellsH * g,
+              };
+              upsertElement({
+                ...el,
+                data: nextData as unknown as SceneElement["data"],
+              });
+              void updateSceneElementAction({
+                elementId: el.id,
+                campaignId,
+                data: nextData,
+              });
+            };
+
+            return (
+              <div className="max-h-60 space-y-2 overflow-y-auto pr-0.5">
+                {sceneProps.map((el, idx) => {
+                  const d = (el.data ?? {}) as SceneElementData;
+                  const cellsW = Math.max(1, Math.round((d.width ?? g * 2) / g));
+                  const cellsH = Math.max(1, Math.round((d.height ?? g * 2) / g));
+                  return (
+                    <div
+                      key={el.id}
+                      className="rounded-xl border border-zinc-800 bg-zinc-900/70 p-2 text-[11px]"
+                    >
+                      <div className="flex items-center gap-2">
+                        {d.imageUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={d.imageUrl}
+                            alt={d.label ?? `Peça ${idx + 1}`}
+                            className="h-9 w-9 shrink-0 rounded-lg border border-zinc-700 object-cover"
+                          />
+                        ) : (
+                          <div className="h-9 w-9 shrink-0 rounded-lg bg-zinc-800" />
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate font-semibold text-zinc-100">
+                            {d.label || `Mapa / Peça ${idx + 1}`}
+                          </p>
+                          <p className="text-[10px] text-zinc-400">
+                            {cellsW}q × {cellsH}q ({cellsW * g}×{cellsH * g}px)
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          title="Selecionar peça no tabuleiro para mover ou girar"
+                          onClick={() => {
+                            setTool("select");
+                            setSelectedElementId(el.id);
+                            if (typeof window !== "undefined") {
+                              const cx = el.x + (d.width ?? g * 2) / 2;
+                              const cy = el.y + (d.height ?? g * 2) / 2;
+                              setViewport({
+                                ...viewport,
+                                x: window.innerWidth * 0.42 - cx * viewport.scale,
+                                y: window.innerHeight * 0.48 - cy * viewport.scale,
+                              });
+                            }
+                          }}
+                          className="rounded-lg border border-zinc-700 bg-zinc-800 p-1.5 text-zinc-200 transition hover:border-amber-500/50 hover:text-amber-200"
+                        >
+                          <MousePointer className="h-3 w-3" />
+                        </button>
+                        <button
+                          type="button"
+                          title="Excluir peça"
+                          onClick={() => {
+                            removeElement(el.id);
+                            void deleteSceneElementAction({ elementId: el.id });
+                          }}
+                          className="rounded-lg border border-red-500/20 bg-red-500/10 p-1.5 text-red-300 transition hover:bg-red-500/20"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      </div>
+
+                      <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-zinc-800/80 pt-1.5 text-[10px] text-zinc-300">
+                        <div className="flex items-center gap-1">
+                          <span className="text-zinc-400">Larg:</span>
+                          <button
+                            type="button"
+                            onClick={() => resizePropCells(el, -1, 0)}
+                            className="rounded bg-zinc-800 p-1 hover:bg-zinc-700"
+                            title="Diminuir largura em 1 quadrado"
+                          >
+                            <Minus className="h-2.5 w-2.5" />
+                          </button>
+                          <span className="min-w-[26px] text-center font-mono font-semibold text-amber-200">
+                            {cellsW}q
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => resizePropCells(el, 1, 0)}
+                            className="rounded bg-zinc-800 p-1 hover:bg-zinc-700"
+                            title="Aumentar largura em 1 quadrado"
+                          >
+                            <Plus className="h-2.5 w-2.5" />
+                          </button>
+                        </div>
+
+                        <div className="flex items-center gap-1">
+                          <span className="text-zinc-400">Alt:</span>
+                          <button
+                            type="button"
+                            onClick={() => resizePropCells(el, 0, -1)}
+                            className="rounded bg-zinc-800 p-1 hover:bg-zinc-700"
+                            title="Diminuir altura em 1 quadrado"
+                          >
+                            <Minus className="h-2.5 w-2.5" />
+                          </button>
+                          <span className="min-w-[26px] text-center font-mono font-semibold text-amber-200">
+                            {cellsH}q
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => resizePropCells(el, 0, 1)}
+                            className="rounded bg-zinc-800 p-1 hover:bg-zinc-700"
+                            title="Aumentar altura em 1 quadrado"
+                          >
+                            <Plus className="h-2.5 w-2.5" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
+        </div>
       )}
 
       {isMapStudioOpen && currentScene && (

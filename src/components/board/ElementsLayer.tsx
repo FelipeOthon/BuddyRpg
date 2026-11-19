@@ -443,7 +443,7 @@ export default function ElementsLayer({
         <Transformer
           ref={trRef}
           rotateEnabled
-          keepRatio={shiftDown}
+          keepRatio={!shiftDown}
           anchorFill="#f59e0b"
           anchorStroke="#09090b"
           anchorSize={9}

@@ -248,6 +248,7 @@ export interface DrawPreviewPayload {
 }
 
 export interface FogShapeData {
+  layer?: "fog" | "darkness";
   x?: number;
   y?: number;
   width?: number;

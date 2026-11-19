@@ -279,6 +279,7 @@ export const createFogShapeSchema = z.object({
   operation: z.enum(["cover", "reveal"]),
   shapeKind: z.enum(["rect", "circle", "polygon"]),
   data: z.object({
+    layer: z.enum(["fog", "darkness"]).optional(),
     x: z.number().finite().optional(),
     y: z.number().finite().optional(),
     width: z.number().finite().optional(),

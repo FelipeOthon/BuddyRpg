@@ -33,6 +33,7 @@ export interface FogToolConfig {
   operation: FogOperation;
   mode: "rect" | "circle" | "polygon" | "slice" | "select";
   snapToGrid: boolean;
+  targetLayer: "fog" | "darkness";
 }
 
 export interface ExploredSpot {
@@ -211,6 +212,7 @@ export const useBoardStore = create<BoardState>((set) => ({
     operation: "cover",
     mode: "rect",
     snapToGrid: true,
+    targetLayer: "fog",
   },
   selectedFogShapeId: null,
   exploredMemory: {},

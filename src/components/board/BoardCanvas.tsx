@@ -387,6 +387,7 @@ export default function BoardCanvas({
         setLocalFogPreview({
           mode: "polygon",
           operation: fogToolConfig.operation,
+          layer: fogToolConfig.targetLayer ?? "fog",
           points: nextPts,
         });
       } else {
@@ -403,6 +404,7 @@ export default function BoardCanvas({
         setLocalFogPreview({
           mode: fogToolConfig.mode,
           operation: fogToolConfig.operation,
+          layer: fogToolConfig.targetLayer ?? "fog",
           start: snappedStart,
           end:
             fogToolConfig.mode === "rect" && fogToolConfig.snapToGrid && !altDown
@@ -607,12 +609,19 @@ export default function BoardCanvas({
         const dy = finishedFog.end.y - finishedFog.start.y;
         if (Math.hypot(dx, dy) > 10) {
           if (finishedFog.mode === "slice") {
-            const coverTargets = fogShapes.filter(
-              (s) =>
-                s.scene_id === scene.id &&
-                s.operation === "cover" &&
-                (s.shape_kind === "rect" || s.shape_kind === "polygon")
-            );
+            const targetLayer =
+              finishedFog.layer ?? fogToolConfig.targetLayer ?? "fog";
+            const coverTargets = fogShapes.filter((s) => {
+              if (
+                s.scene_id !== scene.id ||
+                s.operation !== "cover" ||
+                (s.shape_kind !== "rect" && s.shape_kind !== "polygon")
+              ) {
+                return false;
+              }
+              const d = (s.data ?? {}) as FogShapeData;
+              return (d.layer ?? "fog") === targetLayer;
+            });
             const deleteIds: string[] = [];
             const newShapes: Array<{
               operation: "cover";
@@ -642,12 +651,12 @@ export default function BoardCanvas({
                   {
                     operation: "cover",
                     shapeKind: "polygon",
-                    data: { points: sliced[0] },
+                    data: { points: sliced[0], layer: targetLayer },
                   },
                   {
                     operation: "cover",
                     shapeKind: "polygon",
-                    data: { points: sliced[1] },
+                    data: { points: sliced[1], layer: targetLayer },
                   }
                 );
               }
@@ -668,6 +677,27 @@ export default function BoardCanvas({
             }
           } else {
             const shapeKind = finishedFog.mode === "circle" ? "circle" : "rect";
+            const targetLayer = fogToolConfig.targetLayer ?? "fog";
+            const ensureTargetLayerVisible = () => {
+              if (targetLayer === "fog") {
+                if (!scene.fog_enabled) {
+                  upsertScene({ ...scene, fog_enabled: true });
+                  void updateSceneFogSettingsAction({
+                    sceneId: scene.id,
+                    campaignId: scene.campaign_id,
+                    fogEnabled: true,
+                  });
+                }
+              } else if ((scene.ambient_light ?? 1) >= 0.99) {
+                upsertScene({ ...scene, ambient_light: 0.98 });
+                void updateSceneEnvironmentAction({
+                  sceneId: scene.id,
+                  campaignId: scene.campaign_id,
+                  ambientLight: 0.98,
+                });
+              }
+            };
+
             if (shapeKind === "rect" && finishedFog.operation === "cover") {
               const newRect: FogRect = {
                 x: Math.min(finishedFog.start.x, finishedFog.end.x),
@@ -675,9 +705,13 @@ export default function BoardCanvas({
                 width: Math.abs(dx),
                 height: Math.abs(dy),
               };
-              const sceneRects = fogShapes.filter(
-                (s) => s.scene_id === scene.id && s.shape_kind === "rect"
-              );
+              const sceneRects = fogShapes.filter((s) => {
+                if (s.scene_id !== scene.id || s.shape_kind !== "rect") {
+                  return false;
+                }
+                const d = (s.data ?? {}) as FogShapeData;
+                return (d.layer ?? "fog") === targetLayer;
+              });
               const existingCoverRects = sceneRects
                 .filter((s) => s.operation === "cover")
                 .map((s) => {
@@ -712,7 +746,6 @@ export default function BoardCanvas({
                 return;
               }
 
-              // Se havia recortes "reveal" antigos sob a nova cobertura, ajusta-os para não reabrir
               const deleteRevealIds: string[] = [];
               const newShapesPayload: Array<{
                 operation: "cover" | "reveal";
@@ -721,7 +754,7 @@ export default function BoardCanvas({
               }> = uncoveredPieces.map((p) => ({
                 operation: "cover",
                 shapeKind: "rect",
-                data: p,
+                data: { ...p, layer: targetLayer },
               }));
 
               for (const rev of existingRevealShapes) {
@@ -745,21 +778,13 @@ export default function BoardCanvas({
                     newShapesPayload.push({
                       operation: "reveal",
                       shapeKind: "rect",
-                      data: cp,
+                      data: { ...cp, layer: targetLayer },
                     });
                   }
                 }
               }
 
-              if (!scene.fog_enabled) {
-                upsertScene({ ...scene, fog_enabled: true });
-                void updateSceneFogSettingsAction({
-                  sceneId: scene.id,
-                  campaignId: scene.campaign_id,
-                  fogEnabled: true,
-                });
-              }
-
+              ensureTargetLayerVisible();
               deleteRevealIds.forEach((id) => removeFogShape(id));
               void replaceFogShapesAction({
                 sceneId: scene.id,
@@ -777,25 +802,20 @@ export default function BoardCanvas({
             const data: FogShapeData =
               shapeKind === "circle"
                 ? {
+                    layer: targetLayer,
                     x: finishedFog.start.x,
                     y: finishedFog.start.y,
                     radius: Math.hypot(dx, dy),
                   }
                 : {
+                    layer: targetLayer,
                     x: Math.min(finishedFog.start.x, finishedFog.end.x),
                     y: Math.min(finishedFog.start.y, finishedFog.end.y),
                     width: Math.abs(dx),
                     height: Math.abs(dy),
                   };
 
-            if (!scene.fog_enabled) {
-              upsertScene({ ...scene, fog_enabled: true });
-              void updateSceneFogSettingsAction({
-                sceneId: scene.id,
-                campaignId: scene.campaign_id,
-                fogEnabled: true,
-              });
-            }
+            ensureTargetLayerVisible();
 
             void createFogShapeAction({
               sceneId: scene.id,
@@ -1153,6 +1173,69 @@ export default function BoardCanvas({
     }
   };
 
+  const handleUploadMultipleMapProps = async (files: File[]) => {
+    if (role !== "gm" || files.length === 0) return;
+    const g = Math.max(scene.grid_size || 70, 20);
+    const center = screenToWorld(
+      { x: size.width / 2, y: size.height / 2 },
+      viewport
+    );
+    let cursorX = snapToGrid(
+      { x: center.x - g * 3, y: center.y - g * 3 },
+      g,
+      scene.snap_to_grid,
+      scene.grid_offset_x ?? 0,
+      scene.grid_offset_y ?? 0,
+      scene.grid_type ?? "square"
+    ).x;
+    const baseY = snapToGrid(
+      { x: center.x - g * 3, y: center.y - g * 3 },
+      g,
+      scene.snap_to_grid,
+      scene.grid_offset_x ?? 0,
+      scene.grid_offset_y ?? 0,
+      scene.grid_type ?? "square"
+    ).y;
+
+    for (const file of files) {
+      if (!file.type.startsWith("image/")) continue;
+      try {
+        const uploaded = await uploadCampaignImage({
+          bucket: "maps",
+          campaignId: scene.campaign_id,
+          file,
+        });
+        const cellsW = Math.min(Math.max(Math.round(uploaded.width / g), 2), 16);
+        const propW = cellsW * g;
+        const ratio = uploaded.height / Math.max(uploaded.width, 1);
+        const propH = Math.max(g, Math.round((propW * ratio) / g) * g);
+        const res = await createSceneElementAction({
+          sceneId: scene.id,
+          campaignId: scene.campaign_id,
+          layer: "prop",
+          kind: "image",
+          x: cursorX,
+          y: baseY,
+          data: {
+            imageUrl: uploaded.publicUrl,
+            width: propW,
+            height: propH,
+            opacity: 1,
+            label: file.name.replace(/\.[^.]+$/, "").slice(0, 40),
+          },
+        });
+        if (res.ok && res.element) {
+          upsertElement(res.element);
+          setTool("select");
+          setSelectedElementId(res.element.id);
+        }
+        cursorX += propW;
+      } catch {
+        // continua para os próximos arquivos
+      }
+    }
+  };
+
   const handleFileDrop = async (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     setIsDragOverFile(false);
@@ -1206,15 +1289,25 @@ export default function BoardCanvas({
     }
     const pts = fogPolygonPoints;
     const op = fogToolConfig.operation;
+    const targetLayer = fogToolConfig.targetLayer ?? "fog";
     setFogPolygonPoints([]);
     setLocalFogPreview(null);
 
-    if (!scene.fog_enabled) {
-      upsertScene({ ...scene, fog_enabled: true });
-      void updateSceneFogSettingsAction({
+    if (targetLayer === "fog") {
+      if (!scene.fog_enabled) {
+        upsertScene({ ...scene, fog_enabled: true });
+        void updateSceneFogSettingsAction({
+          sceneId: scene.id,
+          campaignId: scene.campaign_id,
+          fogEnabled: true,
+        });
+      }
+    } else if ((scene.ambient_light ?? 1) >= 0.99) {
+      upsertScene({ ...scene, ambient_light: 0.98 });
+      void updateSceneEnvironmentAction({
         sceneId: scene.id,
         campaignId: scene.campaign_id,
-        fogEnabled: true,
+        ambientLight: 0.98,
       });
     }
 
@@ -1223,7 +1316,7 @@ export default function BoardCanvas({
       campaignId: scene.campaign_id,
       operation: op,
       shapeKind: "polygon",
-      data: { points: pts },
+      data: { points: pts, layer: targetLayer },
     }).then((res) => {
       if (res.ok && res.shape) {
         upsertFogShape(res.shape);
@@ -1487,6 +1580,9 @@ export default function BoardCanvas({
             onSyncView={onSyncView}
             onQuickRoll={onQuickRoll}
             onBroadcastMusicState={onBroadcastMusicState}
+            onUploadMapProps={(files) => {
+              void handleUploadMultipleMapProps(files);
+            }}
             onOpenSceneManager={onOpenSceneManager}
             onClearPinnedRulers={() => {
               clearPinnedRulers(scene.id);
@@ -1888,25 +1984,7 @@ export default function BoardCanvas({
           })}
         </Layer>
 
-        {/* Camada 4A: Iluminação Dinâmica & Linha de Visão (Raycasting 2D) */}
-        <Layer listening={false}>
-          <LightingLayer
-            scene={scene}
-            tokens={renderedTokens}
-            walls={walls}
-            fogShapes={fogShapes}
-            exploredSpots={exploredMemory[scene.id] ?? []}
-            gmFogOpacity={gmFogOpacity}
-            remoteTokenDrags={remoteTokenDrags}
-            localTokenDragPos={localTokenDragPos}
-            currentUserId={currentUserId}
-            selectedTokenId={selectedTokenId}
-            isGm={role === "gm"}
-            gmPreviewVision={gmPreviewVision}
-          />
-        </Layer>
-
-        {/* Camada 4B: Névoa de Guerra Estática (sobrepõe iluminação em modo híbrido) */}
+        {/* Camada 4A: Névoa de Guerra (fumaça volumétrica) */}
         <Layer
           opacity={
             role === "gm"
@@ -1914,7 +1992,10 @@ export default function BoardCanvas({
               : sceneFogOpacity
           }
           listening={
-            role === "gm" && tool === "fog" && fogToolConfig.mode === "select"
+            role === "gm" &&
+            tool === "fog" &&
+            fogToolConfig.mode === "select" &&
+            fogToolConfig.targetLayer !== "darkness"
           }
         >
           <FogLayer
@@ -1931,10 +2012,46 @@ export default function BoardCanvas({
             gmPreviewVision={gmPreviewVision}
             exploredSpots={exploredMemory[scene.id] ?? []}
             canSelectFog={
-              role === "gm" && tool === "fog" && fogToolConfig.mode === "select"
+              role === "gm" &&
+              tool === "fog" &&
+              fogToolConfig.mode === "select" &&
+              fogToolConfig.targetLayer !== "darkness"
             }
             selectedFogShapeId={selectedFogShapeId}
             onSelectFogShape={setSelectedFogShapeId}
+          />
+        </Layer>
+
+        {/* Camada 4B: Escuridão & Iluminação Dinâmica (funde tonalidade sombria sobre a névoa) */}
+        <Layer
+          listening={
+            role === "gm" &&
+            tool === "fog" &&
+            fogToolConfig.mode === "select" &&
+            fogToolConfig.targetLayer === "darkness"
+          }
+        >
+          <LightingLayer
+            scene={scene}
+            tokens={renderedTokens}
+            walls={walls}
+            fogShapes={fogShapes}
+            exploredSpots={exploredMemory[scene.id] ?? []}
+            gmFogOpacity={gmFogOpacity}
+            canSelectDarkness={
+              role === "gm" &&
+              tool === "fog" &&
+              fogToolConfig.mode === "select" &&
+              fogToolConfig.targetLayer === "darkness"
+            }
+            selectedFogShapeId={selectedFogShapeId}
+            onSelectFogShape={setSelectedFogShapeId}
+            remoteTokenDrags={remoteTokenDrags}
+            localTokenDragPos={localTokenDragPos}
+            currentUserId={currentUserId}
+            selectedTokenId={selectedTokenId}
+            isGm={role === "gm"}
+            gmPreviewVision={gmPreviewVision}
           />
         </Layer>
 

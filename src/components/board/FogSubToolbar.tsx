@@ -83,7 +83,7 @@ export default function FogSubToolbar({
     return null;
   }
 
-  const isDarknessOn = (scene.ambient_light ?? 1) < 0.85;
+  const isDarknessOn = (scene.ambient_light ?? 1) < 0.99;
 
   return (
     <div className="pointer-events-auto absolute top-14 left-1/2 z-20 flex max-w-[92vw] -translate-x-1/2 flex-wrap items-center gap-1 rounded-xl border border-amber-500/35 bg-zinc-950/95 px-2 py-1.5 text-xs shadow-2xl backdrop-blur">
@@ -102,8 +102,8 @@ export default function FogSubToolbar({
 
       <button
         type="button"
-        onClick={() => onChangeAmbientLight(isDarknessOn ? 1 : 0.12)}
-        title="Ligar ou desligar a Escuridão da cena (respeita áreas reveladas e tochas)"
+        onClick={() => onChangeAmbientLight(isDarknessOn ? 1 : 0.14)}
+        title="Ligar ou desligar toda a Escuridão (global e blocos)"
         className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 font-bold transition ${
           isDarknessOn
             ? "border-indigo-400/60 bg-indigo-500/25 text-indigo-200"
@@ -117,11 +117,41 @@ export default function FogSubToolbar({
       <button
         type="button"
         onClick={onEnableDungeonMode}
-        title="Ativa Névoa + Escuridão juntos (Modo Masmorra)"
+        title="Ativa Névoa + Escuridão global juntos (Modo Masmorra)"
         className="inline-flex items-center gap-1 rounded-lg border border-zinc-700 bg-zinc-900 px-2 py-1 text-[11px] font-semibold text-amber-200 transition hover:border-amber-400/50"
       >
         Masmorra
       </button>
+
+      <div className="mx-0.5 h-4 w-px bg-zinc-800" />
+
+      {/* Seletor independente de qual camada o pincel desenha */}
+      <div className="flex items-center rounded-lg border border-zinc-800 bg-zinc-900 p-0.5">
+        <button
+          type="button"
+          onClick={() => setFogToolConfig({ targetLayer: "fog" })}
+          title="Desenhar blocos de Névoa (fumaça)"
+          className={`rounded-md px-2 py-0.5 text-[11px] font-semibold transition ${
+            fogToolConfig.targetLayer === "fog"
+              ? "bg-amber-500/25 text-amber-200"
+              : "text-zinc-400 hover:text-zinc-200"
+          }`}
+        >
+          Pintar Névoa
+        </button>
+        <button
+          type="button"
+          onClick={() => setFogToolConfig({ targetLayer: "darkness" })}
+          title="Desenhar blocos de Escuridão (funde com névoa onde sobrepor)"
+          className={`rounded-md px-2 py-0.5 text-[11px] font-semibold transition ${
+            fogToolConfig.targetLayer === "darkness"
+              ? "bg-indigo-500/30 text-indigo-200"
+              : "text-zinc-400 hover:text-zinc-200"
+          }`}
+        >
+          Pintar Escuridão
+        </button>
+      </div>
 
       <div className="mx-0.5 h-4 w-px bg-zinc-800" />
 
