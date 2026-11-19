@@ -857,68 +857,144 @@ export default function SceneManager({
               });
             };
 
+            const allLocked = sceneProps.every((p) => p.is_locked);
+
+            const toggleLockProp = (el: SceneElement, locked: boolean) => {
+              upsertElement({ ...el, is_locked: locked });
+              void updateSceneElementAction({
+                elementId: el.id,
+                campaignId,
+                isLocked: locked,
+              });
+            };
+
             return (
-              <div className="max-h-60 space-y-2 overflow-y-auto pr-0.5">
-                {sceneProps.map((el, idx) => {
-                  const d = (el.data ?? {}) as SceneElementData;
-                  const cellsW = Math.max(1, Math.round((d.width ?? g * 2) / g));
-                  const cellsH = Math.max(1, Math.round((d.height ?? g * 2) / g));
-                  return (
-                    <div
-                      key={el.id}
-                      className="rounded-xl border border-zinc-800 bg-zinc-900/70 p-2 text-[11px]"
-                    >
-                      <div className="flex items-center gap-2">
-                        {d.imageUrl ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={d.imageUrl}
-                            alt={d.label ?? `Peça ${idx + 1}`}
-                            className="h-9 w-9 shrink-0 rounded-lg border border-zinc-700 object-cover"
-                          />
-                        ) : (
-                          <div className="h-9 w-9 shrink-0 rounded-lg bg-zinc-800" />
-                        )}
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate font-semibold text-zinc-100">
-                            {d.label || `Mapa / Peça ${idx + 1}`}
-                          </p>
-                          <p className="text-[10px] text-zinc-400">
-                            {cellsW}q × {cellsH}q ({cellsW * g}×{cellsH * g}px)
-                          </p>
-                        </div>
-                        <button
-                          type="button"
-                          title="Selecionar peça no tabuleiro para mover ou girar"
-                          onClick={() => {
-                            setTool("select");
-                            setSelectedElementId(el.id);
-                            if (typeof window !== "undefined") {
-                              const cx = el.x + (d.width ?? g * 2) / 2;
-                              const cy = el.y + (d.height ?? g * 2) / 2;
-                              setViewport({
-                                ...viewport,
-                                x: window.innerWidth * 0.42 - cx * viewport.scale,
-                                y: window.innerHeight * 0.48 - cy * viewport.scale,
-                              });
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-2 text-[11px]">
+                  <span className="text-zinc-400">
+                    {sceneProps.length}{" "}
+                    {sceneProps.length === 1 ? "item colocado" : "itens colocados"}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const nextLocked = !allLocked;
+                      for (const p of sceneProps) {
+                        toggleLockProp(p, nextLocked);
+                      }
+                    }}
+                    title={
+                      allLocked
+                        ? "Destravar todas as peças para poder mover no mapa"
+                        : "Travar todas as peças para não arrastá-las sem querer"
+                    }
+                    className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-[10px] font-semibold transition ${
+                      allLocked
+                        ? "border-amber-500/50 bg-amber-500/20 text-amber-200 hover:bg-amber-500/30"
+                        : "border-zinc-700 bg-zinc-900 text-zinc-200 hover:border-amber-500/40 hover:text-amber-200"
+                    }`}
+                  >
+                    {allLocked ? (
+                      <>
+                        <LockOpen className="h-3 w-3" />
+                        Destravar Tudo
+                      </>
+                    ) : (
+                      <>
+                        <Lock className="h-3 w-3 text-amber-400" />
+                        Travar Tudo
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                <div className="max-h-60 space-y-2 overflow-y-auto pr-0.5">
+                  {sceneProps.map((el, idx) => {
+                    const d = (el.data ?? {}) as SceneElementData;
+                    const cellsW = Math.max(1, Math.round((d.width ?? g * 2) / g));
+                    const cellsH = Math.max(1, Math.round((d.height ?? g * 2) / g));
+                    return (
+                      <div
+                        key={el.id}
+                        className={`rounded-xl border p-2 text-[11px] ${
+                          el.is_locked
+                            ? "border-amber-500/35 bg-amber-500/5"
+                            : "border-zinc-800 bg-zinc-900/70"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          {d.imageUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={d.imageUrl}
+                              alt={d.label ?? `Peça ${idx + 1}`}
+                              className="h-9 w-9 shrink-0 rounded-lg border border-zinc-700 object-cover"
+                            />
+                          ) : (
+                            <div className="h-9 w-9 shrink-0 rounded-lg bg-zinc-800" />
+                          )}
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate font-semibold text-zinc-100">
+                              {d.label || `Mapa / Peça ${idx + 1}`}
+                            </p>
+                            <p className="text-[10px] text-zinc-400">
+                              {cellsW}q × {cellsH}q ({cellsW * g}×{cellsH * g}px)
+                              {el.is_locked ? " · 🔒 Travado" : ""}
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            title={
+                              el.is_locked
+                                ? "Destravar para mover/redimensionar no tabuleiro"
+                                : "Bloquear no lugar para não mover sem querer"
                             }
-                          }}
-                          className="rounded-lg border border-zinc-700 bg-zinc-800 p-1.5 text-zinc-200 transition hover:border-amber-500/50 hover:text-amber-200"
-                        >
-                          <MousePointer className="h-3 w-3" />
-                        </button>
-                        <button
-                          type="button"
-                          title="Excluir peça"
-                          onClick={() => {
-                            removeElement(el.id);
-                            void deleteSceneElementAction({ elementId: el.id });
-                          }}
-                          className="rounded-lg border border-red-500/20 bg-red-500/10 p-1.5 text-red-300 transition hover:bg-red-500/20"
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </button>
-                      </div>
+                            onClick={() => toggleLockProp(el, !el.is_locked)}
+                            className={`rounded-lg border p-1.5 transition ${
+                              el.is_locked
+                                ? "border-amber-500/50 bg-amber-500/20 text-amber-200 hover:bg-amber-500/30"
+                                : "border-zinc-700 bg-zinc-800 text-zinc-300 hover:border-amber-500/40 hover:text-amber-200"
+                            }`}
+                          >
+                            {el.is_locked ? (
+                              <Lock className="h-3 w-3" />
+                            ) : (
+                              <LockOpen className="h-3 w-3" />
+                            )}
+                          </button>
+                          <button
+                            type="button"
+                            title="Selecionar peça no tabuleiro (destrava se estiver travada)"
+                            onClick={() => {
+                              if (el.is_locked) toggleLockProp(el, false);
+                              setTool("select");
+                              setSelectedElementId(el.id);
+                              if (typeof window !== "undefined") {
+                                const cx = el.x + (d.width ?? g * 2) / 2;
+                                const cy = el.y + (d.height ?? g * 2) / 2;
+                                setViewport({
+                                  ...viewport,
+                                  x: window.innerWidth * 0.42 - cx * viewport.scale,
+                                  y: window.innerHeight * 0.48 - cy * viewport.scale,
+                                });
+                              }
+                            }}
+                            className="rounded-lg border border-zinc-700 bg-zinc-800 p-1.5 text-zinc-200 transition hover:border-amber-500/50 hover:text-amber-200"
+                          >
+                            <MousePointer className="h-3 w-3" />
+                          </button>
+                          <button
+                            type="button"
+                            title="Excluir peça"
+                            onClick={() => {
+                              removeElement(el.id);
+                              void deleteSceneElementAction({ elementId: el.id });
+                            }}
+                            className="rounded-lg border border-red-500/20 bg-red-500/10 p-1.5 text-red-300 transition hover:bg-red-500/20"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        </div>
 
                       <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-zinc-800/80 pt-1.5 text-[10px] text-zinc-300">
                         <div className="flex items-center gap-1">
@@ -1023,6 +1099,7 @@ export default function SceneManager({
                     </div>
                   );
                 })}
+                </div>
               </div>
             );
           })()}

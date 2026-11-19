@@ -379,8 +379,9 @@ export default function ElementsLayer({
 
   const selectedTransformable = sceneElements.find((el) => {
     if (el.id !== selectedElementId) return false;
+    if (el.is_locked || weatherToolActive) return false;
     if (el.kind !== "image" && el.kind !== "rect") return false;
-    return isGm || (el.created_by === currentUserId && !el.is_locked);
+    return isGm || el.created_by === currentUserId;
   });
 
   useEffect(() => {
@@ -424,8 +425,11 @@ export default function ElementsLayer({
         const data = (el.data ?? {}) as SceneElementData;
         const canEdit =
           canSelect &&
+          !weatherToolActive &&
+          !el.is_locked &&
           !el.attached_to_token_id &&
-          (isGm || (el.created_by === currentUserId && !el.is_locked));
+          (isGm || el.created_by === currentUserId);
+        const shouldListen = canSelect && (!el.is_locked || weatherToolActive);
         const attachDelta = getAttachmentOffset(el.attached_to_token_id);
         const shouldSnapProp =
           el.layer === "prop" && snapEnabled && !altDown && gridSize > 0;
@@ -445,7 +449,7 @@ export default function ElementsLayer({
             rotation={el.rotation}
             opacity={el.is_hidden ? 0.45 : 1}
             draggable={canEdit}
-            listening={canSelect}
+            listening={shouldListen}
             dragBoundFunc={
               shouldSnapProp
                 ? (pos) => pos
