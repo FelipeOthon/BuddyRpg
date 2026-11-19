@@ -44,6 +44,7 @@ export default function BoardClient(props: {
     preview: Omit<DrawPreviewPayload, "userId" | "sceneId">
   ) => void;
   onSyncView?: (x: number, y: number, scale: number) => void;
+  onQuickRoll?: (cmd: string) => void;
   onBroadcastMusicState?: (state: Omit<MusicStatePayload, "userId">) => void;
   onOpenSceneManager?: () => void;
 }) {

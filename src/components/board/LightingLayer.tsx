@@ -1,15 +1,24 @@
 "use client";
 
 import { useMemo } from "react";
-import { Group, Line, Rect } from "react-konva";
+import { Circle, Group, Line, Rect } from "react-konva";
 import { computeVisibilityPolygon } from "@/lib/board/visibility";
-import type { RemoteDragPosition } from "@/stores/boardStore";
-import type { Scene, SceneWall, Token } from "@/types/domain";
+import type { ExploredSpot, RemoteDragPosition } from "@/stores/boardStore";
+import type {
+  FogShapeData,
+  Scene,
+  SceneFogShape,
+  SceneWall,
+  Token,
+} from "@/types/domain";
 
 export default function LightingLayer({
   scene,
   tokens,
   walls,
+  fogShapes = [],
+  exploredSpots = [],
+  gmFogOpacity = 0.62,
   remoteTokenDrags,
   localTokenDragPos,
   currentUserId,
@@ -20,6 +29,9 @@ export default function LightingLayer({
   scene: Scene;
   tokens: Token[];
   walls: SceneWall[];
+  fogShapes?: SceneFogShape[];
+  exploredSpots?: ExploredSpot[];
+  gmFogOpacity?: number;
   remoteTokenDrags: Record<string, RemoteDragPosition>;
   localTokenDragPos?: { tokenId: string; x: number; y: number } | null;
   currentUserId: string;
@@ -132,7 +144,12 @@ export default function LightingLayer({
   const mapH = scene.map_height || 2000;
   const rawDarkness = Math.max(0.95 - ambientLight * 0.95, 0);
   const darknessOpacity =
-    isGm && !gmPreviewVision ? Math.min(rawDarkness, 0.32) : rawDarkness;
+    isGm && !gmPreviewVision
+      ? Math.min(rawDarkness, Math.max(0.05, gmFogOpacity))
+      : rawDarkness;
+  const revealShapes = fogShapes.filter(
+    (s) => s.scene_id === scene.id && s.operation === "reveal"
+  );
 
   return (
     <Group listening={false}>
@@ -146,6 +163,77 @@ export default function LightingLayer({
             height={mapH}
             fill={`rgba(4, 6, 14, ${darknessOpacity})`}
           />
+
+          {/* Áreas reveladas manualmente pelo Mestre (mesmo comportamento da névoa) */}
+          {revealShapes.map((s) => {
+            const d = (s.data ?? {}) as FogShapeData;
+            const revealProps = {
+              fill: "#000000",
+              globalCompositeOperation: "destination-out" as const,
+              shadowColor: "#000000",
+              shadowBlur: 24,
+              shadowOpacity: 1,
+            };
+            if (s.shape_kind === "rect") {
+              const rx =
+                d.width && d.width < 0 ? (d.x ?? 0) + d.width : (d.x ?? 0);
+              const ry =
+                d.height && d.height < 0 ? (d.y ?? 0) + d.height : (d.y ?? 0);
+              return (
+                <Rect
+                  key={`dark-rev-${s.id}`}
+                  x={rx}
+                  y={ry}
+                  width={Math.abs(d.width ?? 0)}
+                  height={Math.abs(d.height ?? 0)}
+                  {...revealProps}
+                />
+              );
+            }
+            if (s.shape_kind === "circle") {
+              return (
+                <Circle
+                  key={`dark-rev-${s.id}`}
+                  x={d.x ?? 0}
+                  y={d.y ?? 0}
+                  radius={Math.max(d.radius ?? 0, 2)}
+                  {...revealProps}
+                />
+              );
+            }
+            return (
+              <Line
+                key={`dark-rev-${s.id}`}
+                points={d.points ?? []}
+                closed
+                {...revealProps}
+              />
+            );
+          })}
+
+          {/* Rastro de áreas já exploradas (penumbra coordenada com a névoa) */}
+          {exploredSpots.map((sp, idx) => (
+            <Circle
+              key={`dark-exp-${idx}`}
+              x={sp.x}
+              y={sp.y}
+              radius={sp.radiusPx}
+              globalCompositeOperation="destination-out"
+              opacity={0.56}
+              fillRadialGradientStartPoint={{ x: 0, y: 0 }}
+              fillRadialGradientEndPoint={{ x: 0, y: 0 }}
+              fillRadialGradientStartRadius={0}
+              fillRadialGradientEndRadius={sp.radiusPx}
+              fillRadialGradientColorStops={[
+                0,
+                "rgba(0,0,0,1)",
+                0.7,
+                "rgba(0,0,0,0.85)",
+                1,
+                "rgba(0,0,0,0)",
+              ]}
+            />
+          ))}
 
           {/* Recortes de visão & luz com queda suave (radial gradient) */}
           {sources.map((src) => (

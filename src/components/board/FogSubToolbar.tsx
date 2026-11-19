@@ -1,6 +1,8 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import {
+  ChevronDown,
   Circle,
   CloudFog,
   Eraser,
@@ -12,6 +14,7 @@ import {
   MousePointer,
   Pentagon,
   Scissors,
+  SlidersHorizontal,
   Square,
   Trash2,
 } from "lucide-react";
@@ -59,17 +62,33 @@ export default function FogSubToolbar({
     gmFogOpacity,
     setGmFogOpacity,
   } = useBoardStore();
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const settingsRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!settingsOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (
+        settingsRef.current &&
+        !settingsRef.current.contains(e.target as Node)
+      ) {
+        setSettingsOpen(false);
+      }
+    };
+    window.addEventListener("mousedown", onDown);
+    return () => window.removeEventListener("mousedown", onDown);
+  }, [settingsOpen]);
 
   if (!isGm || tool !== "fog") {
     return null;
   }
 
   return (
-    <div className="pointer-events-auto absolute top-14 left-1/2 z-20 flex max-w-[95vw] -translate-x-1/2 flex-wrap items-center gap-1.5 rounded-xl border border-amber-500/35 bg-zinc-950/95 px-2.5 py-1.5 text-xs shadow-2xl backdrop-blur">
+    <div className="pointer-events-auto absolute top-14 left-1/2 z-20 flex max-w-[92vw] -translate-x-1/2 flex-wrap items-center gap-1 rounded-xl border border-amber-500/35 bg-zinc-950/95 px-2 py-1.5 text-xs shadow-2xl backdrop-blur">
       <button
         type="button"
         onClick={() => onToggleFogEnabled(!scene.fog_enabled)}
-        className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1 font-bold transition ${
+        className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 font-bold transition ${
           scene.fog_enabled
             ? "border-amber-500/50 bg-amber-500/20 text-amber-200"
             : "border-zinc-700 bg-zinc-800 text-zinc-400"
@@ -78,17 +97,6 @@ export default function FogSubToolbar({
         <CloudFog className="h-3.5 w-3.5" />
         Névoa {scene.fog_enabled ? "ON" : "OFF"}
       </button>
-
-      <select
-        value={scene.fog_mode ?? "static"}
-        onChange={(e) => onChangeFogMode(e.target.value as FogMode)}
-        title="Modo da Névoa"
-        className="rounded-lg border border-zinc-800 bg-zinc-900 px-2 py-1 text-[11px] font-medium text-zinc-200"
-      >
-        <option value="static">Estática</option>
-        <option value="dynamic">Dinâmica (Luz/Paredes)</option>
-        <option value="hybrid">Híbrida (Ambas)</option>
-      </select>
 
       <button
         type="button"
@@ -138,11 +146,11 @@ export default function FogSubToolbar({
 
       {(
         [
-          { mode: "rect", label: "Blocos/Retângulo", icon: Square },
-          { mode: "select", label: "Selecionar Bloco", icon: MousePointer },
+          { mode: "rect", label: "Blocos", icon: Square },
+          { mode: "select", label: "Selecionar", icon: MousePointer },
           { mode: "circle", label: "Círculo", icon: Circle },
           { mode: "polygon", label: "Polígono", icon: Pentagon },
-          { mode: "slice", label: "Slice (Cortar)", icon: Scissors },
+          { mode: "slice", label: "Slice", icon: Scissors },
         ] as const
       ).map((item) => {
         const Icon = item.icon;
@@ -165,22 +173,6 @@ export default function FogSubToolbar({
         );
       })}
 
-      <button
-        type="button"
-        onClick={() =>
-          setFogToolConfig({ snapToGrid: !fogToolConfig.snapToGrid })
-        }
-        title="Encaixar blocos de névoa exatamente nos quadrados do grid"
-        className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-semibold transition ${
-          fogToolConfig.snapToGrid
-            ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-200"
-            : "border-zinc-700 bg-zinc-900 text-zinc-400"
-        }`}
-      >
-        <Grid className="h-3 w-3" />
-        Blocos {fogToolConfig.snapToGrid ? "ON" : "OFF"}
-      </button>
-
       {selectedFogShapeId && (
         <button
           type="button"
@@ -189,7 +181,7 @@ export default function FogSubToolbar({
           className="inline-flex items-center gap-1 rounded-lg border border-rose-500/50 bg-rose-500/20 px-2 py-1 font-bold text-rose-200 hover:bg-rose-500/30"
         >
           <Trash2 className="h-3.5 w-3.5" />
-          Excluir Bloco
+          Excluir
         </button>
       )}
 
@@ -199,19 +191,9 @@ export default function FogSubToolbar({
           onClick={onFinishPolygon}
           className="rounded-lg bg-emerald-500 px-2.5 py-1 font-bold text-zinc-950 hover:bg-emerald-400"
         >
-          Fechar Polígono
+          Fechar
         </button>
       )}
-
-      <div className="mx-0.5 h-4 w-px bg-zinc-800" />
-
-      <button
-        type="button"
-        onClick={onCoverAll}
-        className="rounded-lg border border-zinc-700 bg-zinc-900 px-2 py-1 font-medium text-amber-200 hover:bg-zinc-800"
-      >
-        Cobrir Tudo
-      </button>
 
       {exploredCount > 0 && (
         <button
@@ -221,77 +203,143 @@ export default function FogSubToolbar({
           className="inline-flex items-center gap-1 rounded-lg border border-zinc-700 bg-zinc-900 px-2 py-1 text-[11px] font-medium text-sky-200 hover:bg-zinc-800"
         >
           <Footprints className="h-3 w-3" />
-          Resetar Rastro
+          <span className="hidden md:inline">Rastro</span>
         </button>
       )}
 
       <button
         type="button"
         onClick={onClearAll}
+        title="Limpar toda a névoa da cena"
         className="inline-flex items-center gap-1 rounded-lg border border-rose-500/30 bg-rose-500/10 px-2 py-1 font-medium text-rose-300 hover:bg-rose-500/20"
       >
         <Eraser className="h-3.5 w-3.5" />
-        Limpar Névoa
+        <span className="hidden sm:inline">Limpar</span>
       </button>
 
-      <div className="mx-0.5 h-4 w-px bg-zinc-800" />
+      {/* Popover de Ajustes da Névoa & Escuridão */}
+      <div ref={settingsRef} className="relative">
+        <button
+          type="button"
+          onClick={() => setSettingsOpen((v) => !v)}
+          className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 font-semibold transition ${
+            settingsOpen
+              ? "border-amber-400 bg-zinc-800 text-amber-200"
+              : "border-zinc-700 bg-zinc-900 text-zinc-200 hover:border-amber-500/40"
+          }`}
+        >
+          <SlidersHorizontal className="h-3.5 w-3.5" />
+          <span className="hidden sm:inline">Ajustes</span>
+          <ChevronDown
+            className={`h-3 w-3 transition-transform ${
+              settingsOpen ? "rotate-180" : ""
+            }`}
+          />
+        </button>
 
-      <div
-        className="flex items-center gap-1.5"
-        title="Luz Ambiente / Escuridão da Cena (0% breu · 100% claro)"
-      >
-        <Moon className="h-3 w-3 text-indigo-300" />
-        <span className="text-[11px] text-zinc-400">Luz:</span>
-        <input
-          type="range"
-          min={0}
-          max={1}
-          step={0.05}
-          value={scene.ambient_light ?? 1}
-          onChange={(e) => onChangeAmbientLight(Number(e.target.value))}
-          className="w-16 accent-indigo-400"
-        />
-        <span className="w-8 font-mono text-[10px] text-indigo-200">
-          {Math.round((scene.ambient_light ?? 1) * 100)}%
-        </span>
-      </div>
+        {settingsOpen && (
+          <div className="absolute top-full right-0 z-30 mt-2 w-72 space-y-2.5 rounded-2xl border border-amber-500/35 bg-zinc-950/95 p-3 text-xs shadow-2xl backdrop-blur">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[11px] text-zinc-400">Modo da Névoa</span>
+              <select
+                value={scene.fog_mode ?? "static"}
+                onChange={(e) => onChangeFogMode(e.target.value as FogMode)}
+                className="rounded-lg border border-zinc-800 bg-zinc-900 px-2 py-1 text-[11px] font-medium text-zinc-200"
+              >
+                <option value="static">Estática</option>
+                <option value="dynamic">Dinâmica (Luz/Paredes)</option>
+                <option value="hybrid">Híbrida (Ambas)</option>
+              </select>
+            </div>
 
-      <div
-        className="flex items-center gap-1.5"
-        title="Intensidade da Névoa para toda a mesa (5% quase invisível · 100% fechada)"
-      >
-        <span className="text-[11px] text-zinc-400">Intensidade:</span>
-        <input
-          type="range"
-          min={0.05}
-          max={1}
-          step={0.05}
-          value={fogIntensity}
-          onChange={(e) => onChangeFogIntensity(Number(e.target.value))}
-          className="w-16 accent-amber-400"
-        />
-        <span className="w-8 font-mono text-[10px] text-amber-200">
-          {Math.round(fogIntensity * 100)}%
-        </span>
-      </div>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[11px] text-zinc-400">
+                Encaixar Blocos no Grid
+              </span>
+              <button
+                type="button"
+                onClick={() =>
+                  setFogToolConfig({ snapToGrid: !fogToolConfig.snapToGrid })
+                }
+                className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-semibold ${
+                  fogToolConfig.snapToGrid
+                    ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-200"
+                    : "border-zinc-700 bg-zinc-900 text-zinc-400"
+                }`}
+              >
+                <Grid className="h-3 w-3" />
+                {fogToolConfig.snapToGrid ? "ON" : "OFF"}
+              </button>
+            </div>
 
-      <div
-        className="flex items-center gap-1.5"
-        title="Visibilidade da Névoa só para você (Mestre): 5% quase invisível · 100% igual jogador"
-      >
-        <span className="text-[11px] text-zinc-400">Visão GM:</span>
-        <input
-          type="range"
-          min={0.05}
-          max={1}
-          step={0.05}
-          value={gmFogOpacity}
-          onChange={(e) => setGmFogOpacity(Number(e.target.value))}
-          className="w-16 accent-sky-400"
-        />
-        <span className="w-8 font-mono text-[10px] text-sky-200">
-          {Math.round(gmFogOpacity * 100)}%
-        </span>
+            <div className="space-y-1 border-t border-zinc-800/80 pt-2">
+              <div className="flex items-center justify-between text-[11px]">
+                <span className="text-zinc-400">Luz / Escuridão</span>
+                <span className="font-mono text-indigo-200">
+                  {Math.round((scene.ambient_light ?? 1) * 100)}%
+                </span>
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={1}
+                step={0.05}
+                value={scene.ambient_light ?? 1}
+                onChange={(e) => onChangeAmbientLight(Number(e.target.value))}
+                className="w-full accent-indigo-400"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <div className="flex items-center justify-between text-[11px]">
+                <span className="text-zinc-400">Intensidade (Mesa)</span>
+                <span className="font-mono text-amber-200">
+                  {Math.round(fogIntensity * 100)}%
+                </span>
+              </div>
+              <input
+                type="range"
+                min={0.05}
+                max={1}
+                step={0.05}
+                value={fogIntensity}
+                onChange={(e) => onChangeFogIntensity(Number(e.target.value))}
+                className="w-full accent-amber-400"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <div className="flex items-center justify-between text-[11px]">
+                <span className="text-zinc-400">Visão GM (Sua Tela)</span>
+                <span className="font-mono text-sky-200">
+                  {Math.round(gmFogOpacity * 100)}%
+                </span>
+              </div>
+              <input
+                type="range"
+                min={0.05}
+                max={1}
+                step={0.05}
+                value={gmFogOpacity}
+                onChange={(e) => setGmFogOpacity(Number(e.target.value))}
+                className="w-full accent-sky-400"
+              />
+            </div>
+
+            <div className="border-t border-zinc-800/80 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  onCoverAll();
+                  setSettingsOpen(false);
+                }}
+                className="w-full rounded-xl border border-amber-500/40 bg-amber-500/15 py-1.5 text-[11px] font-bold text-amber-200 hover:bg-amber-500/25"
+              >
+                Cobrir Todo o Mapa
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

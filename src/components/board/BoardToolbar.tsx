@@ -76,6 +76,7 @@ export default function BoardToolbar({
   scene,
   isGm,
   onSyncView,
+  onQuickRoll,
   onClearPinnedRulers,
   onBroadcastMusicState,
   onOpenSceneManager,
@@ -83,6 +84,7 @@ export default function BoardToolbar({
   scene: Scene;
   isGm: boolean;
   onSyncView?: (x: number, y: number, scale: number) => void;
+  onQuickRoll?: (cmd: string) => void;
   onClearPinnedRulers?: () => void;
   onBroadcastMusicState?: (state: Omit<MusicStatePayload, "userId">) => void;
   onOpenSceneManager?: () => void;
@@ -464,84 +466,25 @@ export default function BoardToolbar({
   ];
 
   return (
-    <div className="pointer-events-none absolute inset-x-0 top-3 z-20 flex flex-wrap items-center justify-between gap-2 px-4">
-      {/* Ferramentas do Tabuleiro */}
-      <div className="pointer-events-auto flex items-center gap-1 rounded-xl border border-amber-500/30 bg-zinc-950/90 p-1 shadow-xl backdrop-blur">
-        {tools.map((t) => {
-          const Icon = t.icon;
-          const active = tool === t.id;
-          return (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => setTool(t.id)}
-              title={`${t.label} (${t.shortcut})`}
-              className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition ${
-                active
-                  ? "bg-gradient-to-r from-amber-500 to-amber-600 text-zinc-950 shadow"
-                  : "text-zinc-300 hover:bg-zinc-800 hover:text-amber-200"
-              }`}
-            >
-              <Icon className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">{t.label.split(" ")[0]}</span>
-              <kbd
-                className={`rounded px-1 text-[10px] ${
-                  active
-                    ? "bg-amber-700/30 text-zinc-950"
-                    : "bg-zinc-800 text-zinc-400"
-                }`}
-              >
-                {t.shortcut}
-              </kbd>
-            </button>
-          );
-        })}
-
-        <div className="mx-1 h-4 w-px bg-zinc-800" />
-
-        {tool === "ruler" && (
+    <>
+      {/* Barra Superior Limpa (Áudio/Músicas · Cena · Zoom) */}
+      <div className="pointer-events-none absolute inset-x-0 top-3 z-20 flex items-center justify-between gap-2 px-3">
+        <div className="pointer-events-auto flex items-center gap-1 rounded-xl border border-amber-500/30 bg-zinc-950/90 p-1 shadow-xl backdrop-blur">
           <button
             type="button"
-            onClick={() => setRulerPinMode(!rulerPinMode)}
-            title="Fixar réguas no mapa ao soltar (ou segure Shift)"
-            className={`flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs font-semibold transition ${
-              rulerPinMode
-                ? "border border-purple-500/40 bg-purple-500/20 text-purple-200"
-                : "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+            onClick={() => setDice3dEnabled(!dice3dEnabled)}
+            title="Ativar/Desativar Dados 3D rolando no tabuleiro"
+            className={`flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-semibold transition ${
+              dice3dEnabled
+                ? "border border-amber-500/40 bg-amber-500/15 text-amber-300"
+                : "text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300"
             }`}
           >
-            <Pin className="h-3.5 w-3.5" />
-            <span className="hidden lg:inline">Fixar</span>
+            <Dices className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">
+              3D {dice3dEnabled ? "ON" : "OFF"}
+            </span>
           </button>
-        )}
-
-        {scenePinnedCount > 0 && onClearPinnedRulers && (
-          <button
-            type="button"
-            onClick={onClearPinnedRulers}
-            title="Limpar réguas fixadas nesta cena"
-            className="flex items-center gap-1 rounded-lg border border-rose-500/30 bg-rose-500/10 px-2 py-1.5 text-xs font-semibold text-rose-300 transition hover:bg-rose-500/20"
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-            <span className="hidden lg:inline">Réguas ({scenePinnedCount})</span>
-          </button>
-        )}
-
-        <button
-          type="button"
-          onClick={() => setDice3dEnabled(!dice3dEnabled)}
-          title="Ativar/Desativar Dados 3D rolando no tabuleiro"
-          className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition ${
-            dice3dEnabled
-              ? "border border-amber-500/40 bg-amber-500/15 text-amber-300"
-              : "text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300"
-          }`}
-        >
-          <Dices className="h-3.5 w-3.5" />
-          <span className="hidden sm:inline">
-            3D {dice3dEnabled ? "ON" : "OFF"}
-          </span>
-        </button>
 
         <button
           type="button"
@@ -1118,5 +1061,94 @@ export default function BoardToolbar({
         </button>
       </div>
     </div>
+
+      {/* Dock Vertical Esquerda (Ferramentas VTT + Dados Rápidos) */}
+      <div className="pointer-events-none absolute top-14 left-3 z-20 flex flex-col items-start gap-2">
+        <div className="pointer-events-auto flex flex-col gap-1 rounded-xl border border-amber-500/30 bg-zinc-950/90 p-1 shadow-xl backdrop-blur">
+          {tools.map((t) => {
+            const Icon = t.icon;
+            const active = tool === t.id;
+            return (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => setTool(t.id)}
+                title={`${t.label} (${t.shortcut})`}
+                className={`relative flex h-8 w-8 items-center justify-center rounded-lg transition ${
+                  active
+                    ? "bg-gradient-to-br from-amber-400 to-amber-600 text-zinc-950 shadow"
+                    : "text-zinc-300 hover:bg-zinc-800 hover:text-amber-200"
+                }`}
+              >
+                <Icon className="h-4 w-4" />
+                <span
+                  className={`pointer-events-none absolute right-0.5 bottom-0 text-[8px] font-bold ${
+                    active ? "text-zinc-950/80" : "text-zinc-500"
+                  }`}
+                >
+                  {t.shortcut}
+                </span>
+              </button>
+            );
+          })}
+
+          {tool === "ruler" && (
+            <button
+              type="button"
+              onClick={() => setRulerPinMode(!rulerPinMode)}
+              title="Fixar réguas no mapa ao soltar (ou segure Shift)"
+              className={`flex h-8 w-8 items-center justify-center rounded-lg border transition ${
+                rulerPinMode
+                  ? "border-purple-500/50 bg-purple-500/25 text-purple-200"
+                  : "border-zinc-800 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+              }`}
+            >
+              <Pin className="h-3.5 w-3.5" />
+            </button>
+          )}
+
+          {scenePinnedCount > 0 && onClearPinnedRulers && (
+            <button
+              type="button"
+              onClick={onClearPinnedRulers}
+              title={`Limpar ${scenePinnedCount} régua(s) fixada(s)`}
+              className="relative flex h-8 w-8 items-center justify-center rounded-lg border border-rose-500/30 bg-rose-500/15 text-rose-300 transition hover:bg-rose-500/25"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              <span className="absolute -top-1 -right-1 flex h-3.5 min-w-[14px] items-center justify-center rounded-full bg-rose-500 px-0.5 text-[9px] font-bold text-white">
+                {scenePinnedCount}
+              </span>
+            </button>
+          )}
+        </div>
+
+        {onQuickRoll && (
+          <div
+            className="pointer-events-auto flex flex-col gap-0.5 rounded-xl border border-zinc-800/90 bg-zinc-950/90 p-1 shadow-xl backdrop-blur"
+            title="Rolagem rápida de dados"
+          >
+            {[
+              { label: "d20", cmd: "/r 1d20", color: "text-amber-300" },
+              { label: "d12", cmd: "/r 1d12", color: "text-zinc-200" },
+              { label: "d10", cmd: "/r 1d10", color: "text-zinc-200" },
+              { label: "d8", cmd: "/r 1d8", color: "text-zinc-200" },
+              { label: "d6", cmd: "/r 1d6", color: "text-zinc-200" },
+              { label: "d4", cmd: "/r 1d4", color: "text-zinc-200" },
+              { label: "d%", cmd: "/r 1d%", color: "text-sky-300" },
+            ].map((die) => (
+              <button
+                key={die.label}
+                type="button"
+                onClick={() => onQuickRoll(die.cmd)}
+                title={`Rolar 1${die.label} no chat e 3D`}
+                className={`flex h-7 w-8 items-center justify-center rounded-lg font-mono text-[10px] font-bold transition hover:bg-amber-500/20 hover:text-amber-200 ${die.color}`}
+              >
+                {die.label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </>
   );
 }

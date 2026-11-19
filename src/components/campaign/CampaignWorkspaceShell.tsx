@@ -20,7 +20,7 @@ import {
   Users,
   Wifi,
 } from "lucide-react";
-import { loadOlderMessagesAction } from "@/actions/chat";
+import { loadOlderMessagesAction, sendChatMessageAction } from "@/actions/chat";
 import BoardClient from "@/components/board/BoardClient";
 import Dice3DOverlay from "@/components/board/Dice3DOverlay";
 import InitiativeTrackerBar from "@/components/board/InitiativeTrackerBar";
@@ -656,6 +656,18 @@ export default function CampaignWorkspaceShell({
                 onPointerBroadcast={handlePointerBroadcast}
                 onDrawPreviewBroadcast={handleDrawPreviewBroadcast}
                 onSyncView={handleSyncView}
+                onQuickRoll={(cmd) => {
+                  void sendChatMessageAction({
+                    campaignId: campaign.id,
+                    content: cmd,
+                  }).then((res) => {
+                    if (!res.ok) {
+                      showError(res.error ?? "Erro ao rolar dado.");
+                    } else if (res.message) {
+                      appendOrDedupeMessage(res.message);
+                    }
+                  });
+                }}
                 onBroadcastMusicState={(st: Omit<MusicStatePayload, "userId">) =>
                   broadcastMusicState(st)
                 }

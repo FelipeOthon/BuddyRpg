@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Eye } from "lucide-react";
+import { Eye, HelpCircle } from "lucide-react";
 import { Layer, Rect, Stage } from "react-konva";
 import type Konva from "konva";
 import type { KonvaEventObject } from "konva/lib/Node";
@@ -74,6 +74,7 @@ export default function BoardCanvas({
   onPointerBroadcast,
   onDrawPreviewBroadcast,
   onSyncView,
+  onQuickRoll,
   onBroadcastMusicState,
   onOpenSceneManager,
 }: {
@@ -105,6 +106,7 @@ export default function BoardCanvas({
     preview: Omit<DrawPreviewPayload, "userId" | "sceneId">
   ) => void;
   onSyncView?: (x: number, y: number, scale: number) => void;
+  onQuickRoll?: (cmd: string) => void;
   onBroadcastMusicState?: (state: Omit<MusicStatePayload, "userId">) => void;
   onOpenSceneManager?: () => void;
 }) {
@@ -135,6 +137,7 @@ export default function BoardCanvas({
     y: number;
   } | null>(null);
   const [isDragOverFile, setIsDragOverFile] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
   const [pendingDrop, setPendingDrop] = useState<{
     file: File;
     world: Point2D;
@@ -1373,6 +1376,7 @@ export default function BoardCanvas({
             scene={scene}
             isGm={role === "gm"}
             onSyncView={onSyncView}
+            onQuickRoll={onQuickRoll}
             onBroadcastMusicState={onBroadcastMusicState}
             onOpenSceneManager={onOpenSceneManager}
             onClearPinnedRulers={() => {
@@ -1781,6 +1785,9 @@ export default function BoardCanvas({
             scene={scene}
             tokens={renderedTokens}
             walls={walls}
+            fogShapes={fogShapes}
+            exploredSpots={exploredMemory[scene.id] ?? []}
+            gmFogOpacity={gmFogOpacity}
             remoteTokenDrags={remoteTokenDrags}
             localTokenDragPos={localTokenDragPos}
             currentUserId={currentUserId}
@@ -1878,10 +1885,54 @@ export default function BoardCanvas({
         height={size.height}
       />
 
-      {/* Dica de controles no rodapé do tabuleiro */}
+      {/* Botão discreto de Atalhos (?) no canto inferior esquerdo */}
       {!uiHidden && (
-        <div className="pointer-events-none absolute bottom-3 left-4 z-10 hidden rounded-lg border border-zinc-800/80 bg-zinc-900/80 px-3 py-1.5 text-[11px] text-zinc-400 backdrop-blur sm:block">
-          Zoom: Scroll · Pan: Espaço · Pointer: Botão Dir. (Q) · Desenhar: D · Texto: T · Régua: R (Shift fixa) · Solte imagem p/ Token
+        <div className="pointer-events-auto absolute bottom-3 left-3 z-20">
+          {helpOpen && (
+            <div className="mb-2 w-72 rounded-2xl border border-zinc-800 bg-zinc-950/95 p-3 text-[11px] text-zinc-300 shadow-2xl backdrop-blur">
+              <p className="mb-1.5 font-semibold text-amber-200">
+                Atalhos do Tabuleiro
+              </p>
+              <ul className="space-y-1 text-zinc-400">
+                <li>
+                  <strong className="text-zinc-200">Scroll</strong>: Zoom ·{" "}
+                  <strong className="text-zinc-200">Espaço</strong>: Mover mapa
+                </li>
+                <li>
+                  <strong className="text-zinc-200">Botão Direito / Q</strong>:
+                  Ponteiro laser
+                </li>
+                <li>
+                  <strong className="text-zinc-200">Alt (ao arrastar)</strong>:
+                  Soltar fora do grid
+                </li>
+                <li>
+                  <strong className="text-zinc-200">Shift + Régua</strong>:
+                  Fixar medição no mapa
+                </li>
+                <li>
+                  <strong className="text-zinc-200">Delete / Backspace</strong>:
+                  Excluir item selecionado
+                </li>
+                <li>
+                  <strong className="text-zinc-200">Arrastar imagem</strong>:
+                  Criar Peça de Mapa ou Token
+                </li>
+              </ul>
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={() => setHelpOpen((v) => !v)}
+            title="Atalhos e dicas de controle"
+            className={`flex h-8 w-8 items-center justify-center rounded-xl border shadow-lg backdrop-blur transition ${
+              helpOpen
+                ? "border-amber-400 bg-zinc-900 text-amber-200"
+                : "border-zinc-800 bg-zinc-950/85 text-zinc-400 hover:border-amber-500/40 hover:text-amber-200"
+            }`}
+          >
+            <HelpCircle className="h-4 w-4" />
+          </button>
         </div>
       )}
     </div>
