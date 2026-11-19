@@ -11,6 +11,7 @@ import type {
   FogOperation,
   FogShapeData,
   FogShapeKind,
+  RevealMode,
   Scene,
   SceneFogShape,
 } from "@/types/domain";
@@ -28,6 +29,7 @@ export async function updateSceneFogSettingsAction(input: {
   campaignId: string;
   fogEnabled: boolean;
   fogMode?: FogMode;
+  fogRevealMode?: RevealMode;
   fogColor?: string;
 }): Promise<FogActionResult> {
   const parsed = updateSceneFogSettingsSchema.safeParse(input);
@@ -50,6 +52,9 @@ export async function updateSceneFogSettingsAction(input: {
     .update({
       fog_enabled: v.fogEnabled,
       ...(v.fogMode !== undefined ? { fog_mode: v.fogMode } : {}),
+      ...(v.fogRevealMode !== undefined
+        ? { fog_reveal_mode: v.fogRevealMode }
+        : {}),
       ...(v.fogColor !== undefined ? { fog_color: v.fogColor } : {}),
     })
     .eq("id", v.sceneId)

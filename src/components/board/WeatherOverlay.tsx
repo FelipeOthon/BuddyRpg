@@ -1,11 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useRef } from "react";
+import { getSmokeTextures } from "@/lib/board/smokeTexture";
+import { parseWeatherEffects } from "@/lib/board/weatherPresets";
 import { useBoardStore } from "@/stores/boardStore";
 import type {
   FxBurstPreset,
   SceneElement,
   SceneElementData,
+  WeatherEffect,
   WeatherPreset,
 } from "@/types/domain";
 
@@ -19,10 +22,10 @@ interface Particle {
   size: number;
   alpha: number;
   phase: number;
-  depth: number; // 0 = fundo distante, 1 = primeiro plano
+  depth: number;
   rot: number;
   rotSpeed: number;
-  emberTint: boolean;
+  variant: number;
 }
 
 interface RainRipple {
@@ -33,11 +36,23 @@ interface RainRipple {
   maxRadius: number;
 }
 
-interface WeatherSimState {
+interface LightningBolt {
+  segments: Array<{ x1: number; y1: number; x2: number; y2: number; width: number }>;
+  alpha: number;
+}
+
+interface EffectSim {
+  effect: WeatherEffect;
   particles: Particle[];
   ripples: RainRipple[];
   lightningAlpha: number;
   nextLightningSec: number;
+  bolts: LightningBolt[];
+  elapsed: number;
+}
+
+interface MultiWeatherSim {
+  effects: EffectSim[];
 }
 
 interface WeatherZone {
@@ -58,26 +73,85 @@ const BURST_COLORS: Record<FxBurstPreset, [string, string]> = {
   heal: ["#34d399", "#10b981"],
 };
 
-function buildSimState(
-  preset: WeatherPreset,
+const EFFECT_RENDER_ORDER: Record<WeatherEffect, number> = {
+  nightfall: 0,
+  fog_mist: 1,
+  ash: 2,
+  rain: 3,
+  snow: 4,
+  embers: 5,
+};
+
+function generateLightningBolt(
+  startX: number,
+  boundsW: number,
+  boundsH: number
+): LightningBolt {
+  const segments: LightningBolt["segments"] = [];
+  let cx = startX;
+  let cy = 0;
+  const targetY = boundsH * (0.45 + Math.random() * 0.42);
+  const steps = 10 + Math.floor(Math.random() * 6);
+  const stepY = targetY / steps;
+
+  for (let i = 0; i < steps; i++) {
+    const nx = Math.min(
+      boundsW,
+      Math.max(0, cx + (Math.random() - 0.52) * (boundsW * 0.085))
+    );
+    const ny = cy + stepY * (0.75 + Math.random() * 0.5);
+    const width = Math.max(0.8, 3.2 - (i / steps) * 2.2);
+    segments.push({ x1: cx, y1: cy, x2: nx, y2: ny, width });
+
+    if (i > 1 && i < steps - 2 && Math.random() < 0.45) {
+      let bx = nx;
+      let by = ny;
+      const dir = Math.random() < 0.5 ? -1 : 1;
+      for (let b = 0; b < 3; b++) {
+        const bnx = bx + dir * (12 + Math.random() * 28);
+        const bny = by + 16 + Math.random() * 26;
+        segments.push({
+          x1: bx,
+          y1: by,
+          x2: bnx,
+          y2: bny,
+          width: Math.max(0.5, width * 0.48),
+        });
+        bx = bnx;
+        by = bny;
+      }
+    }
+
+    cx = nx;
+    cy = ny;
+  }
+
+  return { segments, alpha: 0.95 };
+}
+
+function buildEffectSim(
+  effect: WeatherEffect,
   intensity: number,
   boundsW: number,
   boundsH: number,
-  areaScale = 1
-): WeatherSimState {
+  areaScale: number
+): EffectSim {
   const clamped = Math.min(Math.max(intensity, 0.1), 1);
   const baseCount =
-    preset === "rain"
-      ? 190
-      : preset === "snow"
-        ? 135
-        : preset === "fog_mist"
-          ? 24
-          : preset === "embers"
-            ? 95
-            : preset === "ash"
-              ? 110
-              : 0;
+    effect === "rain"
+      ? 240
+      : effect === "snow"
+        ? 160
+        : effect === "fog_mist"
+          ? 22
+          : effect === "embers"
+            ? 110
+            : effect === "ash"
+              ? 125
+              : effect === "nightfall"
+                ? 42
+                : 0;
+
   const count =
     baseCount > 0
       ? Math.max(8, Math.round(baseCount * clamped * areaScale))
@@ -85,10 +159,10 @@ function buildSimState(
 
   const particles: Particle[] = [];
   for (let i = 0; i < count; i++) {
-    const depth = Math.random(); // paralaxe contínua
+    const depth = Math.random();
     const x = Math.random() * boundsW;
     const y = Math.random() * boundsH;
-    const speedMult = 0.55 + depth * 0.75;
+    const speedMult = 0.52 + depth * 0.85;
 
     particles.push({
       x,
@@ -96,267 +170,561 @@ function buildSimState(
       prevX: x,
       prevY: y,
       vx:
-        preset === "rain"
-          ? (-145 - Math.random() * 45) * speedMult
-          : preset === "fog_mist"
-            ? (14 + Math.random() * 20) * speedMult
-            : preset === "snow"
-              ? (Math.random() - 0.35) * 26 * speedMult
-              : (Math.random() - 0.5) * 36 * speedMult,
+        effect === "rain"
+          ? (-165 - Math.random() * 55) * speedMult
+          : effect === "fog_mist"
+            ? (16 + Math.random() * 24) * speedMult
+            : effect === "snow"
+              ? (Math.random() - 0.35) * 32 * speedMult
+              : effect === "nightfall"
+                ? (Math.random() - 0.5) * 18
+                : (Math.random() - 0.5) * 38 * speedMult,
       vy:
-        preset === "rain"
-          ? (760 + Math.random() * 340) * speedMult
-          : preset === "snow"
-            ? (32 + Math.random() * 52) * speedMult
-            : preset === "embers"
-              ? -(48 + Math.random() * 88) * speedMult
-              : preset === "ash"
+        effect === "rain"
+          ? (880 + Math.random() * 380) * speedMult
+          : effect === "snow"
+            ? (36 + Math.random() * 56) * speedMult
+            : effect === "embers"
+              ? -(58 + Math.random() * 98) * speedMult
+              : effect === "ash"
                 ? (22 + Math.random() * 34) * speedMult
-                : (Math.random() - 0.5) * 6,
+                : effect === "nightfall"
+                  ? (Math.random() - 0.5) * 14
+                  : (Math.random() - 0.5) * 7,
       size:
-        preset === "fog_mist"
-          ? (Math.min(220, Math.max(70, boundsW * 0.28)) + Math.random() * 110) *
-            (0.75 + depth * 0.5)
-          : preset === "rain"
-            ? (13 + Math.random() * 16) * (0.7 + depth * 0.6)
-            : preset === "snow"
-              ? 1.8 + depth * 4.4
-              : preset === "ash"
-                ? 2.2 + depth * 3.8
-                : 1.5 + depth * 2.8,
+        effect === "fog_mist"
+          ? (Math.min(260, Math.max(90, boundsW * 0.3)) + Math.random() * 140) *
+            (0.7 + depth * 0.6)
+          : effect === "rain"
+            ? 14 + depth * 22
+            : effect === "snow"
+              ? 1.3 + depth * 4.2
+              : effect === "embers"
+                ? 1.4 + depth * 3.1
+                : effect === "nightfall"
+                  ? 1.4 + depth * 2.4
+                  : 1.6 + depth * 3.4,
       alpha:
-        preset === "fog_mist"
-          ? 0.055 + (1 - depth * 0.4) * 0.06
-          : 0.32 + depth * 0.58,
+        effect === "fog_mist"
+          ? 0.08 + Math.random() * 0.14
+          : effect === "rain"
+            ? 0.2 + depth * 0.45
+            : effect === "snow"
+              ? 0.25 + depth * 0.68
+              : effect === "embers"
+                ? 0.55 + depth * 0.45
+                : effect === "nightfall"
+                  ? 0.25 + depth * 0.55
+                  : 0.28 + Math.random() * 0.48,
       phase: Math.random() * Math.PI * 2,
       depth,
       rot: Math.random() * Math.PI * 2,
       rotSpeed: (Math.random() - 0.5) * 3.2,
-      emberTint: preset === "ash" ? Math.random() < 0.16 : false,
+      variant: Math.random(),
     });
   }
 
   return {
+    effect,
     particles,
     ripples: [],
     lightningAlpha: 0,
-    nextLightningSec: 4 + Math.random() * 8,
+    nextLightningSec: 3.5 + Math.random() * 7.5,
+    bolts: [],
+    elapsed: Math.random() * 20,
   };
 }
 
-function drawAtmosphericTint(
-  ctx: CanvasRenderingContext2D,
+function buildMultiSimState(
   preset: WeatherPreset,
   intensity: number,
-  w: number,
-  h: number,
-  lightningAlpha: number
-) {
-  const k = Math.min(Math.max(intensity, 0.1), 1);
-  if (preset === "rain") {
-    ctx.fillStyle = `rgba(10, 20, 38, ${0.12 + k * 0.14})`;
-    ctx.fillRect(0, 0, w, h);
-    if (lightningAlpha > 0.01) {
-      ctx.fillStyle = `rgba(219, 234, 254, ${lightningAlpha})`;
-      ctx.fillRect(0, 0, w, h);
-    }
-  } else if (preset === "snow") {
-    ctx.fillStyle = `rgba(186, 230, 253, ${0.04 + k * 0.06})`;
-    ctx.fillRect(0, 0, w, h);
-  } else if (preset === "embers") {
-    const glow = ctx.createLinearGradient(0, h, 0, 0);
-    glow.addColorStop(0, `rgba(234, 88, 12, ${0.09 + k * 0.11})`);
-    glow.addColorStop(0.55, `rgba(124, 45, 18, ${0.03 + k * 0.04})`);
-    glow.addColorStop(1, "rgba(0, 0, 0, 0)");
-    ctx.fillStyle = glow;
-    ctx.fillRect(0, 0, w, h);
-  } else if (preset === "ash") {
-    ctx.fillStyle = `rgba(24, 24, 27, ${0.11 + k * 0.12})`;
-    ctx.fillRect(0, 0, w, h);
-  } else if (preset === "fog_mist") {
-    ctx.fillStyle = `rgba(148, 163, 184, ${0.05 + k * 0.08})`;
-    ctx.fillRect(0, 0, w, h);
-  }
+  boundsW: number,
+  boundsH: number,
+  areaScale = 1
+): MultiWeatherSim {
+  const active = parseWeatherEffects(preset).sort(
+    (a, b) => EFFECT_RENDER_ORDER[a] - EFFECT_RENDER_ORDER[b]
+  );
+  return {
+    effects: active.map((eff) =>
+      buildEffectSim(eff, intensity, boundsW, boundsH, areaScale)
+    ),
+  };
 }
 
-function stepAndRenderWeatherSim(
+function drawNightfall(
   ctx: CanvasRenderingContext2D,
-  sim: WeatherSimState,
-  preset: WeatherPreset,
+  sim: EffectSim,
   intensity: number,
   boundsW: number,
   boundsH: number,
   dt: number
 ) {
-  ctx.save();
+  const clamped = Math.min(Math.max(intensity, 0.1), 1);
 
-  // Relâmpagos sutis e raros em tempestades de chuva intensas
-  if (preset === "rain" && intensity >= 0.45) {
+  // Crepúsculo/Anoitecer cinematográfico: azul-meia-noite + vinheta nas bordas
+  ctx.save();
+  const cx = boundsW * 0.5;
+  const cy = boundsH * 0.45;
+  const rad = Math.hypot(boundsW, boundsH) * 0.6;
+  const vignette = ctx.createRadialGradient(
+    cx,
+    cy,
+    rad * 0.12,
+    cx,
+    cy,
+    rad
+  );
+  vignette.addColorStop(0, `rgba(12, 22, 58, ${0.18 + clamped * 0.34})`);
+  vignette.addColorStop(0.65, `rgba(6, 12, 36, ${0.26 + clamped * 0.42})`);
+  vignette.addColorStop(1, `rgba(2, 5, 18, ${0.36 + clamped * 0.48})`);
+  ctx.fillStyle = vignette;
+  ctx.fillRect(0, 0, boundsW, boundsH);
+
+  // Feixe oblíquo suave de luar prateado vindo do canto superior esquerdo
+  const moonGrad = ctx.createLinearGradient(0, 0, boundsW * 0.72, boundsH * 0.65);
+  moonGrad.addColorStop(0, `rgba(148, 179, 240, ${0.06 + clamped * 0.08})`);
+  moonGrad.addColorStop(0.5, `rgba(105, 140, 215, ${0.02 + clamped * 0.03})`);
+  moonGrad.addColorStop(1, "rgba(15, 23, 42, 0)");
+  ctx.fillStyle = moonGrad;
+  ctx.fillRect(0, 0, boundsW, boundsH);
+
+  // Vagalumes bioluminescentes e poeira estelar cintilante
+  ctx.globalCompositeOperation = "lighter";
+  for (const p of sim.particles) {
+    p.phase += dt * (1.2 + p.depth * 1.4);
+    if (p.variant < 0.62) {
+      // Vagalume noturno flutuando com pulso suave
+      p.x += (p.vx + Math.sin(p.phase * 0.9) * 14) * dt;
+      p.y += (p.vy + Math.cos(p.phase * 1.1) * 11) * dt;
+      if (p.x < -10) p.x = boundsW + 10;
+      if (p.x > boundsW + 10) p.x = -10;
+      if (p.y < -10) p.y = boundsH + 10;
+      if (p.y > boundsH + 10) p.y = -10;
+
+      const pulse = Math.max(0.08, (Math.sin(p.phase * 1.7) + 1) * 0.5);
+      const glowR = p.size * (3.2 + pulse * 2.5);
+      const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, glowR);
+      const isWarm = p.variant < 0.42;
+      const coreRgb = isWarm ? "250, 224, 120" : "134, 239, 172";
+      const midRgb = isWarm ? "217, 179, 54" : "52, 211, 153";
+      g.addColorStop(0, `rgba(${coreRgb}, ${p.alpha * pulse * clamped})`);
+      g.addColorStop(0.35, `rgba(${midRgb}, ${p.alpha * pulse * 0.42 * clamped})`);
+      g.addColorStop(1, `rgba(${midRgb}, 0)`);
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, glowR, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      // Ponto estelar/poeira lunar cintilante
+      const twinkle = 0.25 + 0.75 * Math.pow((Math.sin(p.phase * 2.1) + 1) * 0.5, 2);
+      ctx.fillStyle = `rgba(199, 218, 255, ${p.alpha * twinkle * 0.55 * clamped})`;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size * 0.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  ctx.restore();
+}
+
+function drawFogMist(
+  ctx: CanvasRenderingContext2D,
+  sim: EffectSim,
+  intensity: number,
+  boundsW: number,
+  boundsH: number,
+  dt: number
+) {
+  const clamped = Math.min(Math.max(intensity, 0.1), 1);
+  const textures = getSmokeTextures();
+
+  ctx.save();
+  // Véu atmosférico frio
+  const wash = ctx.createLinearGradient(0, 0, 0, boundsH);
+  wash.addColorStop(0, `rgba(148, 163, 184, ${0.06 * clamped})`);
+  wash.addColorStop(0.55, `rgba(186, 200, 218, ${0.13 * clamped})`);
+  wash.addColorStop(1, `rgba(148, 163, 184, ${0.18 * clamped})`);
+  ctx.fillStyle = wash;
+  ctx.fillRect(0, 0, boundsW, boundsH);
+
+  // Camadas contínuas de nuvem FBM rolando em paralaxe (realismo volumétrico)
+  if (textures) {
+    const drawTilePass = (
+      img: HTMLCanvasElement,
+      scale: number,
+      speedX: number,
+      speedY: number,
+      alpha: number
+    ) => {
+      const pattern = ctx.createPattern(img, "repeat");
+      if (!pattern) return;
+      ctx.save();
+      ctx.globalAlpha = alpha * clamped;
+      const offX = (sim.elapsed * speedX) % (256 * scale);
+      const offY = (sim.elapsed * speedY) % (256 * scale);
+      ctx.translate(offX, offY);
+      ctx.scale(scale, scale);
+      ctx.fillStyle = pattern;
+      ctx.fillRect(
+        -offX / scale - 256,
+        -offY / scale - 256,
+        boundsW / scale + 512,
+        boundsH / scale + 512
+      );
+      ctx.restore();
+    };
+
+    drawTilePass(textures.dense, 2.4, 14, 5, 0.24);
+    drawTilePass(textures.wisps, 1.9, -21, 9, 0.28);
+  }
+
+  // Bancos de bruma suave orgânica em movimento
+  for (const p of sim.particles) {
+    p.phase += dt * 0.65;
+    p.x += p.vx * dt;
+    p.y += Math.sin(p.phase) * 9 * dt;
+    if (p.x - p.size > boundsW) p.x = -p.size;
+    if (p.y < -p.size) p.y = boundsH + p.size;
+    if (p.y > boundsH + p.size) p.y = -p.size;
+
+    const grad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.size);
+    grad.addColorStop(0, `rgba(220, 232, 248, ${p.alpha * clamped})`);
+    grad.addColorStop(0.5, `rgba(190, 206, 228, ${p.alpha * 0.48 * clamped})`);
+    grad.addColorStop(1, "rgba(180, 198, 220, 0)");
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.ellipse(
+      p.x,
+      p.y,
+      p.size * 1.25,
+      p.size * 0.72,
+      Math.sin(p.phase * 0.3) * 0.15,
+      0,
+      Math.PI * 2
+    );
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawRain(
+  ctx: CanvasRenderingContext2D,
+  sim: EffectSim,
+  intensity: number,
+  boundsW: number,
+  boundsH: number,
+  dt: number
+) {
+  const clamped = Math.min(Math.max(intensity, 0.1), 1);
+
+  ctx.save();
+  // Tonalidade cinza-azul de temporal
+  ctx.fillStyle = `rgba(10, 22, 46, ${0.11 * clamped})`;
+  ctx.fillRect(0, 0, boundsW, boundsH);
+
+  // Relâmpagos reais com ramificação quando chuva >= 35%
+  if (clamped >= 0.35) {
     sim.nextLightningSec -= dt;
     if (sim.nextLightningSec <= 0) {
-      sim.lightningAlpha = 0.22 + Math.random() * 0.18;
-      sim.nextLightningSec = 5 + Math.random() * 11;
-    } else if (sim.lightningAlpha > 0) {
-      sim.lightningAlpha = Math.max(0, sim.lightningAlpha - dt * 1.45);
+      sim.lightningAlpha = 0.2 + Math.random() * 0.28 * clamped;
+      sim.bolts.push(
+        generateLightningBolt(
+          boundsW * (0.15 + Math.random() * 0.7),
+          boundsW,
+          boundsH
+        )
+      );
+      sim.nextLightningSec =
+        Math.max(2.2, 8.5 - clamped * 5) + Math.random() * 6.5;
     }
-  } else {
-    sim.lightningAlpha = 0;
   }
 
-  drawAtmosphericTint(ctx, preset, intensity, boundsW, boundsH, sim.lightningAlpha);
+  if (sim.lightningAlpha > 0.004) {
+    ctx.fillStyle = `rgba(218, 235, 255, ${sim.lightningAlpha})`;
+    ctx.fillRect(0, 0, boundsW, boundsH);
+    sim.lightningAlpha *= Math.pow(0.015, dt);
+  }
 
-  if (preset === "embers") {
+  if (sim.bolts.length > 0) {
+    ctx.save();
     ctx.globalCompositeOperation = "lighter";
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    sim.bolts = sim.bolts.filter((bolt) => {
+      if (bolt.alpha < 0.04) return false;
+      ctx.strokeStyle = `rgba(186, 224, 255, ${bolt.alpha * 0.65})`;
+      ctx.shadowColor = "rgba(147, 197, 253, 0.9)";
+      ctx.shadowBlur = 12;
+      for (const seg of bolt.segments) {
+        ctx.lineWidth = seg.width;
+        ctx.beginPath();
+        ctx.moveTo(seg.x1, seg.y1);
+        ctx.lineTo(seg.x2, seg.y2);
+        ctx.stroke();
+      }
+      bolt.alpha *= Math.pow(0.008, dt);
+      return true;
+    });
+    ctx.restore();
   }
 
+  // Gotas em 3 camadas de profundidade com gradiente na cauda
+  ctx.lineCap = "round";
+  for (const p of sim.particles) {
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+
+    if (p.y > boundsH + 20) {
+      if (Math.random() < 0.34 * clamped && sim.ripples.length < 95) {
+        sim.ripples.push({
+          x: Math.random() * boundsW,
+          y: Math.random() * boundsH,
+          age: 0,
+          ttl: 0.34 + Math.random() * 0.24,
+          maxRadius: 4.5 + Math.random() * 9.5,
+        });
+      }
+      p.y = -25 - Math.random() * 45;
+      p.x = Math.random() * (boundsW + 180) - 30;
+    } else if (p.x < -40) {
+      p.x = boundsW + 25;
+    }
+
+    const tailX = p.x - p.vx * 0.025;
+    const tailY = p.y - p.vy * 0.025;
+    const g = ctx.createLinearGradient(tailX, tailY, p.x, p.y);
+    g.addColorStop(0, "rgba(186, 220, 255, 0)");
+    g.addColorStop(1, `rgba(220, 239, 255, ${p.alpha * clamped})`);
+
+    ctx.strokeStyle = g;
+    ctx.lineWidth = 0.75 + p.depth * 1.1;
+    ctx.beginPath();
+    ctx.moveTo(tailX, tailY);
+    ctx.lineTo(p.x, p.y);
+    ctx.stroke();
+  }
+
+  // Coroas de impacto / respingos na superfície
+  sim.ripples = sim.ripples.filter((r) => {
+    r.age += dt;
+    if (r.age >= r.ttl) return false;
+    const t = r.age / r.ttl;
+    const rad = r.maxRadius * t;
+    const op = (1 - t) * 0.42 * clamped;
+    ctx.strokeStyle = `rgba(205, 232, 255, ${op})`;
+    ctx.lineWidth = 1.05;
+    ctx.beginPath();
+    ctx.ellipse(r.x, r.y, rad * 1.35, rad * 0.55, 0, 0, Math.PI * 2);
+    ctx.stroke();
+
+    if (t < 0.55) {
+      const dropH = Math.sin((t / 0.55) * Math.PI) * 5;
+      ctx.fillStyle = `rgba(225, 242, 255, ${op * 0.85})`;
+      ctx.fillRect(r.x - rad * 0.4, r.y - dropH, 1.3, 1.3);
+      ctx.fillRect(r.x + rad * 0.4, r.y - dropH * 0.8, 1.3, 1.3);
+    }
+    return true;
+  });
+
+  ctx.restore();
+}
+
+function drawSnow(
+  ctx: CanvasRenderingContext2D,
+  sim: EffectSim,
+  intensity: number,
+  boundsW: number,
+  boundsH: number,
+  dt: number
+) {
+  const clamped = Math.min(Math.max(intensity, 0.1), 1);
+
+  ctx.save();
+  // Halo invernal frio nas bordas
+  const frost = ctx.createRadialGradient(
+    boundsW * 0.5,
+    boundsH * 0.5,
+    Math.min(boundsW, boundsH) * 0.25,
+    boundsW * 0.5,
+    boundsH * 0.5,
+    Math.hypot(boundsW, boundsH) * 0.65
+  );
+  frost.addColorStop(0, "rgba(224, 242, 254, 0)");
+  frost.addColorStop(1, `rgba(186, 224, 248, ${0.14 * clamped})`);
+  ctx.fillStyle = frost;
+  ctx.fillRect(0, 0, boundsW, boundsH);
+
+  const windGust = Math.sin(sim.elapsed * 0.45) * 18 * clamped;
+  for (const p of sim.particles) {
+    p.phase += dt * (1.2 + p.depth * 1.1);
+    const sway = Math.sin(p.phase) * (20 + p.depth * 24);
+    p.x += (p.vx + sway + windGust) * dt;
+    p.y += p.vy * dt;
+
+    if (p.y > boundsH + 14) {
+      p.y = -14;
+      p.x = Math.random() * boundsW;
+    }
+    if (p.x > boundsW + 14) p.x = -14;
+    if (p.x < -14) p.x = boundsW + 14;
+
+    if (p.depth > 0.72) {
+      // Flocos de primeiro plano suaves estilo bokeh
+      const bokeh = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.size * 1.8);
+      bokeh.addColorStop(0, `rgba(248, 252, 255, ${p.alpha * 0.72 * clamped})`);
+      bokeh.addColorStop(0.5, `rgba(224, 242, 254, ${p.alpha * 0.3 * clamped})`);
+      bokeh.addColorStop(1, "rgba(224, 242, 254, 0)");
+      ctx.fillStyle = bokeh;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size * 1.8, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      ctx.fillStyle = `rgba(245, 250, 255, ${p.alpha * clamped})`;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  ctx.restore();
+}
+
+function drawEmbers(
+  ctx: CanvasRenderingContext2D,
+  sim: EffectSim,
+  intensity: number,
+  boundsW: number,
+  boundsH: number,
+  dt: number
+) {
+  const clamped = Math.min(Math.max(intensity, 0.1), 1);
+
+  ctx.save();
+  // Brilho de calor inferior
+  const heatGlow = ctx.createLinearGradient(0, boundsH * 0.45, 0, boundsH);
+  heatGlow.addColorStop(0, "rgba(234, 88, 12, 0)");
+  heatGlow.addColorStop(1, `rgba(194, 65, 12, ${0.15 * clamped})`);
+  ctx.fillStyle = heatGlow;
+  ctx.fillRect(0, 0, boundsW, boundsH);
+
+  ctx.globalCompositeOperation = "lighter";
+  ctx.lineCap = "round";
   for (const p of sim.particles) {
     p.prevX = p.x;
     p.prevY = p.y;
-    p.phase += dt * (1.8 + p.depth * 1.2);
-    p.rot += p.rotSpeed * dt;
-
-    const turbulence =
-      preset === "snow"
-        ? (Math.sin(p.phase) * 24 + Math.cos(p.phase * 0.57) * 14) *
-          (0.6 + p.depth * 0.7)
-        : preset === "embers"
-          ? Math.sin(p.phase * 1.6) * 32 + Math.cos(p.phase * 0.7) * 18
-          : preset === "ash"
-            ? Math.sin(p.phase * 1.1) * 20
-            : 0;
-
-    p.x += (p.vx + turbulence) * dt;
+    p.phase += dt * (2.6 + p.depth * 2.2);
+    p.x += (p.vx + Math.sin(p.phase) * 34) * dt;
     p.y += p.vy * dt;
 
-    if (p.y > boundsH + 35) {
-      p.y = -25;
-      p.prevY = p.y;
-      p.x = Math.random() * (boundsW + 120);
-      p.prevX = p.x;
-    } else if (p.y < -35) {
-      p.y = boundsH + 20;
-      p.prevY = p.y;
+    if (p.y < -18) {
+      p.y = boundsH + 14;
       p.x = Math.random() * boundsW;
       p.prevX = p.x;
+      p.prevY = p.y;
     }
-    if (p.x < -140) {
-      p.x = boundsW + 80;
-      p.prevX = p.x;
-    }
-    if (p.x > boundsW + 140) {
-      p.x = -80;
-      p.prevX = p.x;
-    }
+    if (p.x < -14) p.x = boundsW + 14;
+    if (p.x > boundsW + 14) p.x = -14;
 
-    // Impactos de pingos aleatórios gerando anéis na superfície
-    if (preset === "rain" && Math.random() < dt * (0.4 + intensity * 0.65) && sim.ripples.length < 36) {
-      sim.ripples.push({
-        x: Math.random() * boundsW,
-        y: Math.random() * boundsH,
-        age: 0,
-        ttl: 0.35 + Math.random() * 0.25,
-        maxRadius: 5 + p.depth * 9,
-      });
-    }
+    const flicker = 0.65 + 0.35 * Math.sin(p.phase * 2.7);
+    const op = Math.min(1, p.alpha * flicker * clamped);
 
-    if (preset === "rain") {
-      const dx = (p.vx / Math.max(p.vy, 1)) * p.size;
-      const tailX = p.x - dx;
-      const tailY = p.y - p.size;
-      const grad = ctx.createLinearGradient(tailX, tailY, p.x, p.y);
-      grad.addColorStop(0, "rgba(147, 197, 253, 0)");
-      grad.addColorStop(0.65, `rgba(186, 230, 253, ${p.alpha * 0.42})`);
-      grad.addColorStop(1, `rgba(224, 242, 254, ${p.alpha * 0.72})`);
-      ctx.strokeStyle = grad;
-      ctx.lineWidth = 0.7 + p.depth * 1.1;
-      ctx.beginPath();
-      ctx.moveTo(tailX, tailY);
-      ctx.lineTo(p.x, p.y);
-      ctx.stroke();
-    } else if (preset === "snow") {
-      const rad = p.size * (p.depth > 0.72 ? 1.55 : 1.15);
-      const grad = ctx.createRadialGradient(p.x, p.y, 0.2, p.x, p.y, rad);
-      grad.addColorStop(0, `rgba(255, 255, 255, ${p.alpha})`);
-      grad.addColorStop(0.55, `rgba(226, 232, 240, ${p.alpha * 0.65})`);
-      grad.addColorStop(1, "rgba(226, 232, 240, 0)");
-      ctx.fillStyle = grad;
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, rad, 0, Math.PI * 2);
-      ctx.fill();
-    } else if (preset === "fog_mist") {
-      const stretchX = p.size * 1.45;
-      const stretchY = p.size * 0.72;
-      ctx.save();
-      ctx.translate(p.x, p.y);
-      ctx.scale(1, stretchY / stretchX);
-      const grad = ctx.createRadialGradient(0, 0, stretchX * 0.08, 0, 0, stretchX);
-      grad.addColorStop(0, `rgba(226, 232, 240, ${p.alpha})`);
-      grad.addColorStop(0.55, `rgba(203, 213, 225, ${p.alpha * 0.48})`);
-      grad.addColorStop(1, "rgba(203, 213, 225, 0)");
-      ctx.fillStyle = grad;
-      ctx.beginPath();
-      ctx.arc(0, 0, stretchX, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
-    } else if (preset === "embers") {
-      const flicker = 0.6 + 0.4 * Math.sin(p.phase * 4.2);
-      // Trilha quente em velocidade
-      ctx.strokeStyle = `rgba(251, 146, 60, ${p.alpha * 0.55 * flicker})`;
-      ctx.lineWidth = Math.max(1, p.size * 0.65);
-      ctx.beginPath();
-      ctx.moveTo(p.prevX, p.prevY);
-      ctx.lineTo(p.x, p.y);
-      ctx.stroke();
+    // Cauda luminosa curta
+    ctx.strokeStyle =
+      p.variant > 0.35
+        ? `rgba(251, 146, 60, ${op * 0.5})`
+        : `rgba(253, 224, 71, ${op * 0.55})`;
+    ctx.lineWidth = p.size * 0.8;
+    ctx.beginPath();
+    ctx.moveTo(p.prevX, p.prevY);
+    ctx.lineTo(p.x, p.y);
+    ctx.stroke();
 
-      const bloomR = p.size * 3.2;
-      const grad = ctx.createRadialGradient(p.x, p.y, 0.3, p.x, p.y, bloomR);
-      grad.addColorStop(0, `rgba(254, 249, 195, ${p.alpha * flicker})`);
-      grad.addColorStop(0.35, `rgba(251, 146, 60, ${p.alpha * 0.72 * flicker})`);
-      grad.addColorStop(1, "rgba(239, 68, 68, 0)");
-      ctx.fillStyle = grad;
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, bloomR, 0, Math.PI * 2);
-      ctx.fill();
-    } else if (preset === "ash") {
-      ctx.save();
-      ctx.translate(p.x, p.y);
-      ctx.rotate(p.rot);
-      const scaleY = 0.35 + Math.abs(Math.cos(p.phase * 1.4)) * 0.65;
-      ctx.scale(1, scaleY);
-      if (p.emberTint) {
-        const flicker = 0.55 + 0.45 * Math.sin(p.phase * 4);
-        ctx.fillStyle = `rgba(249, 115, 22, ${p.alpha * flicker})`;
-      } else {
-        ctx.fillStyle = `rgba(180, 180, 190, ${p.alpha * 0.65})`;
-      }
-      ctx.beginPath();
-      ctx.moveTo(-p.size, -p.size * 0.4);
-      ctx.lineTo(p.size * 0.7, -p.size * 0.65);
-      ctx.lineTo(p.size, p.size * 0.45);
-      ctx.lineTo(-p.size * 0.5, p.size * 0.6);
-      ctx.closePath();
-      ctx.fill();
-      ctx.restore();
-    }
+    // Halo quente + centro incandescente branco-dourado
+    const haloR = p.size * 3.4;
+    const halo = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, haloR);
+    halo.addColorStop(0, `rgba(255, 250, 215, ${op})`);
+    halo.addColorStop(0.28, `rgba(251, 146, 60, ${op * 0.7})`);
+    halo.addColorStop(0.65, `rgba(239, 68, 68, ${op * 0.25})`);
+    halo.addColorStop(1, "rgba(239, 68, 68, 0)");
+    ctx.fillStyle = halo;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, haloR, 0, Math.PI * 2);
+    ctx.fill();
   }
-
-  // Renderizar respingos / anéis de chuva na superfície
-  if (sim.ripples.length > 0) {
-    sim.ripples = sim.ripples.filter((rp) => {
-      rp.age += dt;
-      if (rp.age >= rp.ttl) return false;
-      const prog = rp.age / rp.ttl;
-      const r = 1.5 + rp.maxRadius * prog;
-      ctx.strokeStyle = `rgba(186, 230, 253, ${(1 - prog) * 0.36})`;
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.ellipse(rp.x, rp.y, r, r * 0.46, 0, 0, Math.PI * 2);
-      ctx.stroke();
-      return true;
-    });
-  }
-
   ctx.restore();
+}
+
+function drawAsh(
+  ctx: CanvasRenderingContext2D,
+  sim: EffectSim,
+  intensity: number,
+  boundsW: number,
+  boundsH: number,
+  dt: number
+) {
+  const clamped = Math.min(Math.max(intensity, 0.1), 1);
+
+  ctx.save();
+  ctx.fillStyle = `rgba(38, 32, 30, ${0.14 * clamped})`;
+  ctx.fillRect(0, 0, boundsW, boundsH);
+
+  for (const p of sim.particles) {
+    p.phase += dt * 1.4;
+    p.rot += p.rotSpeed * dt;
+    p.x += (p.vx + Math.sin(p.phase) * 26) * dt;
+    p.y += p.vy * dt;
+
+    if (p.y > boundsH + 14) {
+      p.y = -14;
+      p.x = Math.random() * boundsW;
+    }
+    if (p.x < -14) p.x = boundsW + 14;
+    if (p.x > boundsW + 14) p.x = -14;
+
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    ctx.rotate(p.rot);
+    if (p.variant > 0.88) {
+      ctx.fillStyle = `rgba(249, 115, 22, ${p.alpha * 0.8 * clamped})`;
+    } else {
+      ctx.fillStyle = `rgba(182, 174, 168, ${p.alpha * clamped})`;
+    }
+    ctx.fillRect(-p.size * 0.65, -p.size * 0.28, p.size * 1.3, p.size * 0.56);
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
+function stepAndRenderMultiSim(
+  ctx: CanvasRenderingContext2D,
+  sim: MultiWeatherSim,
+  intensity: number,
+  boundsW: number,
+  boundsH: number,
+  dt: number
+) {
+  for (const eff of sim.effects) {
+    eff.elapsed += dt;
+    switch (eff.effect) {
+      case "nightfall":
+        drawNightfall(ctx, eff, intensity, boundsW, boundsH, dt);
+        break;
+      case "fog_mist":
+        drawFogMist(ctx, eff, intensity, boundsW, boundsH, dt);
+        break;
+      case "rain":
+        drawRain(ctx, eff, intensity, boundsW, boundsH, dt);
+        break;
+      case "snow":
+        drawSnow(ctx, eff, intensity, boundsW, boundsH, dt);
+        break;
+      case "embers":
+        drawEmbers(ctx, eff, intensity, boundsW, boundsH, dt);
+        break;
+      case "ash":
+        drawAsh(ctx, eff, intensity, boundsW, boundsH, dt);
+        break;
+    }
+  }
 }
 
 export default function WeatherOverlay({
@@ -448,7 +816,7 @@ export default function WeatherOverlay({
       if (el.scene_id !== sceneId) continue;
       if (el.kind !== "image" && el.kind !== "rect") continue;
       const d = (el.data ?? {}) as SceneElementData;
-      if (!d.weatherPreset || d.weatherPreset === "none") continue;
+      if (parseWeatherEffects(d.weatherPreset).length === 0) continue;
       const rawW = d.width ?? 280;
       const rawH = d.height ?? 280;
       const x = rawW < 0 ? el.x + rawW : el.x;
@@ -462,7 +830,7 @@ export default function WeatherOverlay({
         w,
         h,
         rotation: el.rotation ?? 0,
-        preset: d.weatherPreset,
+        preset: d.weatherPreset!,
         intensity: d.weatherIntensity ?? 0.6,
       });
     }
@@ -474,7 +842,8 @@ export default function WeatherOverlay({
     .join("|");
 
   const hasBursts = fxBursts.some((b) => b.sceneId === sceneId);
-  const activeGlobalWeather = preset !== "none";
+  const activeGlobalEffects = parseWeatherEffects(preset);
+  const activeGlobalWeather = activeGlobalEffects.length > 0;
   const hasZoneWeather = weatherZones.length > 0;
 
   useEffect(() => {
@@ -489,7 +858,7 @@ export default function WeatherOverlay({
     }
 
     const globalSim = activeGlobalWeather
-      ? buildSimState(preset, intensity, width, height, 1)
+      ? buildMultiSimState(preset, intensity, width, height, 1)
       : null;
 
     const zoneSims = weatherZones.map((zone) => {
@@ -499,7 +868,13 @@ export default function WeatherOverlay({
       );
       return {
         zone,
-        sim: buildSimState(zone.preset, zone.intensity, zone.w, zone.h, areaScale),
+        sim: buildMultiSimState(
+          zone.preset,
+          zone.intensity,
+          zone.w,
+          zone.h,
+          areaScale
+        ),
       };
     });
 
@@ -511,17 +886,9 @@ export default function WeatherOverlay({
       lastTime = now;
       ctx.clearRect(0, 0, width, height);
 
-      // 1. Clima Global da Cena (sobre toda a tela)
+      // 1. Climas Globais da Cena (combinados simultaneamente sobre toda a tela)
       if (globalSim) {
-        stepAndRenderWeatherSim(
-          ctx,
-          globalSim,
-          preset,
-          intensity,
-          width,
-          height,
-          dt
-        );
+        stepAndRenderMultiSim(ctx, globalSim, intensity, width, height, dt);
       }
 
       // 2. Climas Localizados por Bloco / Mapa Extra (no espaço do mundo)
@@ -541,15 +908,7 @@ export default function WeatherOverlay({
           ctx.beginPath();
           ctx.rect(0, 0, z.w, z.h);
           ctx.clip();
-          stepAndRenderWeatherSim(
-            ctx,
-            entry.sim,
-            z.preset,
-            z.intensity,
-            z.w,
-            z.h,
-            dt
-          );
+          stepAndRenderMultiSim(ctx, entry.sim, z.intensity, z.w, z.h, dt);
           ctx.restore();
         }
 

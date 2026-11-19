@@ -453,29 +453,50 @@ export default function LightingLayer({
             );
           })}
 
-          {/* Rastro de áreas já exploradas (penumbra coordenada com a névoa) */}
-          {exploredSpots.map((sp, idx) => (
-            <Circle
-              key={`dark-exp-${idx}`}
-              x={sp.x}
-              y={sp.y}
-              radius={sp.radiusPx}
-              globalCompositeOperation="destination-out"
-              opacity={0.56}
-              fillRadialGradientStartPoint={{ x: 0, y: 0 }}
-              fillRadialGradientEndPoint={{ x: 0, y: 0 }}
-              fillRadialGradientStartRadius={0}
-              fillRadialGradientEndRadius={sp.radiusPx}
-              fillRadialGradientColorStops={[
-                0,
-                "rgba(0,0,0,1)",
-                0.7,
-                "rgba(0,0,0,0.85)",
-                1,
-                "rgba(0,0,0,0)",
-              ]}
-            />
-          ))}
+          {/* Rastro de áreas já exploradas (Somente no modo "trail" = Escuridão some de vez onde passou) */}
+          {(scene.darkness_reveal_mode ?? "vision") === "trail" &&
+            exploredSpots.map((sp, idx) =>
+              sp.poly && sp.poly.length >= 6 ? (
+                <Line
+                  key={`dark-exp-${idx}`}
+                  points={sp.poly}
+                  closed
+                  globalCompositeOperation="destination-out"
+                  fillRadialGradientStartPoint={{ x: sp.x, y: sp.y }}
+                  fillRadialGradientEndPoint={{ x: sp.x, y: sp.y }}
+                  fillRadialGradientStartRadius={0}
+                  fillRadialGradientEndRadius={sp.radiusPx}
+                  fillRadialGradientColorStops={[
+                    0,
+                    "rgba(0,0,0,1)",
+                    0.74,
+                    "rgba(0,0,0,0.95)",
+                    1,
+                    "rgba(0,0,0,0)",
+                  ]}
+                />
+              ) : (
+                <Circle
+                  key={`dark-exp-${idx}`}
+                  x={sp.x}
+                  y={sp.y}
+                  radius={sp.radiusPx}
+                  globalCompositeOperation="destination-out"
+                  fillRadialGradientStartPoint={{ x: 0, y: 0 }}
+                  fillRadialGradientEndPoint={{ x: 0, y: 0 }}
+                  fillRadialGradientStartRadius={0}
+                  fillRadialGradientEndRadius={sp.radiusPx}
+                  fillRadialGradientColorStops={[
+                    0,
+                    "rgba(0,0,0,1)",
+                    0.74,
+                    "rgba(0,0,0,0.95)",
+                    1,
+                    "rgba(0,0,0,0)",
+                  ]}
+                />
+              )
+            )}
 
           {/* Recortes de visão & luz com transição Bright -> Dim -> Darkness */}
           {sources.map((src) => (

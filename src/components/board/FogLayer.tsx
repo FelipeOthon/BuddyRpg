@@ -440,29 +440,50 @@ export default function FogLayer({
               smokeWisps: smokeTextures?.wisps ?? null,
             })
           )}
-          {/* Rastro de áreas já exploradas pelos personagens (penumbra) */}
-          {exploredSpots.map((sp, idx) => (
-            <Circle
-              key={`exp-${idx}`}
-              x={sp.x}
-              y={sp.y}
-              radius={sp.radiusPx}
-              globalCompositeOperation="destination-out"
-              opacity={0.56}
-              fillRadialGradientStartPoint={{ x: 0, y: 0 }}
-              fillRadialGradientEndPoint={{ x: 0, y: 0 }}
-              fillRadialGradientStartRadius={0}
-              fillRadialGradientEndRadius={sp.radiusPx}
-              fillRadialGradientColorStops={[
-                0,
-                "rgba(0,0,0,1)",
-                0.7,
-                "rgba(0,0,0,0.85)",
-                1,
-                "rgba(0,0,0,0)",
-              ]}
-            />
-          ))}
+          {/* Rastro de áreas já exploradas pelos personagens (Somente no modo "trail" = Some de vez) */}
+          {(scene.fog_reveal_mode ?? "trail") === "trail" &&
+            exploredSpots.map((sp, idx) =>
+              sp.poly && sp.poly.length >= 6 ? (
+                <Line
+                  key={`exp-${idx}`}
+                  points={sp.poly}
+                  closed
+                  globalCompositeOperation="destination-out"
+                  fillRadialGradientStartPoint={{ x: sp.x, y: sp.y }}
+                  fillRadialGradientEndPoint={{ x: sp.x, y: sp.y }}
+                  fillRadialGradientStartRadius={0}
+                  fillRadialGradientEndRadius={sp.radiusPx}
+                  fillRadialGradientColorStops={[
+                    0,
+                    "rgba(0,0,0,1)",
+                    0.78,
+                    "rgba(0,0,0,0.96)",
+                    1,
+                    "rgba(0,0,0,0)",
+                  ]}
+                />
+              ) : (
+                <Circle
+                  key={`exp-${idx}`}
+                  x={sp.x}
+                  y={sp.y}
+                  radius={sp.radiusPx}
+                  globalCompositeOperation="destination-out"
+                  fillRadialGradientStartPoint={{ x: 0, y: 0 }}
+                  fillRadialGradientEndPoint={{ x: 0, y: 0 }}
+                  fillRadialGradientStartRadius={0}
+                  fillRadialGradientEndRadius={sp.radiusPx}
+                  fillRadialGradientColorStops={[
+                    0,
+                    "rgba(0,0,0,1)",
+                    0.78,
+                    "rgba(0,0,0,0.96)",
+                    1,
+                    "rgba(0,0,0,0)",
+                  ]}
+                />
+              )
+            )}
           {visionCutouts.map((cut) => (
             <Line
               key={`tok-vis-${cut.id}`}

@@ -31,7 +31,6 @@ import {
   updateSceneSettingsAction,
 } from "@/actions/scenes";
 import { screenToWorld, snapToGrid as snapPointToGrid } from "@/lib/board/geometry";
-import { WEATHER_PRESET_OPTIONS } from "@/lib/board/weatherPresets";
 import { uploadCampaignImage } from "@/lib/utils/storage";
 import { useBoardStore } from "@/stores/boardStore";
 import type {
@@ -41,8 +40,8 @@ import type {
   Scene,
   SceneElement,
   SceneElementData,
-  WeatherPreset,
 } from "@/types/domain";
+import WeatherMultiPicker from "../board/WeatherMultiPicker";
 import MapAlignmentModal from "./MapAlignmentModal";
 import MapStudioModal from "./MapStudioModal";
 
@@ -1071,12 +1070,12 @@ export default function SceneManager({
                             <option value="above_tokens">Por Cima (Teto)</option>
                           </select>
 
-                          <select
+                          <WeatherMultiPicker
                             value={d.weatherPreset ?? "none"}
-                            onChange={(e) => {
+                            onChange={(nextPreset) => {
                               const nextData: SceneElementData = {
                                 ...d,
-                                weatherPreset: e.target.value as WeatherPreset,
+                                weatherPreset: nextPreset,
                                 weatherIntensity: d.weatherIntensity ?? 0.6,
                               };
                               upsertElement({
@@ -1089,15 +1088,10 @@ export default function SceneManager({
                                 data: nextData,
                               });
                             }}
-                            title="Clima localizado nesta peça/mapa"
-                            className="w-full rounded border border-sky-500/30 bg-zinc-800 px-1.5 py-1 text-[10px] text-sky-200"
-                          >
-                            {WEATHER_PRESET_OPTIONS.map((opt) => (
-                              <option key={opt.value} value={opt.value}>
-                                {opt.label}
-                              </option>
-                            ))}
-                          </select>
+                            title="Clima localizado nesta peça/mapa (permite combinar efeitos)"
+                            compact
+                            align="right"
+                          />
                         </div>
                       </div>
                     </div>

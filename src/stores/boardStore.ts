@@ -49,6 +49,7 @@ export interface ExploredSpot {
   x: number;
   y: number;
   radiusPx: number;
+  poly?: number[];
 }
 
 export interface DrawConfig {
@@ -125,6 +126,7 @@ interface BoardState {
   fogToolConfig: FogToolConfig;
   selectedFogShapeId: string | null;
   exploredMemory: Record<string, ExploredSpot[]>;
+  exploredDarknessMemory: Record<string, ExploredSpot[]>;
   gmFogOpacity: number;
   walls: SceneWall[];
   wallToolType: WallType;
@@ -176,8 +178,16 @@ interface BoardState {
   clearFogForScene: (sceneId: string) => void;
   setFogToolConfig: (patch: Partial<FogToolConfig>) => void;
   setSelectedFogShapeId: (shapeId: string | null) => void;
-  recordExploredSpot: (sceneId: string, spot: ExploredSpot, minStepPx?: number) => void;
-  clearExploredMemory: (sceneId: string) => void;
+  recordExploredSpot: (
+    sceneId: string,
+    spot: ExploredSpot,
+    minStepPx?: number,
+    targetLayer?: "fog" | "darkness"
+  ) => void;
+  clearExploredMemory: (
+    sceneId: string,
+    targetLayer?: "fog" | "darkness" | "both"
+  ) => void;
   setGmFogOpacity: (opacity: number) => void;
   upsertWall: (wall: SceneWall) => void;
   removeWall: (wallId: string) => void;
@@ -230,6 +240,7 @@ export const useBoardStore = create<BoardState>((set) => ({
   },
   selectedFogShapeId: null,
   exploredMemory: {},
+  exploredDarknessMemory: {},
   gmFogOpacity: 0.62,
   walls: [],
   wallToolType: "wall",
@@ -463,12 +474,15 @@ export const useBoardStore = create<BoardState>((set) => ({
     })),
   clearFogForScene: (sceneId) =>
     set((state) => {
-      const nextMem = { ...state.exploredMemory };
-      delete nextMem[sceneId];
+      const nextFog = { ...state.exploredMemory };
+      const nextDark = { ...state.exploredDarknessMemory };
+      delete nextFog[sceneId];
+      delete nextDark[sceneId];
       return {
         fogShapes: state.fogShapes.filter((s) => s.scene_id !== sceneId),
         selectedFogShapeId: null,
-        exploredMemory: nextMem,
+        exploredMemory: nextFog,
+        exploredDarknessMemory: nextDark,
       };
     }),
   setFogToolConfig: (patch) =>
@@ -476,30 +490,51 @@ export const useBoardStore = create<BoardState>((set) => ({
       fogToolConfig: { ...state.fogToolConfig, ...patch },
     })),
   setSelectedFogShapeId: (selectedFogShapeId) => set({ selectedFogShapeId }),
-  recordExploredSpot: (sceneId, spot, minStepPx = 30) =>
+  recordExploredSpot: (
+    sceneId,
+    spot,
+    minStepPx = 30,
+    targetLayer = "fog"
+  ) =>
     set((state) => {
-      const cur = state.exploredMemory[sceneId] ?? [];
+      const key =
+        targetLayer === "darkness"
+          ? "exploredDarknessMemory"
+          : "exploredMemory";
+      const cur = state[key][sceneId] ?? [];
       const minSq = minStepPx * minStepPx;
       for (let i = cur.length - 1; i >= 0; i--) {
         const s = cur[i]!;
         const dx = s.x - spot.x;
         const dy = s.y - spot.y;
-        if (dx * dx + dy * dy < minSq && Math.abs(s.radiusPx - spot.radiusPx) < 12) {
+        if (
+          dx * dx + dy * dy < minSq &&
+          Math.abs(s.radiusPx - spot.radiusPx) < 12
+        ) {
           return state;
         }
       }
       return {
-        exploredMemory: {
-          ...state.exploredMemory,
+        [key]: {
+          ...state[key],
           [sceneId]: [...cur, spot],
         },
       };
     }),
-  clearExploredMemory: (sceneId) =>
+  clearExploredMemory: (sceneId, targetLayer = "fog") =>
     set((state) => {
-      const next = { ...state.exploredMemory };
-      delete next[sceneId];
-      return { exploredMemory: next };
+      const patch: Partial<BoardState> = {};
+      if (targetLayer === "fog" || targetLayer === "both") {
+        const nextFog = { ...state.exploredMemory };
+        delete nextFog[sceneId];
+        patch.exploredMemory = nextFog;
+      }
+      if (targetLayer === "darkness" || targetLayer === "both") {
+        const nextDark = { ...state.exploredDarknessMemory };
+        delete nextDark[sceneId];
+        patch.exploredDarknessMemory = nextDark;
+      }
+      return patch;
     }),
   setGmFogOpacity: (opacity) =>
     set({

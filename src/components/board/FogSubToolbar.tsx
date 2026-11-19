@@ -19,7 +19,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { useBoardStore } from "@/stores/boardStore";
-import type { FogMode, Scene } from "@/types/domain";
+import type { FogMode, RevealMode, Scene } from "@/types/domain";
 
 export default function FogSubToolbar({
   scene,
@@ -27,9 +27,12 @@ export default function FogSubToolbar({
   polygonPointCount,
   fogIntensity,
   exploredCount,
+  darknessExploredCount,
   onFinishPolygon,
   onToggleFogEnabled,
   onChangeFogMode,
+  onChangeFogRevealMode,
+  onChangeDarknessRevealMode,
   onChangeFogIntensity,
   onChangeAmbientLight,
   onDeleteSelectedShape,
@@ -42,13 +45,16 @@ export default function FogSubToolbar({
   polygonPointCount: number;
   fogIntensity: number;
   exploredCount: number;
+  darknessExploredCount: number;
   onFinishPolygon: () => void;
   onToggleFogEnabled: (enabled: boolean) => void;
   onChangeFogMode: (mode: FogMode) => void;
+  onChangeFogRevealMode: (mode: RevealMode) => void;
+  onChangeDarknessRevealMode: (mode: RevealMode) => void;
   onChangeFogIntensity: (opacity: number) => void;
   onChangeAmbientLight: (light: number) => void;
   onDeleteSelectedShape: () => void;
-  onResetExplored: () => void;
+  onResetExplored: (layer: "fog" | "darkness") => void;
   onCoverAllLayer: (layer: "fog" | "darkness") => void;
   onClearAllLayer: (layer: "fog" | "darkness") => void;
 }) {
@@ -86,6 +92,19 @@ export default function FogSubToolbar({
   const isDarknessMode = tool === "darkness";
   const activeLayer: "fog" | "darkness" = isDarknessMode ? "darkness" : "fog";
   const isDarknessOn = (scene.ambient_light ?? 1) < 0.99;
+  const activeRevealMode: RevealMode = isDarknessMode
+    ? (scene.darkness_reveal_mode ?? "vision")
+    : (scene.fog_reveal_mode ?? "trail");
+  const activeExploredCount = isDarknessMode
+    ? darknessExploredCount
+    : exploredCount;
+  const handleSetRevealMode = (mode: RevealMode) => {
+    if (isDarknessMode) {
+      onChangeDarknessRevealMode(mode);
+    } else {
+      onChangeFogRevealMode(mode);
+    }
+  };
 
   return (
     <div
@@ -122,6 +141,47 @@ export default function FogSubToolbar({
           Névoa {scene.fog_enabled ? "ON" : "OFF"}
         </button>
       )}
+
+      <div className="mx-0.5 h-4 w-px bg-zinc-800" />
+
+      {/* Modalidade de passagem dos tokens: Some de vez vs Apenas Raio de Visão */}
+      <div
+        className="flex items-center rounded-lg border border-zinc-800 bg-zinc-900 p-0.5"
+        title={
+          isDarknessMode
+            ? "Comportamento da escuridão quando um personagem passa"
+            : "Comportamento da névoa quando um personagem passa"
+        }
+      >
+        <button
+          type="button"
+          onClick={() => handleSetRevealMode("trail")}
+          title="Onde o personagem passa fica visível de vez (não volta a cobrir)"
+          className={`rounded-md px-2 py-0.5 text-[11px] font-semibold transition ${
+            activeRevealMode === "trail"
+              ? isDarknessMode
+                ? "bg-indigo-500 text-white"
+                : "bg-amber-500 text-zinc-950"
+              : "text-zinc-400 hover:text-zinc-200"
+          }`}
+        >
+          Some de vez
+        </button>
+        <button
+          type="button"
+          onClick={() => handleSetRevealMode("vision")}
+          title="Mapa aparece apenas dentro do raio de visão/luz atual do personagem"
+          className={`rounded-md px-2 py-0.5 text-[11px] font-semibold transition ${
+            activeRevealMode === "vision"
+              ? isDarknessMode
+                ? "bg-indigo-500 text-white"
+                : "bg-amber-500 text-zinc-950"
+              : "text-zinc-400 hover:text-zinc-200"
+          }`}
+        >
+          Raio de Visão
+        </button>
+      </div>
 
       <div className="mx-0.5 h-4 w-px bg-zinc-800" />
 
@@ -210,11 +270,15 @@ export default function FogSubToolbar({
         </button>
       )}
 
-      {!isDarknessMode && exploredCount > 0 && (
+      {activeRevealMode === "trail" && activeExploredCount > 0 && (
         <button
           type="button"
-          onClick={onResetExplored}
-          title="Apagar o rastro das áreas já exploradas pelos tokens"
+          onClick={() => onResetExplored(activeLayer)}
+          title={
+            isDarknessMode
+              ? "Apagar o rastro de luz já desbravado pelos tokens"
+              : "Apagar o rastro das áreas já exploradas pelos tokens"
+          }
           className="inline-flex items-center gap-1 rounded-lg border border-zinc-700 bg-zinc-900 px-2 py-1 text-[11px] font-medium text-sky-200 hover:bg-zinc-800"
         >
           <Footprints className="h-3 w-3" />

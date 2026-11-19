@@ -6,7 +6,13 @@ import {
   updateSceneEnvironmentSchema,
 } from "@/lib/validation/schemas";
 import type { Database } from "@/types/database.types";
-import type { Scene, SceneWall, WallType, WeatherPreset } from "@/types/domain";
+import type {
+  RevealMode,
+  Scene,
+  SceneWall,
+  WallType,
+  WeatherPreset,
+} from "@/types/domain";
 
 export interface LightingActionResult {
   ok: boolean;
@@ -19,6 +25,7 @@ export async function updateSceneEnvironmentAction(input: {
   sceneId: string;
   campaignId: string;
   ambientLight?: number;
+  darknessRevealMode?: RevealMode;
   weatherPreset?: WeatherPreset;
   weatherIntensity?: number;
 }): Promise<LightingActionResult> {
@@ -39,6 +46,8 @@ export async function updateSceneEnvironmentAction(input: {
 
   const patch: Database["public"]["Tables"]["scenes"]["Update"] = {};
   if (v.ambientLight !== undefined) patch.ambient_light = v.ambientLight;
+  if (v.darknessRevealMode !== undefined)
+    patch.darkness_reveal_mode = v.darknessRevealMode;
   if (v.weatherPreset !== undefined) patch.weather_preset = v.weatherPreset;
   if (v.weatherIntensity !== undefined)
     patch.weather_intensity = v.weatherIntensity;

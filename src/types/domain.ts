@@ -6,9 +6,11 @@ import type {
   FogOperation,
   FogShapeKind,
   GridType,
+  RevealMode,
   SceneElementKind,
   SceneElementLayer,
   WallType,
+  WeatherEffect,
   WeatherPreset,
 } from "./database.types";
 
@@ -19,9 +21,11 @@ export type {
   FogOperation,
   FogShapeKind,
   GridType,
+  RevealMode,
   SceneElementKind,
   SceneElementLayer,
   WallType,
+  WeatherEffect,
   WeatherPreset,
 };
 

@@ -15,7 +15,7 @@ import {
 import useImage from "use-image";
 import { useKeyPressed } from "@/hooks/useKeyPressed";
 import { snapToGrid } from "@/lib/board/geometry";
-import { formatWeatherBadge } from "@/lib/board/weatherPresets";
+import { formatWeatherBadge, hasActiveWeather } from "@/lib/board/weatherPresets";
 import type { RemoteDragPosition } from "@/stores/boardStore";
 import type {
   DrawPreviewPayload,
@@ -101,11 +101,12 @@ function renderShapeGraphic(params: {
   const fill = data.fill ?? "#f59e0b";
   const strokeWidth = data.strokeWidth ?? 3;
   const opacity = data.opacity ?? 0.35;
-  const hasWeather = Boolean(data.weatherPreset && data.weatherPreset !== "none");
+  const hasWeather = hasActiveWeather(data.weatherPreset);
 
   if (kind === "image" && data.imageUrl) {
     const imgW = Math.max(data.width ?? 280, 20);
     const imgH = Math.max(data.height ?? 280, 20);
+    const imgBadgeText = hasWeather ? formatWeatherBadge(data.weatherPreset) : "";
     return (
       <Group>
         <LoadedElementImage
@@ -120,7 +121,7 @@ function renderShapeGraphic(params: {
             <Rect
               x={8}
               y={8}
-              width={118}
+              width={Math.max(118, imgBadgeText.length * 7.2 + 16)}
               height={22}
               cornerRadius={6}
               fill="rgba(9, 9, 11, 0.82)"
@@ -130,7 +131,7 @@ function renderShapeGraphic(params: {
             <Text
               x={14}
               y={13}
-              text={formatWeatherBadge(data.weatherPreset!)}
+              text={imgBadgeText}
               fontSize={11}
               fontStyle="bold"
               fill="#7dd3fc"

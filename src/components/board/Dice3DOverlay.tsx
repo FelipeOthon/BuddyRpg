@@ -2,104 +2,72 @@
 
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
+import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { Dices, Skull, Sparkles } from "lucide-react";
 import { playDiceRollSound } from "@/lib/audio/soundEngine";
+import {
+  buildDieAssets,
+  computeTargetDieQuaternion,
+  type DieTheme,
+} from "@/lib/dice/dice3dGeometry";
 import { useBoardStore } from "@/stores/boardStore";
 
 interface DiePhysicsBody {
   group: THREE.Group;
-  badge: THREE.Sprite;
+  contactShadow: THREE.Mesh;
+  auraDisc: THREE.Mesh | null;
+  geometry: THREE.BufferGeometry;
+  materials: THREE.Material[];
+  restZ: number;
   vx: number;
   vy: number;
   vz: number;
   wx: number;
   wy: number;
   wz: number;
+  targetQuat: THREE.Quaternion;
+  settleBlend: number;
+  bounces: number;
   settled: boolean;
   isCrit: boolean;
   isFumble: boolean;
-  kept: boolean;
 }
 
-function createGeometryForSides(sides: number): THREE.BufferGeometry {
-  if (sides === 4) return new THREE.TetrahedronGeometry(0.78, 0);
-  if (sides === 6) return new THREE.BoxGeometry(0.95, 0.95, 0.95);
-  if (sides === 8 || sides === 10 || sides === 100) {
-    return new THREE.OctahedronGeometry(0.76, 0);
+let cachedShadowTex: THREE.CanvasTexture | null = null;
+function getContactShadowTexture(): THREE.CanvasTexture {
+  if (cachedShadowTex) return cachedShadowTex;
+  const c = document.createElement("canvas");
+  c.width = 128;
+  c.height = 128;
+  const ctx = c.getContext("2d")!;
+  const g = ctx.createRadialGradient(64, 64, 6, 64, 64, 62);
+  g.addColorStop(0, "rgba(0, 0, 0, 0.58)");
+  g.addColorStop(0.55, "rgba(0, 0, 0, 0.24)");
+  g.addColorStop(1, "rgba(0, 0, 0, 0)");
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 128, 128);
+  cachedShadowTex = new THREE.CanvasTexture(c);
+  return cachedShadowTex;
+}
+
+function createAuraTexture(kind: "crit" | "fumble"): THREE.CanvasTexture {
+  const c = document.createElement("canvas");
+  c.width = 128;
+  c.height = 128;
+  const ctx = c.getContext("2d")!;
+  const g = ctx.createRadialGradient(64, 64, 8, 64, 64, 62);
+  if (kind === "crit") {
+    g.addColorStop(0, "rgba(52, 211, 153, 0.55)");
+    g.addColorStop(0.48, "rgba(16, 185, 129, 0.35)");
+    g.addColorStop(1, "rgba(16, 185, 129, 0)");
+  } else {
+    g.addColorStop(0, "rgba(251, 113, 133, 0.55)");
+    g.addColorStop(0.48, "rgba(225, 29, 72, 0.35)");
+    g.addColorStop(1, "rgba(225, 29, 72, 0)");
   }
-  if (sides === 12) return new THREE.DodecahedronGeometry(0.72, 0);
-  return new THREE.IcosahedronGeometry(0.78, 0);
-}
-
-function createNumberBadgeSprite(params: {
-  value: number;
-  sides: number;
-  isCrit: boolean;
-  isFumble: boolean;
-  kept: boolean;
-}): THREE.Sprite {
-  const canvas = document.createElement("canvas");
-  canvas.width = 256;
-  canvas.height = 256;
-  const ctx = canvas.getContext("2d")!;
-
-  ctx.clearRect(0, 0, 256, 256);
-
-  // Anel externo dourado/esmeralda/rubro
-  ctx.beginPath();
-  ctx.arc(128, 128, 84, 0, Math.PI * 2);
-  ctx.fillStyle = params.isCrit
-    ? "rgba(6, 78, 59, 0.92)"
-    : params.isFumble
-      ? "rgba(136, 19, 55, 0.92)"
-      : "rgba(12, 10, 18, 0.88)";
-  ctx.fill();
-
-  ctx.lineWidth = 8;
-  ctx.strokeStyle = params.isCrit
-    ? "#34d399"
-    : params.isFumble
-      ? "#fb7185"
-      : params.kept
-        ? "#f59e0b"
-        : "#52525b";
-  ctx.stroke();
-
-  // Número sorteado
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.font = "900 84px ui-monospace, SFMono-Regular, Menlo, monospace";
-  ctx.fillStyle = params.isCrit
-    ? "#fef08a"
-    : params.isFumble
-      ? "#fecdd3"
-      : params.kept
-        ? "#fef3c7"
-        : "#a1a1aa";
-  ctx.fillText(String(params.value), 128, 118);
-
-  // Tipo de dado (ex: d20)
-  ctx.font = "700 30px ui-sans-serif, system-ui, sans-serif";
-  ctx.fillStyle = params.isCrit
-    ? "#6ee7b7"
-    : params.isFumble
-      ? "#fda4af"
-      : "#fbbf24";
-  ctx.fillText(`d${params.sides}`, 128, 176);
-
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.needsUpdate = true;
-
-  const material = new THREE.SpriteMaterial({
-    map: texture,
-    transparent: true,
-    opacity: 0,
-    depthTest: false,
-  });
-
-  const sprite = new THREE.Sprite(material);
-  sprite.scale.set(1.25, 1.25, 1);
-  return sprite;
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 128, 128);
+  return new THREE.CanvasTexture(c);
 }
 
 export default function Dice3DOverlay() {
@@ -130,51 +98,62 @@ export default function Dice3DOverlay() {
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.18;
     container.innerHTML = "";
     container.appendChild(renderer.domElement);
 
     const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(42, width / height, 0.1, 100);
-    camera.position.set(0, -6.2, 11.5);
-    camera.lookAt(0, 0.2, 0);
 
-    // Iluminação cinematográfica (luz quente de tocha + luz arcana fria)
-    const ambient = new THREE.AmbientLight(0xfff1d6, 0.75);
-    scene.add(ambient);
+    // Ambiente IBL de estúdio para reflexos realistas na resina e ouro gravado
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    const roomEnv = new RoomEnvironment();
+    const envTarget = pmrem.fromScene(roomEnv, 0.04);
+    scene.environment = envTarget.texture;
+    roomEnv.dispose();
+    pmrem.dispose();
 
-    const keyLight = new THREE.DirectionalLight(0xffd28a, 2.4);
-    keyLight.position.set(5, -4, 12);
+    const camera = new THREE.PerspectiveCamera(40, width / height, 0.1, 100);
+    camera.position.set(0, -4.6, 11.4);
+    camera.lookAt(0, 0.15, 0);
+
+    // Iluminação principal quente + contra-luz fria
+    const hemi = new THREE.HemisphereLight(0xfef3c7, 0x1e293b, 0.85);
+    scene.add(hemi);
+
+    const keyLight = new THREE.DirectionalLight(0xffe4b5, 2.2);
+    keyLight.position.set(4.5, -3.5, 11.5);
     keyLight.castShadow = true;
     keyLight.shadow.mapSize.width = 1024;
     keyLight.shadow.mapSize.height = 1024;
+    keyLight.shadow.bias = -0.0005;
     keyLight.shadow.camera.near = 1;
     keyLight.shadow.camera.far = 30;
-    const dCam = 9;
+    const dCam = 8.5;
     keyLight.shadow.camera.left = -dCam;
     keyLight.shadow.camera.right = dCam;
     keyLight.shadow.camera.top = dCam;
     keyLight.shadow.camera.bottom = -dCam;
     scene.add(keyLight);
 
-    const rimLight = new THREE.PointLight(0x818cf8, 22, 25);
-    rimLight.position.set(-6, 5, 6);
-    scene.add(rimLight);
+    const fillLight = new THREE.DirectionalLight(0x93c5fd, 0.95);
+    fillLight.position.set(-6, 5, 7);
+    scene.add(fillLight);
 
-    // Plano invisível que recebe sombras reais sobre o mapa
-    const floorGeo = new THREE.PlaneGeometry(32, 24);
-    const floorMat = new THREE.ShadowMaterial({ opacity: 0.48 });
+    // Plano invisível receptor de sombra real
+    const floorGeo = new THREE.PlaneGeometry(34, 24);
+    const floorMat = new THREE.ShadowMaterial({ opacity: 0.42 });
     const floor = new THREE.Mesh(floorGeo, floorMat);
     floor.receiveShadow = true;
     floor.position.z = 0;
     scene.add(floor);
 
-    // Constrói os dados do roll_result
-    const flatDice: Array<{ sides: number; value: number; kept: boolean }> =
-      [];
+    // Expande dados (d100 vira par d% + d10 quando couber na mesa)
+    const rawDice: Array<{ sides: number; value: number; kept: boolean }> = [];
     for (const term of activeDice3dRoll.roll.terms) {
       if (term.type === "dice") {
         for (const r of term.rolls) {
-          flatDice.push({
+          rawDice.push({
             sides: term.sides,
             value: r.v,
             kept: r.kept,
@@ -183,97 +162,157 @@ export default function Dice3DOverlay() {
       }
     }
 
+    const flatDice: Array<{
+      sides: number;
+      value: number;
+      kept: boolean;
+      isCrit: boolean;
+      isFumble: boolean;
+    }> = [];
+
+    for (const item of rawDice) {
+      const isCrit = item.kept && item.sides === 20 && item.value === 20;
+      const isFumble = item.kept && item.sides === 20 && item.value === 1;
+      if (item.sides === 100 && rawDice.length <= 8) {
+        const tensBucket = Math.floor((item.value % 100) / 10) * 10;
+        const tensVal = tensBucket === 0 ? 100 : tensBucket;
+        const onesVal = item.value % 10 === 0 ? 10 : item.value % 10;
+        flatDice.push({
+          sides: 100,
+          value: tensVal,
+          kept: item.kept,
+          isCrit: false,
+          isFumble: false,
+        });
+        flatDice.push({
+          sides: 10,
+          value: onesVal,
+          kept: item.kept,
+          isCrit: false,
+          isFumble: false,
+        });
+      } else {
+        const normalizedVal =
+          item.sides === 100
+            ? Math.floor((item.value % 100) / 10) * 10 || 100
+            : item.value;
+        flatDice.push({
+          sides: item.sides,
+          value: normalizedVal,
+          kept: item.kept,
+          isCrit,
+          isFumble,
+        });
+      }
+    }
+
     const bodies: DiePhysicsBody[] = [];
     const diceCount = Math.min(flatDice.length, 16);
+    const dieScale = diceCount > 8 ? 1.08 : 1.24;
+
+    const shadowTex = getContactShadowTexture();
+    const shadowPlaneGeo = new THREE.PlaneGeometry(2.1, 2.1);
+    const auraPlaneGeo = new THREE.PlaneGeometry(2.7, 2.7);
+    const disposableTextures: THREE.Texture[] = [];
 
     let soundNat20 = false;
     let soundNat1 = false;
 
+    const cols = Math.max(1, Math.min(diceCount, 5));
+    const rows = Math.max(1, Math.ceil(diceCount / cols));
+
     for (let i = 0; i < diceCount; i++) {
       const item = flatDice[i]!;
-      const isCrit = item.kept && item.sides === 20 && item.value === 20;
-      const isFumble = item.kept && item.sides === 20 && item.value === 1;
-      if (isCrit) soundNat20 = true;
-      if (isFumble) soundNat1 = true;
+      if (item.isCrit) soundNat20 = true;
+      if (item.isFumble) soundNat1 = true;
 
-      const geo = createGeometryForSides(item.sides);
-      const baseColor = isCrit
-        ? 0x065f46
-        : isFumble
-          ? 0x881337
+      const theme: DieTheme = item.isCrit
+        ? "crit"
+        : item.isFumble
+          ? "fumble"
           : item.kept
-            ? 0x221738
-            : 0x27272a;
+            ? "standard"
+            : "dropped";
 
-      const mat = new THREE.MeshPhysicalMaterial({
-        color: baseColor,
-        roughness: 0.22,
-        metalness: 0.35,
-        clearcoat: 0.9,
-        clearcoatRoughness: 0.15,
-        transparent: !item.kept,
-        opacity: item.kept ? 1 : 0.48,
-      });
-
-      const mesh = new THREE.Mesh(geo, mat);
+      const built = buildDieAssets(item.sides, theme);
+      const mesh = new THREE.Mesh(built.geometry, built.materials);
       mesh.castShadow = true;
       mesh.receiveShadow = true;
 
-      // Bordas metálicas em ouro velho / esmeralda / rubi
-      const edgesGeo = new THREE.EdgesGeometry(geo);
-      const edgeColor = isCrit
-        ? 0x34d399
-        : isFumble
-          ? 0xfb7185
-          : item.kept
-            ? 0xf59e0b
-            : 0x71717a;
-      const edgesMat = new THREE.LineBasicMaterial({
-        color: edgeColor,
-        transparent: true,
-        opacity: item.kept ? 0.95 : 0.45,
-      });
-      const edges = new THREE.LineSegments(edgesGeo, edgesMat);
-      mesh.add(edges);
-
       const group = new THREE.Group();
+      group.scale.setScalar(dieScale);
       group.add(mesh);
 
-      const angle = (i / Math.max(diceCount, 1)) * Math.PI * 2;
-      const startX = -3.8 + (i % 4) * 1.1;
-      const startY = -3.6 + Math.floor(i / 4) * 0.8;
-      group.position.set(startX, startY, 3.6 + (i % 3) * 0.7);
-      group.rotation.set(i * 0.9, i * 1.4, i * 0.6);
-
+      const startX = -4.2 + (i % 4) * 1.25;
+      const startY = -3.4 + Math.floor(i / 4) * 0.9;
+      group.position.set(startX, startY, 3.8 + (i % 3) * 0.65);
+      group.rotation.set(i * 1.1, i * 1.7, i * 0.8);
       scene.add(group);
 
-      const badge = createNumberBadgeSprite({
-        value: item.value,
-        sides: item.sides,
-        isCrit,
-        isFumble,
-        kept: item.kept,
+      const shadowMat = new THREE.MeshBasicMaterial({
+        map: shadowTex,
+        transparent: true,
+        opacity: 0.25,
+        depthWrite: false,
       });
-      badge.position.set(startX, startY, 1.35);
-      scene.add(badge);
+      const contactShadow = new THREE.Mesh(shadowPlaneGeo, shadowMat);
+      contactShadow.position.set(startX, startY, 0.015);
+      scene.add(contactShadow);
 
-      const targetX = Math.cos(angle) * Math.min(diceCount * 0.55, 2.8);
-      const targetY = Math.sin(angle) * Math.min(diceCount * 0.45, 2.0);
-      const flightFrames = 36;
+      let auraDisc: THREE.Mesh | null = null;
+      if (item.isCrit || item.isFumble) {
+        const auraTex = createAuraTexture(item.isCrit ? "crit" : "fumble");
+        disposableTextures.push(auraTex);
+        const auraMat = new THREE.MeshBasicMaterial({
+          map: auraTex,
+          transparent: true,
+          opacity: 0,
+          depthWrite: false,
+          blending: THREE.AdditiveBlending,
+        });
+        auraDisc = new THREE.Mesh(auraPlaneGeo, auraMat);
+        auraDisc.position.set(startX, startY, 0.02);
+        scene.add(auraDisc);
+      }
+
+      const col = i % cols;
+      const row = Math.floor(i / cols);
+      const spacingX = diceCount === 1 ? 0 : 1.75;
+      const spacingY = rows === 1 ? 0 : 1.65;
+      const targetX =
+        (col - (cols - 1) / 2) * spacingX + ((i % 3) - 1) * 0.16;
+      const targetY =
+        ((rows - 1) / 2 - row) * spacingY + ((i % 2) - 0.5) * 0.14;
+
+      const yawJitter = (((i * 73) % 21) - 10) * 0.028; // leve naturalidade +-16 deg mantendo leitura reta
+      const targetQuat = computeTargetDieQuaternion(
+        built.faceMap,
+        item.value,
+        yawJitter
+      );
+
+      const restZ = built.restHeight * dieScale;
+      const flightFrames = 34;
 
       bodies.push({
         group,
-        badge,
+        contactShadow,
+        auraDisc,
+        geometry: built.geometry,
+        materials: built.materials,
+        restZ,
         vx: (targetX - startX) / flightFrames,
         vy: (targetY - startY) / flightFrames,
-        vz: 0.12 + (i % 3) * 0.03,
-        wx: (i % 2 === 0 ? 1 : -1) * 0.24,
-        wy: 0.28,
-        wz: 0.19,
+        vz: 0.11 + (i % 3) * 0.025,
+        wx: (i % 2 === 0 ? 1 : -1) * (0.24 + (i % 3) * 0.04),
+        wy: (i % 3 === 0 ? -1 : 1) * 0.29,
+        wz: 0.21,
+        targetQuat,
+        settleBlend: 0,
+        bounces: 0,
         settled: false,
-        isCrit,
-        isFumble,
-        kept: item.kept,
+        isCrit: item.isCrit,
+        isFumble: item.isFumble,
       });
     }
 
@@ -285,7 +324,7 @@ export default function Dice3DOverlay() {
 
     let rafId = 0;
     const startTime = performance.now();
-    const totalDuration = 4000;
+    const totalDuration = 4200;
 
     const animate = (now: number) => {
       const elapsed = now - startTime;
@@ -300,63 +339,73 @@ export default function Dice3DOverlay() {
           : 1;
       renderer.domElement.style.opacity = String(fadeAlpha);
 
-      // Passo de física 3D
       for (let i = 0; i < bodies.length; i++) {
         const b = bodies[i]!;
         if (!b.settled) {
           b.group.position.x += b.vx;
           b.group.position.y += b.vy;
           b.group.position.z += b.vz;
-          b.vz -= 0.019; // gravidade
+          b.vz -= 0.02;
 
-          b.group.rotation.x += b.wx;
-          b.group.rotation.y += b.wy;
-          b.group.rotation.z += b.wz;
-
-          // Limites da mesa
-          if (b.group.position.x < -5.5 || b.group.position.x > 5.5) {
-            b.vx = -b.vx * 0.7;
+          // Mistura suave para a rotação da face sorteada após o primeiro quique/meio-voo
+          if (elapsed > 520) {
+            b.settleBlend = Math.min(1, b.settleBlend + 0.048);
+            const spinDamp = 1 - b.settleBlend;
+            b.group.rotation.x += b.wx * spinDamp;
+            b.group.rotation.y += b.wy * spinDamp;
+            b.group.rotation.z += b.wz * spinDamp;
+            b.group.quaternion.slerp(b.targetQuat, 0.09 + b.settleBlend * 0.16);
+          } else {
+            b.group.rotation.x += b.wx;
+            b.group.rotation.y += b.wy;
+            b.group.rotation.z += b.wz;
           }
-          if (b.group.position.y < -3.8 || b.group.position.y > 3.8) {
-            b.vy = -b.vy * 0.7;
+
+          if (b.group.position.x < -5.2 || b.group.position.x > 5.2) {
+            b.vx = -b.vx * 0.68;
+          }
+          if (b.group.position.y < -3.6 || b.group.position.y > 3.6) {
+            b.vy = -b.vy * 0.68;
           }
 
-          // Quique no chão z = 0.65
-          if (b.group.position.z <= 0.65) {
-            b.group.position.z = 0.65;
-            if (Math.abs(b.vz) > 0.055) {
-              b.vz = -b.vz * 0.54;
-              b.vx *= 0.76;
-              b.vy *= 0.76;
-              b.wx *= 0.72;
-              b.wy *= 0.72;
-              b.wz *= 0.72;
+          if (b.group.position.z <= b.restZ) {
+            b.group.position.z = b.restZ;
+            b.bounces++;
+            if (Math.abs(b.vz) > 0.055 && b.bounces <= 3) {
+              b.vz = -b.vz * 0.5;
+              b.vx *= 0.72;
+              b.vy *= 0.72;
+              b.wx *= 0.62;
+              b.wy *= 0.62;
+              b.wz *= 0.62;
             } else {
               b.vz = 0;
-              b.vx *= 0.82;
-              b.vy *= 0.82;
-              b.wx *= 0.68;
-              b.wy *= 0.68;
-              b.wz *= 0.68;
+              b.vx *= 0.8;
+              b.vy *= 0.8;
+              b.wx *= 0.6;
+              b.wy *= 0.6;
+              b.wz *= 0.6;
+              b.group.quaternion.slerp(b.targetQuat, 0.28);
 
               if (
                 Math.hypot(b.vx, b.vy) < 0.008 &&
-                Math.hypot(b.wx, b.wy, b.wz) < 0.02
+                b.group.quaternion.angleTo(b.targetQuat) < 0.025
               ) {
+                b.group.quaternion.copy(b.targetQuat);
                 b.settled = true;
               }
             }
           }
         }
 
-        // Repulsão suave entre dados
+        // Separação suave entre dados na mesa
         for (let j = i + 1; j < bodies.length; j++) {
           const other = bodies[j]!;
           const dx = other.group.position.x - b.group.position.x;
           const dy = other.group.position.y - b.group.position.y;
           const dist = Math.hypot(dx, dy);
-          if (dist > 0 && dist < 1.45) {
-            const push = (1.45 - dist) * 0.08;
+          if (dist > 0 && dist < 1.55) {
+            const push = (1.55 - dist) * 0.08;
             const nx = dx / dist;
             const ny = dy / dist;
             b.group.position.x -= nx * push;
@@ -366,15 +415,32 @@ export default function Dice3DOverlay() {
           }
         }
 
-        // Badge acompanha o dado e aparece suavemente ao assentar (ou após 850ms)
-        b.badge.position.set(
+        // Atualiza sombra de contato no chão
+        const heightRatio = Math.max(0, Math.min(1, (b.group.position.z - b.restZ) / 3.8));
+        b.contactShadow.position.set(
           b.group.position.x,
           b.group.position.y,
-          b.group.position.z + 0.95
+          0.015
         );
-        const badgeMat = b.badge.material as THREE.SpriteMaterial;
-        if (b.settled || elapsed > 900) {
-          badgeMat.opacity = Math.min(badgeMat.opacity + 0.12, 1);
+        const sScale = (1 + heightRatio * 0.55) * dieScale;
+        b.contactShadow.scale.set(sScale, sScale, 1);
+        (b.contactShadow.material as THREE.MeshBasicMaterial).opacity =
+          0.65 * (1 - heightRatio * 0.65);
+
+        // Aura pulsante de Crítico / Falha Crítica
+        if (b.auraDisc) {
+          b.auraDisc.position.set(
+            b.group.position.x,
+            b.group.position.y,
+            0.02
+          );
+          const auraMat = b.auraDisc.material as THREE.MeshBasicMaterial;
+          if (b.settled || elapsed > 900) {
+            const pulse = 0.72 + Math.sin(elapsed * 0.009) * 0.28;
+            auraMat.opacity = Math.min(auraMat.opacity + 0.08, 0.9 * pulse);
+            const aScale = (0.95 + Math.sin(elapsed * 0.006) * 0.08) * dieScale;
+            b.auraDisc.scale.set(aScale, aScale, 1);
+          }
         }
       }
 
@@ -387,11 +453,19 @@ export default function Dice3DOverlay() {
     return () => {
       window.cancelAnimationFrame(rafId);
       bodies.forEach((b) => {
-        b.badge.material.map?.dispose();
-        b.badge.material.dispose();
+        b.geometry.dispose();
+        b.materials.forEach((m) => m.dispose());
+        (b.contactShadow.material as THREE.Material).dispose();
+        if (b.auraDisc) {
+          (b.auraDisc.material as THREE.Material).dispose();
+        }
       });
+      disposableTextures.forEach((t) => t.dispose());
+      shadowPlaneGeo.dispose();
+      auraPlaneGeo.dispose();
       floorGeo.dispose();
       floorMat.dispose();
+      envTarget.dispose();
       renderer.dispose();
       if (container.contains(renderer.domElement)) {
         container.removeChild(renderer.domElement);

@@ -13,9 +13,10 @@ import {
 } from "lucide-react";
 import {
   formatWeatherBadge,
-  WEATHER_PRESET_OPTIONS,
+  hasActiveWeather,
 } from "@/lib/board/weatherPresets";
 import { useBoardStore } from "@/stores/boardStore";
+import WeatherMultiPicker from "./WeatherMultiPicker";
 import type {
   Scene,
   SceneElement,
@@ -108,22 +109,16 @@ export default function WeatherSubToolbar({
         <span className="hidden text-[11px] font-semibold text-zinc-400 sm:inline">
           Cena Toda:
         </span>
-        <select
+        <WeatherMultiPicker
           value={scene.weather_preset ?? "none"}
-          onChange={(e) =>
+          onChange={(nextPreset) =>
             onUpdateSceneWeather({
-              weatherPreset: e.target.value as WeatherPreset,
+              weatherPreset: nextPreset,
             })
           }
-          className="rounded-lg border border-zinc-800 bg-zinc-900 px-2 py-1 text-[11px] text-zinc-200"
-        >
-          {WEATHER_PRESET_OPTIONS.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </select>
-        {scene.weather_preset && scene.weather_preset !== "none" && (
+          title="Escolher um ou mais climas simultâneos para a cena toda"
+        />
+        {hasActiveWeather(scene.weather_preset) && (
           <>
             <input
               type="range"
@@ -181,24 +176,15 @@ export default function WeatherSubToolbar({
       {/* Quando está desenhando um novo bloco */}
       {weatherToolConfig.mode === "draw" && (
         <div className="flex items-center gap-1.5">
-          <select
+          <WeatherMultiPicker
             value={weatherToolConfig.preset}
-            onChange={(e) =>
+            onChange={(nextPreset) =>
               setWeatherToolConfig({
-                preset: e.target.value as WeatherPreset,
+                preset: nextPreset === "none" ? "rain" : nextPreset,
               })
             }
-            title="Clima aplicado ao novo bloco desenhado"
-            className="rounded-lg border border-sky-500/40 bg-zinc-900 px-2 py-1 text-[11px] text-sky-200"
-          >
-            {WEATHER_PRESET_OPTIONS.filter((o) => o.value !== "none").map(
-              (opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              )
-            )}
-          </select>
+            title="Climas aplicados ao novo bloco desenhado"
+          />
           <input
             type="range"
             min={0.1}
@@ -273,10 +259,9 @@ export default function WeatherSubToolbar({
                 {sceneProps.map((p, idx) => {
                   const checked = effectiveIds.includes(p.id);
                   const pd = (p.data ?? {}) as SceneElementData;
-                  const activeWeather =
-                    pd.weatherPreset && pd.weatherPreset !== "none"
-                      ? formatWeatherBadge(pd.weatherPreset)
-                      : null;
+                  const activeWeather = hasActiveWeather(pd.weatherPreset)
+                    ? formatWeatherBadge(pd.weatherPreset)
+                    : null;
                   return (
                     <button
                       key={p.id}
@@ -338,23 +323,18 @@ export default function WeatherSubToolbar({
               ? `${selectedBlocks.length} mapas:`
               : `${getBlockDisplayName(selectedBlocks[0]!, 0)}:`}
           </span>
-          <select
+          <WeatherMultiPicker
             value={targetPreset}
-            onChange={(e) =>
+            onChange={(nextPreset) =>
               onUpdateElementsWeather(effectiveIds, {
-                weatherPreset: e.target.value as WeatherPreset,
+                weatherPreset: nextPreset,
                 weatherIntensity: targetIntensity,
               })
             }
-            className="rounded-md border border-zinc-800 bg-zinc-900 px-1.5 py-0.5 text-[11px] text-white"
-          >
-            {WEATHER_PRESET_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
-          {targetPreset !== "none" && (
+            title="Aplicar ou combinar vários climas nos blocos/mapas selecionados"
+            align="right"
+          />
+          {hasActiveWeather(targetPreset) && (
             <>
               <input
                 type="range"

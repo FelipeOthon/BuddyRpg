@@ -20,14 +20,13 @@ import {
   Triangle,
   Unlock,
 } from "lucide-react";
-import { WEATHER_PRESET_OPTIONS } from "@/lib/board/weatherPresets";
 import { useBoardStore } from "@/stores/boardStore";
+import WeatherMultiPicker from "./WeatherMultiPicker";
 import type {
   ElementDepthLayer,
   SceneElement,
   SceneElementData,
   Token,
-  WeatherPreset,
 } from "@/types/domain";
 
 const DRAW_COLORS = [
@@ -299,26 +298,20 @@ export default function DrawingSubToolbar({
               {isGm && isPropOrWeatherBlock && (
                 <div className="flex items-center gap-1">
                   <CloudRain className="h-3 w-3 text-sky-300" />
-                  <select
+                  <WeatherMultiPicker
                     value={selectedData.weatherPreset ?? "none"}
-                    onChange={(e) =>
+                    onChange={(nextPreset) =>
                       onUpdateElement(selectedElement.id, {
                         data: {
                           ...selectedData,
-                          weatherPreset: e.target.value as WeatherPreset,
+                          weatherPreset: nextPreset,
                           weatherIntensity: selectedData.weatherIntensity ?? 0.6,
                         },
                       })
                     }
-                    title="Aplicar clima apenas sobre este bloco / mapa extra"
-                    className="rounded-lg border border-sky-500/30 bg-zinc-900 px-1.5 py-1 text-[11px] text-sky-200"
-                  >
-                    {WEATHER_PRESET_OPTIONS.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
+                    title="Aplicar ou combinar climas apenas sobre este bloco / mapa extra"
+                    compact
+                  />
                 </div>
               )}
 

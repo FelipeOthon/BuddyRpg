@@ -26,15 +26,17 @@ export type SceneElementKind =
   | "image"
   | "aura";
 export type FogMode = "static" | "dynamic" | "hybrid";
+export type RevealMode = "trail" | "vision";
 export type FogOperation = "cover" | "reveal";
 export type FogShapeKind = "rect" | "circle" | "polygon";
-export type WeatherPreset =
-  | "none"
+export type WeatherEffect =
   | "rain"
   | "snow"
   | "fog_mist"
   | "embers"
-  | "ash";
+  | "ash"
+  | "nightfall";
+export type WeatherPreset = "none" | WeatherEffect | (string & {});
 export type WallType = "wall" | "door" | "window";
 
 export interface Database {
@@ -185,6 +187,8 @@ export interface Database {
           combat_state: Json | null;
           fog_enabled: boolean;
           fog_mode: FogMode;
+          fog_reveal_mode?: RevealMode;
+          darkness_reveal_mode?: RevealMode;
           fog_color: string;
           ambient_light: number;
           weather_preset: WeatherPreset;
@@ -211,6 +215,8 @@ export interface Database {
           combat_state?: Json | null;
           fog_enabled?: boolean;
           fog_mode?: FogMode;
+          fog_reveal_mode?: RevealMode;
+          darkness_reveal_mode?: RevealMode;
           fog_color?: string;
           ambient_light?: number;
           weather_preset?: WeatherPreset;
@@ -237,6 +243,8 @@ export interface Database {
           combat_state?: Json | null;
           fog_enabled?: boolean;
           fog_mode?: FogMode;
+          fog_reveal_mode?: RevealMode;
+          darkness_reveal_mode?: RevealMode;
           fog_color?: string;
           ambient_light?: number;
           weather_preset?: WeatherPreset;

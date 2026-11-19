@@ -1,4 +1,13 @@
 import { z } from "zod";
+import { normalizeWeatherPreset } from "@/lib/board/weatherPresets";
+
+const weatherPresetSchema = z
+  .string()
+  .trim()
+  .refine((val) => normalizeWeatherPreset(val) !== null, "Clima inválido.")
+  .transform((val) => normalizeWeatherPreset(val) ?? "none");
+
+const revealModeSchema = z.enum(["trail", "vision"]);
 
 export const loginSchema = z.object({
   email: z
@@ -226,9 +235,7 @@ const sceneElementDataSchema = z.object({
   label: z.string().max(80).optional(),
   zLayer: z.enum(["under_map", "above_map", "above_tokens"]).optional(),
   zIndex: z.number().finite().optional(),
-  weatherPreset: z
-    .enum(["none", "rain", "snow", "fog_mist", "embers", "ash"])
-    .optional(),
+  weatherPreset: weatherPresetSchema.optional(),
   weatherIntensity: z.number().finite().min(0).max(1).optional(),
 });
 
@@ -274,6 +281,7 @@ export const updateSceneFogSettingsSchema = z.object({
   campaignId: z.string().uuid("Campanha inválida."),
   fogEnabled: z.boolean(),
   fogMode: z.enum(["static", "dynamic", "hybrid"]).optional(),
+  fogRevealMode: revealModeSchema.optional(),
   fogColor: z
     .string()
     .trim()
@@ -305,9 +313,8 @@ export const updateSceneEnvironmentSchema = z.object({
     .finite()
     .transform((v) => Math.min(Math.max(v, 0), 1))
     .optional(),
-  weatherPreset: z
-    .enum(["none", "rain", "snow", "fog_mist", "embers", "ash"])
-    .optional(),
+  darknessRevealMode: revealModeSchema.optional(),
+  weatherPreset: weatherPresetSchema.optional(),
   weatherIntensity: z
     .number()
     .finite()

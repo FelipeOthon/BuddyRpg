@@ -226,4 +226,39 @@ describe("useBoardStore", () => {
     store.setUiHidden(true);
     expect(useBoardStore.getState().uiHidden).toBe(true);
   });
+
+  it("records and clears explored spots independently for fog and darkness", () => {
+    useBoardStore.setState({
+      exploredMemory: {},
+      exploredDarknessMemory: {},
+    });
+    const store = useBoardStore.getState();
+
+    store.recordExploredSpot(
+      "scene-1",
+      { x: 100, y: 100, radiusPx: 140 },
+      30,
+      "fog"
+    );
+    store.recordExploredSpot(
+      "scene-1",
+      { x: 200, y: 200, radiusPx: 180 },
+      30,
+      "darkness"
+    );
+
+    expect(useBoardStore.getState().exploredMemory["scene-1"]).toHaveLength(1);
+    expect(
+      useBoardStore.getState().exploredDarknessMemory["scene-1"]
+    ).toHaveLength(1);
+
+    store.clearExploredMemory("scene-1", "darkness");
+    expect(useBoardStore.getState().exploredMemory["scene-1"]).toHaveLength(1);
+    expect(
+      useBoardStore.getState().exploredDarknessMemory["scene-1"]
+    ).toBeUndefined();
+
+    store.clearExploredMemory("scene-1", "fog");
+    expect(useBoardStore.getState().exploredMemory["scene-1"]).toBeUndefined();
+  });
 });

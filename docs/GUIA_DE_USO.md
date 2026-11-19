@@ -25,6 +25,9 @@ Este guia resume como utilizar os recursos do **BuddyRPG** durante uma sessão d
 | `V` | Ferramenta **Selecionar / Mover Token** |
 | `H` | Ferramenta **Mão (Pan)** para arrastar o mapa |
 | `R` | Ferramenta **Régua** para medir distância (compartilhada em tempo real) |
+| `F` | Ferramenta **Névoa de Guerra** (modalidades *Some de vez* ou *Raio de Visão*) |
+| `E` | Ferramenta **Escuridão & Iluminação** (modalidades *Some de vez* ou *Raio de Visão*) |
+| `C` | Ferramenta **Clima & Anoitecer** (efeitos combináveis na cena toda ou por bloco) |
 | `0` | Resetar zoom (`100%`) e centralizar câmera |
 | `Espaço` *(segurar)* | Ativa **Pan temporário** enquanto pressionada |
 | `Delete` | Remove o token selecionado (pede confirmação) |

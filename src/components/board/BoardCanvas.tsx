@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Eye, HelpCircle } from "lucide-react";
 import { Layer, Rect, Stage } from "react-konva";
 import type Konva from "konva";
 import type { KonvaEventObject } from "konva/lib/Node";
 import { clamp, screenToWorld, type Point2D } from "@/lib/board/geometry";
+import { computeVisibilityPolygon } from "@/lib/board/visibility";
 import { useKeyPressed } from "@/hooks/useKeyPressed";
 import { useBoardStore } from "@/stores/boardStore";
 import {
@@ -46,6 +47,7 @@ import type {
   FogShapeData,
   MusicStatePayload,
   PinnedRuler,
+  RevealMode,
   Scene,
   SceneElementData,
   Token,
@@ -179,6 +181,7 @@ export default function BoardCanvas({
     selectedFogShapeId,
     setSelectedFogShapeId,
     exploredMemory,
+    exploredDarknessMemory,
     recordExploredSpot,
     clearExploredMemory,
     gmFogOpacity,
@@ -239,35 +242,48 @@ export default function BoardCanvas({
     return () => observer.disconnect();
   }, []);
 
-  const sceneTokens = tokens.filter(
-    (t) => t.scene_id === scene.id && (role === "gm" || !t.is_hidden)
+  const sceneTokens = useMemo(
+    () =>
+      tokens.filter(
+        (t) => t.scene_id === scene.id && (role === "gm" || !t.is_hidden)
+      ),
+    [tokens, scene.id, role]
   );
 
-  const fallbackDemoToken: Token = {
-    id: `demo-token-${scene.id}`,
-    scene_id: scene.id,
-    campaign_id: scene.campaign_id,
-    owner_id: currentUserId,
-    character_id: null,
-    name: "Herói (Demo)",
-    image_url: null,
-    pos_x: demoTokenPos.x,
-    pos_y: demoTokenPos.y,
-    size: 1,
-    hp_current: 24,
-    hp_max: 30,
-    is_hidden: false,
-    conditions: [],
-    ring_color: null,
-    is_locked: false,
-    vision_range: 4.5,
-    light_radius: 0,
-    light_color: "#fbbf24",
-    updated_at: new Date().toISOString(),
-  };
-
-  const renderedTokens =
-    sceneTokens.length > 0 ? sceneTokens : [fallbackDemoToken];
+  const renderedTokens = useMemo<Token[]>(() => {
+    if (sceneTokens.length > 0) return sceneTokens;
+    return [
+      {
+        id: `demo-token-${scene.id}`,
+        scene_id: scene.id,
+        campaign_id: scene.campaign_id,
+        owner_id: currentUserId,
+        character_id: null,
+        name: "Herói (Demo)",
+        image_url: null,
+        pos_x: demoTokenPos.x,
+        pos_y: demoTokenPos.y,
+        size: 1,
+        hp_current: 24,
+        hp_max: 30,
+        is_hidden: false,
+        conditions: [],
+        ring_color: null,
+        is_locked: false,
+        vision_range: 4.5,
+        light_radius: 0,
+        light_color: "#fbbf24",
+        updated_at: "2026-01-01T00:00:00.000Z",
+      },
+    ];
+  }, [
+    sceneTokens,
+    scene.id,
+    scene.campaign_id,
+    currentUserId,
+    demoTokenPos.x,
+    demoTokenPos.y,
+  ]);
 
   const canUserMoveToken = (token: Token): boolean => {
     if (token.id.startsWith("demo-token-")) return true;
@@ -1107,10 +1123,113 @@ export default function BoardCanvas({
     }
   };
 
+  const sceneWallSegments = useMemo(
+    () =>
+      walls
+        .filter(
+          (w) =>
+            w.scene_id === scene.id &&
+            (w.wall_type === "wall" || (w.wall_type === "door" && !w.is_open))
+        )
+        .map((w) => ({ x1: w.x1, y1: w.y1, x2: w.x2, y2: w.y2 })),
+    [walls, scene.id]
+  );
+
+  const hasDarknessLayer = useMemo(
+    () =>
+      (scene.ambient_light ?? 1) < 0.99 ||
+      fogShapes.some(
+        (s) =>
+          s.scene_id === scene.id &&
+          s.operation === "cover" &&
+          ((s.data as FogShapeData | null)?.layer ?? "fog") === "darkness"
+      ),
+    [scene.ambient_light, fogShapes, scene.id]
+  );
+
+  const maybeRecordExploration = useCallback(
+    (tokenId: string, x: number, y: number) => {
+      const fogTrail =
+        scene.fog_enabled && (scene.fog_reveal_mode ?? "trail") === "trail";
+      const darknessTrail =
+        hasDarknessLayer &&
+        (scene.darkness_reveal_mode ?? "vision") === "trail";
+      if (!fogTrail && !darknessTrail) return;
+
+      const tok = renderedTokens.find((t) => t.id === tokenId);
+      if (!tok) return;
+      const meters = computeTokenRevealMeters(tok, {
+        gmUserIds,
+        isGm: role === "gm",
+        gmPreviewVision,
+        selectedTokenId,
+      });
+      if (meters <= 0) return;
+
+      const g = Math.max(scene.grid_size || 70, 10);
+      const mpc = Math.max(scene.meters_per_cell || 1.5, 0.1);
+      const radiusPx = Math.max((meters * g) / mpc, g);
+      const half = (Math.min(Math.max(tok.size || 1, 1), 4) * g) / 2;
+      const cx = x + half;
+      const cy = y + half;
+      const poly =
+        sceneWallSegments.length > 0
+          ? computeVisibilityPolygon({ x: cx, y: cy }, radiusPx, sceneWallSegments)
+          : undefined;
+
+      const spot = { x: cx, y: cy, radiusPx, poly };
+      if (fogTrail) {
+        recordExploredSpot(scene.id, spot, g * 0.45, "fog");
+      }
+      if (darknessTrail) {
+        recordExploredSpot(scene.id, spot, g * 0.45, "darkness");
+      }
+    },
+    [
+      scene.fog_enabled,
+      scene.fog_reveal_mode,
+      scene.darkness_reveal_mode,
+      scene.id,
+      scene.grid_size,
+      scene.meters_per_cell,
+      hasDarknessLayer,
+      renderedTokens,
+      gmUserIds,
+      role,
+      gmPreviewVision,
+      selectedTokenId,
+      sceneWallSegments,
+      recordExploredSpot,
+    ]
+  );
+
+  // Registra automaticamente posições atuais e movimentos remotos quando o modo 'trail' está ativo
+  useEffect(() => {
+    const fogTrail =
+      scene.fog_enabled && (scene.fog_reveal_mode ?? "trail") === "trail";
+    const darknessTrail =
+      hasDarknessLayer &&
+      (scene.darkness_reveal_mode ?? "vision") === "trail";
+    if (!fogTrail && !darknessTrail) return;
+    for (const t of renderedTokens) {
+      if (t.scene_id !== scene.id) continue;
+      maybeRecordExploration(t.id, t.pos_x, t.pos_y);
+    }
+  }, [
+    scene.id,
+    scene.fog_enabled,
+    scene.fog_reveal_mode,
+    scene.darkness_reveal_mode,
+    hasDarknessLayer,
+    renderedTokens,
+    maybeRecordExploration,
+  ]);
+
   const handleTokenDragStart = (tokenId: string) => {
     setDraggingLocalTokenId(tokenId);
     const token = renderedTokens.find((t) => t.id === tokenId);
     if (token) {
+      maybeRecordExploration(tokenId, token.pos_x, token.pos_y);
       const halfSize = (Math.min(Math.max(token.size || 1, 1), 4) * scene.grid_size) / 2;
       const center = {
         x: token.pos_x + halfSize,
@@ -1119,29 +1238,6 @@ export default function BoardCanvas({
       tokenDragCenterRef.current = { origin: center, halfSize };
       setTokenDragRuler({ start: center, end: center });
     }
-  };
-
-  const maybeRecordExploration = (tokenId: string, x: number, y: number) => {
-    if (!scene.fog_enabled) return;
-    const tok = renderedTokens.find((t) => t.id === tokenId);
-    if (!tok) return;
-    const meters = computeTokenRevealMeters(tok, {
-      gmUserIds,
-      isGm: role === "gm",
-      gmPreviewVision,
-      selectedTokenId,
-    });
-    if (meters <= 0) return;
-
-    const g = Math.max(scene.grid_size || 70, 10);
-    const mpc = Math.max(scene.meters_per_cell || 1.5, 0.1);
-    const radiusPx = Math.max((meters * g) / mpc, g);
-    const half = (Math.min(Math.max(tok.size || 1, 1), 4) * g) / 2;
-    recordExploredSpot(
-      scene.id,
-      { x: x + half, y: y + half, radiusPx },
-      g * 0.45
-    );
   };
 
   const handleTokenDragMove = (tokenId: string, x: number, y: number) => {
@@ -1454,6 +1550,33 @@ export default function BoardCanvas({
     });
   };
 
+  const handleChangeFogRevealMode = (fogRevealMode: RevealMode) => {
+    if (role !== "gm") return;
+    upsertScene({ ...scene, fog_reveal_mode: fogRevealMode });
+    if (fogRevealMode === "vision") {
+      clearExploredMemory(scene.id, "fog");
+    }
+    void updateSceneFogSettingsAction({
+      sceneId: scene.id,
+      campaignId: scene.campaign_id,
+      fogEnabled: scene.fog_enabled,
+      fogRevealMode,
+    });
+  };
+
+  const handleChangeDarknessRevealMode = (darknessRevealMode: RevealMode) => {
+    if (role !== "gm") return;
+    upsertScene({ ...scene, darkness_reveal_mode: darknessRevealMode });
+    if (darknessRevealMode === "vision") {
+      clearExploredMemory(scene.id, "darkness");
+    }
+    void updateSceneEnvironmentAction({
+      sceneId: scene.id,
+      campaignId: scene.campaign_id,
+      darknessRevealMode,
+    });
+  };
+
   const { hex: fogHex, opacity: sceneFogOpacity } = parseFogColor(
     scene.fog_color
   );
@@ -1644,6 +1767,7 @@ export default function BoardCanvas({
       )
       .map((s) => s.id);
     existingIds.forEach((id) => removeFogShape(id));
+    clearExploredMemory(scene.id, layer);
 
     if (layer === "fog") {
       upsertScene({ ...scene, fog_enabled: true });
@@ -1690,6 +1814,7 @@ export default function BoardCanvas({
     setFogPolygonPoints([]);
     setLocalFogPreview(null);
     setSelectedFogShapeId(null);
+    clearExploredMemory(scene.id, layer);
     const layerIds = fogShapes
       .filter(
         (s) =>
@@ -1838,13 +1963,16 @@ export default function BoardCanvas({
             polygonPointCount={fogPolygonPoints.length}
             fogIntensity={sceneFogOpacity}
             exploredCount={(exploredMemory[scene.id] ?? []).length}
+            darknessExploredCount={(exploredDarknessMemory[scene.id] ?? []).length}
             onFinishPolygon={finishFogPolygon}
             onToggleFogEnabled={handleToggleFogEnabled}
             onChangeFogMode={handleChangeFogMode}
+            onChangeFogRevealMode={handleChangeFogRevealMode}
+            onChangeDarknessRevealMode={handleChangeDarknessRevealMode}
             onChangeFogIntensity={handleChangeFogIntensity}
             onChangeAmbientLight={handleChangeAmbientLight}
             onDeleteSelectedShape={handleDeleteSelectedFogShape}
-            onResetExplored={() => clearExploredMemory(scene.id)}
+            onResetExplored={(layer) => clearExploredMemory(scene.id, layer)}
             onCoverAllLayer={handleCoverAllLayer}
             onClearAllLayer={handleClearAllLayer}
           />
@@ -2215,7 +2343,7 @@ export default function BoardCanvas({
             tokens={renderedTokens}
             walls={walls}
             fogShapes={fogShapes}
-            exploredSpots={exploredMemory[scene.id] ?? []}
+            exploredSpots={exploredDarknessMemory[scene.id] ?? []}
             gmFogOpacity={gmFogOpacity}
             canSelectDarkness={
               role === "gm" &&
