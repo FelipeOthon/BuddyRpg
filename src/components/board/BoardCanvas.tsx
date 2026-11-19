@@ -55,6 +55,7 @@ import type {
   Token,
 } from "@/types/domain";
 import MapLayer from "./MapLayer";
+import AnimatedPropsOverlay from "./AnimatedPropsOverlay";
 import GridLayer from "./GridLayer";
 import ElementsLayer, { type LocalDrawState } from "./ElementsLayer";
 import DrawingSubToolbar from "./DrawingSubToolbar";
@@ -1926,6 +1927,35 @@ export default function BoardCanvas({
             onUploadMapProps={(files) => {
               void handleUploadMultipleMapProps(files);
             }}
+            onPlaceVfxProp={(vfxUrl, label, defaultCells) => {
+              if (role !== "gm") return;
+              const centerX =
+                (-viewport.x + size.width / 2) / viewport.scale;
+              const centerY =
+                (-viewport.y + size.height / 2) / viewport.scale;
+              const dim = Math.round(scene.grid_size * defaultCells);
+              void createSceneElementAction({
+                sceneId: scene.id,
+                campaignId: scene.campaign_id,
+                layer: "prop",
+                kind: "image",
+                x: Math.round(centerX - dim / 2),
+                y: Math.round(centerY - dim / 2),
+                data: {
+                  imageUrl: vfxUrl,
+                  width: dim,
+                  height: dim,
+                  opacity: 1,
+                  label,
+                  zLayer: "above_tokens",
+                },
+              }).then((res) => {
+                if (res.ok && res.element) {
+                  upsertElement(res.element);
+                  setSelectedElementId(res.element.id);
+                }
+              });
+            }}
             onOpenSceneManager={onOpenSceneManager}
             onClearPinnedRulers={() => {
               clearPinnedRulers(scene.id);
@@ -2444,6 +2474,13 @@ export default function BoardCanvas({
           />
         </Layer>
       </Stage>
+
+      {/* Vídeos VFX animados (.webm com fundo transparente) sincronizados no tabuleiro */}
+      <AnimatedPropsOverlay
+        sceneId={scene.id}
+        elements={elements}
+        isGm={role === "gm"}
+      />
 
       {/* Camada VFX 60fps: Clima Global e Zonas por Bloco + Explosões de Magia */}
       <WeatherOverlay

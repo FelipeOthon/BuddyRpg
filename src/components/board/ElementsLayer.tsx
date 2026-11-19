@@ -106,16 +106,35 @@ function renderShapeGraphic(params: {
   if (kind === "image" && data.imageUrl) {
     const imgW = Math.max(data.width ?? 280, 20);
     const imgH = Math.max(data.height ?? 280, 20);
+    const isVideo = data.imageUrl.toLowerCase().endsWith(".webm");
     const imgBadgeText = hasWeather ? formatWeatherBadge(data.weatherPreset) : "";
     return (
       <Group>
-        <LoadedElementImage
-          url={data.imageUrl}
-          width={imgW}
-          height={imgH}
-          opacity={data.opacity ?? 1}
-          isSelected={isSelected}
-        />
+        {isVideo ? (
+          <Rect
+            width={imgW}
+            height={imgH}
+            fill="rgba(0,0,0,0.01)"
+            stroke={
+              isSelected
+                ? "#fbbf24"
+                : isGm
+                  ? "rgba(251, 191, 36, 0.25)"
+                  : undefined
+            }
+            strokeWidth={isSelected ? 2 : 1}
+            dash={[6, 4]}
+            cornerRadius={8}
+          />
+        ) : (
+          <LoadedElementImage
+            url={data.imageUrl}
+            width={imgW}
+            height={imgH}
+            opacity={data.opacity ?? 1}
+            isSelected={isSelected}
+          />
+        )}
         {isGm && hasWeather && (
           <Group listening={false}>
             <Rect

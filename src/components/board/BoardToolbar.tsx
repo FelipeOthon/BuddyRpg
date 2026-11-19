@@ -30,6 +30,8 @@ import {
   RotateCcw,
   Ruler,
   Settings2,
+  Shield,
+  Sparkles,
   Square,
   Trash2,
   Type,
@@ -56,6 +58,8 @@ import {
   unlockAudioPlayback,
 } from "@/lib/audio/soundEngine";
 import { useBoardStore, type BoardTool } from "@/stores/boardStore";
+import { CURATED_VFX_ANIMATIONS } from "@/lib/board/curatedAssets";
+import DmScreenModal from "./DmScreenModal";
 import QuickDiceRoller from "./QuickDiceRoller";
 import type { MusicPreset, MusicStatePayload, Scene } from "@/types/domain";
 
@@ -84,6 +88,7 @@ export default function BoardToolbar({
   onBroadcastMusicState,
   onOpenSceneManager,
   onUploadMapProps,
+  onPlaceVfxProp,
 }: {
   scene: Scene;
   isGm: boolean;
@@ -93,6 +98,7 @@ export default function BoardToolbar({
   onBroadcastMusicState?: (state: Omit<MusicStatePayload, "userId">) => void;
   onOpenSceneManager?: () => void;
   onUploadMapProps?: (files: File[]) => void;
+  onPlaceVfxProp?: (url: string, label: string, defaultCells: number) => void;
 }) {
   const {
     tool,
@@ -129,11 +135,14 @@ export default function BoardToolbar({
   const mapPropsInputRef = useRef<HTMLInputElement>(null);
 
   const [musicMenuOpen, setMusicMenuOpen] = useState(false);
+  const [vfxMenuOpen, setVfxMenuOpen] = useState(false);
+  const [dmScreenOpen, setDmScreenOpen] = useState(false);
   const [musicUploading, setMusicUploading] = useState(false);
   const [trackTitle, setTrackTitle] = useState("");
   const [trackUrlInput, setTrackUrlInput] = useState("");
   const [musicError, setMusicError] = useState<string | null>(null);
   const musicMenuRef = useRef<HTMLDivElement>(null);
+  const vfxMenuRef = useRef<HTMLDivElement>(null);
   const musicFileRef = useRef<HTMLInputElement>(null);
 
   const availableScenes = isGm
@@ -144,7 +153,7 @@ export default function BoardToolbar({
   ).length;
 
   useEffect(() => {
-    if (!sceneMenuOpen && !musicMenuOpen) return;
+    if (!sceneMenuOpen && !musicMenuOpen && !vfxMenuOpen) return;
     const onPointerDown = (e: MouseEvent) => {
       if (
         sceneMenuOpen &&
@@ -160,11 +169,19 @@ export default function BoardToolbar({
       ) {
         setMusicMenuOpen(false);
       }
+      if (
+        vfxMenuOpen &&
+        vfxMenuRef.current &&
+        !vfxMenuRef.current.contains(e.target as Node)
+      ) {
+        setVfxMenuOpen(false);
+      }
     };
     const onEsc = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         setSceneMenuOpen(false);
         setMusicMenuOpen(false);
+        setVfxMenuOpen(false);
       }
     };
     window.addEventListener("mousedown", onPointerDown);
@@ -173,7 +190,7 @@ export default function BoardToolbar({
       window.removeEventListener("mousedown", onPointerDown);
       window.removeEventListener("keydown", onEsc);
     };
-  }, [sceneMenuOpen, musicMenuOpen]);
+  }, [sceneMenuOpen, musicMenuOpen, vfxMenuOpen]);
 
   const emitMusic = (patch: Partial<Omit<MusicStatePayload, "userId">>) => {
     if (!isGm) return;
@@ -1052,7 +1069,68 @@ export default function BoardToolbar({
             )}
           </div>
         )}
+
+        {/* Efeitos VFX Animados (.webm) & Escudo do Mestre 5e */}
+        {isGm && onPlaceVfxProp && (
+          <div ref={vfxMenuRef} className="relative">
+            <button
+              type="button"
+              onClick={() => setVfxMenuOpen((v) => !v)}
+              title="Colocar efeitos animados no mapa (Fogueiras, Braseiros, Vagalumes, Brilhos)"
+              className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-medium transition ${
+                vfxMenuOpen
+                  ? "border-amber-400/60 bg-amber-500/20 text-amber-200"
+                  : "border-zinc-800 text-zinc-200 hover:bg-zinc-800"
+              }`}
+            >
+              <Sparkles className="h-3.5 w-3.5 text-amber-400" />
+              <span className="hidden sm:inline">VFX</span>
+            </button>
+
+            {vfxMenuOpen && (
+              <div className="absolute top-full right-0 z-30 mt-2 w-64 rounded-2xl border border-amber-500/40 bg-zinc-950/95 p-2 text-xs shadow-2xl backdrop-blur">
+                <p className="mb-1.5 border-b border-zinc-800 pb-1 text-[11px] font-bold text-amber-200">
+                  Colocar Animação no Tabuleiro
+                </p>
+                <div className="max-h-64 space-y-1 overflow-y-auto pr-0.5">
+                  {CURATED_VFX_ANIMATIONS.map((vfx) => (
+                    <button
+                      key={vfx.id}
+                      type="button"
+                      onClick={() => {
+                        onPlaceVfxProp(vfx.url, vfx.label, vfx.defaultCells);
+                        setVfxMenuOpen(false);
+                      }}
+                      className="flex w-full items-center justify-between rounded-lg border border-zinc-800/80 bg-zinc-900/70 px-2.5 py-1.5 text-left text-[11px] text-zinc-200 transition hover:border-amber-500/40 hover:bg-zinc-800"
+                    >
+                      <span>{vfx.label}</span>
+                      <span className="text-[10px] text-zinc-500">
+                        {vfx.category}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {isGm && (
+          <button
+            type="button"
+            onClick={() => setDmScreenOpen(true)}
+            title="Abrir Escudo do Mestre (Tabelas D&D 5e)"
+            className="inline-flex items-center gap-1 rounded-lg border border-zinc-800 px-2 py-1 text-[11px] font-medium text-zinc-200 transition hover:border-amber-500/40 hover:bg-zinc-800"
+          >
+            <Shield className="h-3.5 w-3.5 text-amber-400" />
+            <span className="hidden md:inline">Escudo 5e</span>
+          </button>
+        )}
       </div>
+
+      {dmScreenOpen && (
+        <DmScreenModal onClose={() => setDmScreenOpen(false)} />
+      )}
 
       {/* Controles de Zoom */}
       <div className="pointer-events-auto flex items-center gap-1 rounded-xl border border-amber-500/30 bg-zinc-950/90 p-1 shadow-xl backdrop-blur">

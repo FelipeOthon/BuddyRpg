@@ -21,10 +21,14 @@ import {
   type MapBiome,
   type MapPreset,
 } from "@/lib/board/mapGenerator";
+import {
+  CURATED_BATTLEMAPS,
+  type CuratedMapItem,
+} from "@/lib/board/curatedAssets";
 import { uploadCampaignImage } from "@/lib/utils/storage";
 import type { Scene } from "@/types/domain";
 
-type StudioTab = "procedural" | "presets" | "ai_url";
+type StudioTab = "procedural" | "curated" | "presets" | "ai_url";
 
 export default function MapStudioModal({
   campaignId,
@@ -86,6 +90,29 @@ export default function MapStudioModal({
     setRows(preset.rows);
     setSeed(preset.seed);
     setTab("procedural");
+  };
+
+  const handleApplyCurated = async (item: CuratedMapItem) => {
+    setError(null);
+    setIsApplying(true);
+    try {
+      const gridPx = Math.max(scene.grid_size || 70, 20);
+      await onApplyMap({
+        mapUrl: item.url,
+        width: item.cols * gridPx,
+        height: item.rows * gridPx,
+        sceneName: item.title,
+      });
+      onClose();
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Não foi possível aplicar o mapa pronto."
+      );
+    } finally {
+      setIsApplying(false);
+    }
   };
 
   const handleApplyProcedural = async () => {
@@ -186,7 +213,7 @@ export default function MapStudioModal({
         </div>
 
         {/* Abas do Estúdio */}
-        <div className="grid grid-cols-3 gap-1.5 border-b border-amber-500/20 bg-zinc-950/70 p-2">
+        <div className="grid grid-cols-2 gap-1.5 border-b border-amber-500/20 bg-zinc-950/70 p-2 sm:grid-cols-4">
           <button
             type="button"
             onClick={() => setTab("procedural")}
@@ -197,7 +224,19 @@ export default function MapStudioModal({
             }`}
           >
             <Compass className="h-3.5 w-3.5" />
-            1. Forja Procedural (2D)
+            1. Forja 2D
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab("curated")}
+            className={`flex items-center justify-center gap-1.5 rounded-xl py-2 text-xs font-bold transition ${
+              tab === "curated"
+                ? "bg-gradient-to-r from-amber-500 to-amber-600 text-zinc-950 shadow"
+                : "text-zinc-400 hover:text-amber-200"
+            }`}
+          >
+            <Wand2 className="h-3.5 w-3.5" />
+            2. Mapas Prontos
           </button>
           <button
             type="button"
@@ -209,7 +248,7 @@ export default function MapStudioModal({
             }`}
           >
             <Sparkles className="h-3.5 w-3.5" />
-            2. Presets Forgotten Realms
+            3. Presets Faerûn
           </button>
           <button
             type="button"
@@ -221,7 +260,7 @@ export default function MapStudioModal({
             }`}
           >
             <Globe className="h-3.5 w-3.5" />
-            3. IA por Prompt &amp; URL
+            4. IA &amp; URL
           </button>
         </div>
 
@@ -347,6 +386,55 @@ export default function MapStudioModal({
                   {rows * (scene.grid_size || 70)}px)
                 </p>
               </div>
+            </div>
+          )}
+
+          {tab === "curated" && (
+            <div className="grid gap-4 sm:grid-cols-2">
+              {CURATED_BATTLEMAPS.map((item) => (
+                <div
+                  key={item.id}
+                  className="fr-card flex flex-col justify-between overflow-hidden rounded-2xl p-3"
+                >
+                  <div>
+                    <div className="relative mb-2.5 h-36 w-full overflow-hidden rounded-xl border border-zinc-800 bg-zinc-950">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={item.url}
+                        alt={item.title}
+                        loading="lazy"
+                        className="h-full w-full object-cover"
+                      />
+                      <span className="absolute top-2 left-2 rounded-md bg-zinc-950/85 px-2 py-0.5 text-[10px] font-bold text-amber-300">
+                        {item.category}
+                      </span>
+                      <span className="absolute right-2 bottom-2 rounded-md bg-zinc-950/85 px-2 py-0.5 font-mono text-[10px] text-zinc-300">
+                        {item.cols}×{item.rows}
+                      </span>
+                    </div>
+                    <h3 className="font-display text-sm font-bold text-amber-100">
+                      {item.title}
+                    </h3>
+                    <p className="mt-0.5 text-[11px] text-zinc-400">
+                      {item.description}
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled={isApplying}
+                    onClick={() => void handleApplyCurated(item)}
+                    className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-xl bg-amber-500 py-2 text-xs font-bold text-zinc-950 transition hover:bg-amber-400 disabled:opacity-50"
+                  >
+                    {isApplying ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Check className="h-3.5 w-3.5" />
+                    )}
+                    Usar na Cena (Grid Alinhado)
+                  </button>
+                </div>
+              ))}
             </div>
           )}
 
