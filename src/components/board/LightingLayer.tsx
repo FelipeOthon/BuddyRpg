@@ -8,6 +8,7 @@ import {
   buildOrganicRectCloudPoints,
 } from "@/lib/board/fogCloudGeometry";
 import { getSmokeTextures } from "@/lib/board/smokeTexture";
+import { computeTokenRevealMeters } from "@/lib/board/tokenVision";
 import { computeVisibilityPolygon } from "@/lib/board/visibility";
 import type { ExploredSpot, RemoteDragPosition } from "@/stores/boardStore";
 import type {
@@ -30,7 +31,7 @@ export default function LightingLayer({
   onSelectFogShape,
   remoteTokenDrags,
   localTokenDragPos,
-  currentUserId,
+  gmUserIds = [],
   selectedTokenId,
   isGm,
   gmPreviewVision,
@@ -46,7 +47,8 @@ export default function LightingLayer({
   onSelectFogShape?: (id: string | null) => void;
   remoteTokenDrags: Record<string, RemoteDragPosition>;
   localTokenDragPos?: { tokenId: string; x: number; y: number } | null;
-  currentUserId: string;
+  gmUserIds?: string[];
+  currentUserId?: string;
   selectedTokenId: string | null;
   isGm: boolean;
   gmPreviewVision: boolean;
@@ -104,19 +106,15 @@ export default function LightingLayer({
       const cx = tx + half;
       const cy = ty + half;
       const lightPx = (t.light_radius ?? 0) * pxPerMeter;
-      const visionPx = (t.vision_range ?? 18) * pxPerMeter;
+      const revealMeters = computeTokenRevealMeters(t, {
+        gmUserIds,
+        isGm,
+        gmPreviewVision,
+        selectedTokenId,
+      });
 
-      const isMyToken = t.owner_id === currentUserId;
-      const isSelectedPreview = isGm && gmPreviewVision && t.id === selectedTokenId;
-      const includeVision =
-        (isGm && !gmPreviewVision) ||
-        isSelectedPreview ||
-        (!isGm && isMyToken);
-
-      const effectiveRadius = Math.max(
-        lightPx,
-        includeVision ? visionPx : 0
-      );
+      const effectiveRadius =
+        revealMeters > 0 ? Math.max(revealMeters * pxPerMeter, gridSize) : 0;
 
       if (effectiveRadius > 10) {
         const poly = computeVisibilityPolygon(
@@ -145,7 +143,7 @@ export default function LightingLayer({
     pxPerMeter,
     localTokenDragPos,
     remoteTokenDrags,
-    currentUserId,
+    gmUserIds,
     isGm,
     gmPreviewVision,
     selectedTokenId,

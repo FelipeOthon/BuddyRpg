@@ -10,6 +10,7 @@ import {
 } from "@/lib/board/fogCloudGeometry";
 import type { Point2D } from "@/lib/board/geometry";
 import { getSmokeTextures } from "@/lib/board/smokeTexture";
+import { computeTokenRevealMeters } from "@/lib/board/tokenVision";
 import { computeVisibilityPolygon } from "@/lib/board/visibility";
 import type { ExploredSpot, RemoteDragPosition } from "@/stores/boardStore";
 import type {
@@ -294,13 +295,12 @@ export default function FogLayer({
     [walls, scene.id]
   );
 
-  // Tokens de jogadores/personagens (ou com tocha) abrem um pouco a névoa enquanto caminham
+  // Tokens de jogadores/personagens (ou com tocha) abrem a névoa conforme alcance real
   const visionCutouts = useMemo(() => {
     if (!scene.fog_enabled || !hasCoverShapes) return [];
     const gridSize = Math.max(scene.grid_size || 70, 10);
     const metersPerCell = Math.max(scene.meters_per_cell || 1.5, 0.1);
     const pxPerMeter = gridSize / metersPerCell;
-    const gmSet = new Set(gmUserIds);
 
     const list: Array<{
       id: string;
@@ -312,34 +312,15 @@ export default function FogLayer({
 
     for (const t of tokens) {
       if (t.scene_id !== scene.id) continue;
-      if (t.is_hidden && !(isGm && gmPreviewVision && t.id === selectedTokenId)) {
-        continue;
-      }
-
-      const hasTorch = (t.light_radius ?? 0) > 0;
-      const isPlayerToken =
-        Boolean(t.character_id) ||
-        (t.owner_id !== null && !gmSet.has(t.owner_id));
-      const explicitVision = t.vision_range ?? 0;
-
-      let revealMeters = 0;
-      if (hasTorch) {
-        revealMeters = t.light_radius ?? 12;
-      } else if (isPlayerToken) {
-        revealMeters =
-          explicitVision <= 0
-            ? 0
-            : explicitVision === 18
-              ? 4.5
-              : explicitVision;
-      } else if (explicitVision > 0 && explicitVision !== 18) {
-        revealMeters = explicitVision;
-      } else if (isGm && gmPreviewVision && t.id === selectedTokenId) {
-        revealMeters = Math.min(Math.max(explicitVision || 4.5, 1.5), 9);
-      }
+      const revealMeters = computeTokenRevealMeters(t, {
+        gmUserIds,
+        isGm,
+        gmPreviewVision,
+        selectedTokenId,
+      });
 
       if (revealMeters <= 0) continue;
-      const radiusPx = Math.max(revealMeters * pxPerMeter, gridSize * 1.2);
+      const radiusPx = Math.max(revealMeters * pxPerMeter, gridSize);
       const half = (Math.min(Math.max(t.size || 1, 1), 4) * gridSize) / 2;
 
       let tx = t.pos_x;

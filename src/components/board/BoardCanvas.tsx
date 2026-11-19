@@ -30,6 +30,7 @@ import {
 import { createTokenAction } from "@/actions/tokens";
 import { snapToGrid } from "@/lib/board/geometry";
 import { formatFogColor, parseFogColor } from "@/lib/board/fogColor";
+import { computeTokenRevealMeters } from "@/lib/board/tokenVision";
 import {
   computeNonOverlappingCoverRects,
   rectToFlatPolygon,
@@ -256,7 +257,7 @@ export default function BoardCanvas({
     conditions: [],
     ring_color: null,
     is_locked: false,
-    vision_range: 18,
+    vision_range: 4.5,
     light_radius: 0,
     light_color: "#fbbf24",
     updated_at: new Date().toISOString(),
@@ -1120,27 +1121,17 @@ export default function BoardCanvas({
     if (!scene.fog_enabled) return;
     const tok = renderedTokens.find((t) => t.id === tokenId);
     if (!tok) return;
-    const hasTorch = (tok.light_radius ?? 0) > 0;
-    const isPlayerTok =
-      Boolean(tok.character_id) ||
-      (tok.owner_id !== null && !gmUserIds.includes(tok.owner_id));
-    const explicitVision = tok.vision_range ?? 0;
-    const meters = hasTorch
-      ? (tok.light_radius ?? 12)
-      : isPlayerTok
-        ? explicitVision <= 0
-          ? 0
-          : explicitVision === 18
-            ? 4.5
-            : explicitVision
-        : explicitVision > 0 && explicitVision !== 18
-          ? explicitVision
-          : 0;
+    const meters = computeTokenRevealMeters(tok, {
+      gmUserIds,
+      isGm: role === "gm",
+      gmPreviewVision,
+      selectedTokenId,
+    });
     if (meters <= 0) return;
 
     const g = Math.max(scene.grid_size || 70, 10);
     const mpc = Math.max(scene.meters_per_cell || 1.5, 0.1);
-    const radiusPx = Math.max((meters * g) / mpc, g * 1.2);
+    const radiusPx = Math.max((meters * g) / mpc, g);
     const half = (Math.min(Math.max(tok.size || 1, 1), 4) * g) / 2;
     recordExploredSpot(
       scene.id,
@@ -2054,13 +2045,15 @@ export default function BoardCanvas({
           />
         </Layer>
 
-        {/* Camada 1C: Malha quadriculada infinita sobrepondo o fundo e os mapas */}
+        {/* Camada 1C: Malha quadriculada adaptada ao mapa e peças colocadas */}
         <Layer listening={false}>
           <GridLayer
             scene={scene}
             viewport={viewport}
             stageWidth={size.width}
             stageHeight={size.height}
+            elements={elements}
+            tokens={renderedTokens}
           />
         </Layer>
 
@@ -2208,6 +2201,7 @@ export default function BoardCanvas({
             onSelectFogShape={setSelectedFogShapeId}
             remoteTokenDrags={remoteTokenDrags}
             localTokenDragPos={localTokenDragPos}
+            gmUserIds={gmUserIds}
             currentUserId={currentUserId}
             selectedTokenId={selectedTokenId}
             isGm={role === "gm"}
