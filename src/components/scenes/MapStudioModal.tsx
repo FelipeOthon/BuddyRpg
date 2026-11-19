@@ -29,6 +29,7 @@ import { uploadCampaignImage } from "@/lib/utils/storage";
 import type { Scene } from "@/types/domain";
 
 type StudioTab = "procedural" | "curated" | "presets" | "ai_url";
+type MapPlacementMode = "piece" | "background";
 
 export default function MapStudioModal({
   campaignId,
@@ -44,9 +45,12 @@ export default function MapStudioModal({
     width: number;
     height: number;
     sceneName?: string;
+    mode: MapPlacementMode;
   }) => Promise<void>;
 }) {
   const [tab, setTab] = useState<StudioTab>("procedural");
+  const [placementMode, setPlacementMode] =
+    useState<MapPlacementMode>("piece");
   const [biome, setBiome] = useState<MapBiome>("undermountain");
   const [cols, setCols] = useState(24);
   const [rows, setRows] = useState(18);
@@ -102,6 +106,7 @@ export default function MapStudioModal({
         width: item.cols * gridPx,
         height: item.rows * gridPx,
         sceneName: item.title,
+        mode: placementMode,
       });
       onClose();
     } catch (err) {
@@ -137,6 +142,8 @@ export default function MapStudioModal({
         mapUrl: uploaded.publicUrl,
         width: mapData.cols * cellSize,
         height: mapData.rows * cellSize,
+        sceneName: `Forja (${biome})`,
+        mode: placementMode,
       });
       onClose();
     } catch (err) {
@@ -174,6 +181,8 @@ export default function MapStudioModal({
         mapUrl: targetUrl,
         width: (scene.grid_size || 70) * 24,
         height: (scene.grid_size || 70) * 18,
+        sceneName: aiPrompt.trim().slice(0, 40) || "Mapa IA / URL",
+        mode: placementMode,
       });
       onClose();
     } catch (err) {
@@ -262,6 +271,37 @@ export default function MapStudioModal({
             <Globe className="h-3.5 w-3.5" />
             4. IA &amp; URL
           </button>
+        </div>
+
+        {/* Modo de inserção: Mapa Móvel (encaixar nos atuais) vs Fundo Fixo */}
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-800/80 bg-zinc-950/50 px-4 py-2 text-[11px]">
+          <span className="font-semibold text-zinc-400">
+            Como inserir no tabuleiro:
+          </span>
+          <div className="flex items-center gap-1 rounded-xl border border-zinc-800 bg-zinc-900 p-0.5">
+            <button
+              type="button"
+              onClick={() => setPlacementMode("piece")}
+              className={`rounded-lg px-2.5 py-1 font-bold transition ${
+                placementMode === "piece"
+                  ? "bg-amber-500 text-zinc-950"
+                  : "text-zinc-400 hover:text-zinc-200"
+              }`}
+            >
+              🧩 Mapa Móvel (Selecionar e Encaixar)
+            </button>
+            <button
+              type="button"
+              onClick={() => setPlacementMode("background")}
+              className={`rounded-lg px-2.5 py-1 font-bold transition ${
+                placementMode === "background"
+                  ? "bg-zinc-700 text-white"
+                  : "text-zinc-400 hover:text-zinc-200"
+              }`}
+            >
+              🖼️ Fundo Fixo da Cena
+            </button>
+          </div>
         </div>
 
         {/* Conteúdo */}

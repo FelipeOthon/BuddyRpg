@@ -1109,7 +1109,67 @@ export default function SceneManager({
           campaignId={campaignId}
           scene={currentScene}
           onClose={() => setIsMapStudioOpen(false)}
-          onApplyMap={async ({ mapUrl: newUrl, width, height }) => {
+          onApplyMap={async ({
+            mapUrl: newUrl,
+            width,
+            height,
+            sceneName,
+            mode,
+          }) => {
+            if (mode === "piece") {
+              const g = Math.max(currentScene.grid_size || 70, 20);
+              const existingProps = elements.filter(
+                (el) =>
+                  el.scene_id === currentScene.id &&
+                  el.layer === "prop" &&
+                  el.kind === "image"
+              );
+              let rawX = 0;
+              if (existingProps.length > 0) {
+                rawX = Math.max(
+                  ...existingProps.map(
+                    (el) =>
+                      el.x + ((el.data as SceneElementData)?.width ?? 280)
+                  )
+                );
+              } else if (currentScene.map_url) {
+                rawX = currentScene.map_width || 0;
+              }
+              const placeX = Math.round(rawX / g) * g;
+              const placeY = 0;
+
+              const res = await createSceneElementAction({
+                sceneId: currentScene.id,
+                campaignId,
+                layer: "prop",
+                kind: "image",
+                x: placeX,
+                y: placeY,
+                data: {
+                  imageUrl: newUrl,
+                  width,
+                  height,
+                  opacity: 1,
+                  zLayer: "above_map",
+                  label: sceneName || "Mapa",
+                },
+              });
+              if (!res.ok || !res.element) {
+                throw new Error(
+                  res.error ?? "Não foi possível adicionar a peça de mapa."
+                );
+              }
+              upsertElement(res.element);
+              setSelectedElementId(res.element.id);
+              setTool("select");
+              setViewport({
+                ...viewport,
+                x: Math.round(80 - placeX * viewport.scale),
+                y: Math.round(80 - placeY * viewport.scale),
+              });
+              return;
+            }
+
             setMapUrl(newUrl);
             setMapWidth(width);
             setMapHeight(height);
