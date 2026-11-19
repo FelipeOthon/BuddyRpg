@@ -455,11 +455,10 @@ export const useBoardStore = create<BoardState>((set) => ({
           return state;
         }
       }
-      const nextList = cur.length >= 260 ? [...cur.slice(-259), spot] : [...cur, spot];
       return {
         exploredMemory: {
           ...state.exploredMemory,
-          [sceneId]: nextList,
+          [sceneId]: [...cur, spot],
         },
       };
     }),

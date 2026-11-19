@@ -32,8 +32,11 @@ import { createTokenAction } from "@/actions/tokens";
 import { snapToGrid } from "@/lib/board/geometry";
 import { formatFogColor, parseFogColor } from "@/lib/board/fogColor";
 import {
+  computeNonOverlappingCoverRects,
   rectToFlatPolygon,
   slicePolygonByLine,
+  subtractFogRect,
+  type FogRect,
 } from "@/lib/board/fogGeometry";
 import { uploadCampaignImage } from "@/lib/utils/storage";
 import type { Json } from "@/types/database.types";
@@ -665,6 +668,112 @@ export default function BoardCanvas({
             }
           } else {
             const shapeKind = finishedFog.mode === "circle" ? "circle" : "rect";
+            if (shapeKind === "rect" && finishedFog.operation === "cover") {
+              const newRect: FogRect = {
+                x: Math.min(finishedFog.start.x, finishedFog.end.x),
+                y: Math.min(finishedFog.start.y, finishedFog.end.y),
+                width: Math.abs(dx),
+                height: Math.abs(dy),
+              };
+              const sceneRects = fogShapes.filter(
+                (s) => s.scene_id === scene.id && s.shape_kind === "rect"
+              );
+              const existingCoverRects = sceneRects
+                .filter((s) => s.operation === "cover")
+                .map((s) => {
+                  const d = (s.data ?? {}) as FogShapeData;
+                  return {
+                    x: d.x ?? 0,
+                    y: d.y ?? 0,
+                    width: d.width ?? 0,
+                    height: d.height ?? 0,
+                  };
+                });
+              const existingRevealShapes = sceneRects.filter(
+                (s) => s.operation === "reveal"
+              );
+              const existingRevealRects = existingRevealShapes.map((s) => {
+                const d = (s.data ?? {}) as FogShapeData;
+                return {
+                  x: d.x ?? 0,
+                  y: d.y ?? 0,
+                  width: d.width ?? 0,
+                  height: d.height ?? 0,
+                };
+              });
+
+              const uncoveredPieces = computeNonOverlappingCoverRects(
+                newRect,
+                existingCoverRects,
+                existingRevealRects
+              );
+
+              if (uncoveredPieces.length === 0) {
+                return;
+              }
+
+              // Se havia recortes "reveal" antigos sob a nova cobertura, ajusta-os para não reabrir
+              const deleteRevealIds: string[] = [];
+              const newShapesPayload: Array<{
+                operation: "cover" | "reveal";
+                shapeKind: "rect";
+                data: FogShapeData;
+              }> = uncoveredPieces.map((p) => ({
+                operation: "cover",
+                shapeKind: "rect",
+                data: p,
+              }));
+
+              for (const rev of existingRevealShapes) {
+                const rd = (rev.data ?? {}) as FogShapeData;
+                const rr: FogRect = {
+                  x: rd.x ?? 0,
+                  y: rd.y ?? 0,
+                  width: rd.width ?? 0,
+                  height: rd.height ?? 0,
+                };
+                const clipped = subtractFogRect(rr, newRect);
+                const unchanged =
+                  clipped.length === 1 &&
+                  Math.abs(clipped[0]!.x - rr.x) < 1 &&
+                  Math.abs(clipped[0]!.y - rr.y) < 1 &&
+                  Math.abs(clipped[0]!.width - Math.abs(rr.width)) < 1 &&
+                  Math.abs(clipped[0]!.height - Math.abs(rr.height)) < 1;
+                if (!unchanged) {
+                  deleteRevealIds.push(rev.id);
+                  for (const cp of clipped) {
+                    newShapesPayload.push({
+                      operation: "reveal",
+                      shapeKind: "rect",
+                      data: cp,
+                    });
+                  }
+                }
+              }
+
+              if (!scene.fog_enabled) {
+                upsertScene({ ...scene, fog_enabled: true });
+                void updateSceneFogSettingsAction({
+                  sceneId: scene.id,
+                  campaignId: scene.campaign_id,
+                  fogEnabled: true,
+                });
+              }
+
+              deleteRevealIds.forEach((id) => removeFogShape(id));
+              void replaceFogShapesAction({
+                sceneId: scene.id,
+                campaignId: scene.campaign_id,
+                deleteIds: deleteRevealIds,
+                newShapes: newShapesPayload,
+              }).then((res) => {
+                if (res.ok && res.shapes) {
+                  res.shapes.forEach((sh) => upsertFogShape(sh));
+                }
+              });
+              return;
+            }
+
             const data: FogShapeData =
               shapeKind === "circle"
                 ? {

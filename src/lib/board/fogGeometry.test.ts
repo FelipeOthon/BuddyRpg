@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { rectToFlatPolygon, slicePolygonByLine } from "./fogGeometry";
+import {
+  computeNonOverlappingCoverRects,
+  rectToFlatPolygon,
+  slicePolygonByLine,
+} from "./fogGeometry";
 
 describe("fogGeometry slicePolygonByLine", () => {
   it("splits a rectangle cleanly into two polygons when sliced across", () => {
@@ -23,5 +27,32 @@ describe("fogGeometry slicePolygonByLine", () => {
       { x: 300, y: 100 }
     );
     expect(result).toBeNull();
+  });
+});
+
+describe("computeNonOverlappingCoverRects", () => {
+  it("returns empty when the new fog rect is already completely covered", () => {
+    const pieces = computeNonOverlappingCoverRects(
+      { x: 0, y: 0, width: 140, height: 140 },
+      [{ x: 0, y: 0, width: 280, height: 280 }]
+    );
+    expect(pieces).toEqual([]);
+  });
+
+  it("places fog only on the uncovered portion when overlapping existing fog", () => {
+    const pieces = computeNonOverlappingCoverRects(
+      { x: 70, y: 0, width: 140, height: 140 },
+      [{ x: 0, y: 0, width: 140, height: 140 }]
+    );
+    expect(pieces).toEqual([{ x: 140, y: 0, width: 70, height: 140 }]);
+  });
+
+  it("allows re-covering an area that was previously revealed", () => {
+    const pieces = computeNonOverlappingCoverRects(
+      { x: 70, y: 70, width: 70, height: 70 },
+      [{ x: 0, y: 0, width: 210, height: 210 }],
+      [{ x: 70, y: 70, width: 70, height: 70 }]
+    );
+    expect(pieces).toEqual([{ x: 70, y: 70, width: 70, height: 70 }]);
   });
 });

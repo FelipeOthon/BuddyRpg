@@ -7,6 +7,7 @@
 interface SmokeTextureSet {
   dense: HTMLCanvasElement;
   wisps: HTMLCanvasElement;
+  shadow: HTMLCanvasElement;
 }
 
 let cachedSet: SmokeTextureSet | null = null;
@@ -65,7 +66,9 @@ function periodicFbm(u: number, v: number, seed: number): number {
   return value / norm;
 }
 
-function buildWarpedSmokeCanvas(mode: "dense" | "wisps"): HTMLCanvasElement {
+function buildWarpedSmokeCanvas(
+  mode: "dense" | "wisps" | "shadow"
+): HTMLCanvasElement {
   const size = 256;
   const canvas = document.createElement("canvas");
   canvas.width = size;
@@ -75,7 +78,7 @@ function buildWarpedSmokeCanvas(mode: "dense" | "wisps"): HTMLCanvasElement {
 
   const img = ctx.createImageData(size, size);
   const data = img.data;
-  const seed = mode === "dense" ? 107 : 911;
+  const seed = mode === "dense" ? 107 : mode === "wisps" ? 911 : 433;
 
   for (let y = 0; y < size; y++) {
     const v = y / size;
@@ -100,7 +103,7 @@ function buildWarpedSmokeCanvas(mode: "dense" | "wisps"): HTMLCanvasElement {
         data[idx + 1] = Math.round(41 + intensity * 130);
         data[idx + 2] = Math.round(62 + intensity * 145);
         data[idx + 3] = Math.round(intensity * 215);
-      } else {
+      } else if (mode === "wisps") {
         // Filamentos claros prateados que criam efeito de movimento volumétrico
         const ridge = 1 - Math.abs(f * 2 - 1);
         const wisp = Math.pow(Math.min(Math.max((ridge - 0.35) / 0.65, 0), 1), 1.7);
@@ -108,6 +111,13 @@ function buildWarpedSmokeCanvas(mode: "dense" | "wisps"): HTMLCanvasElement {
         data[idx + 1] = Math.round(182 + wisp * 65);
         data[idx + 2] = Math.round(210 + wisp * 45);
         data[idx + 3] = Math.round(wisp * 155);
+      } else {
+        // Véus profundos de escuridão abissal (índigo-obsidiana orgânico)
+        const depth = Math.pow(Math.min(Math.max((f - 0.18) / 0.72, 0), 1), 1.4);
+        data[idx] = Math.round(6 + depth * 22);
+        data[idx + 1] = Math.round(9 + depth * 28);
+        data[idx + 2] = Math.round(22 + depth * 52);
+        data[idx + 3] = Math.round(115 + depth * 125);
       }
     }
   }
@@ -123,6 +133,7 @@ export function getSmokeTextures(): SmokeTextureSet | null {
   cachedSet = {
     dense: buildWarpedSmokeCanvas("dense"),
     wisps: buildWarpedSmokeCanvas("wisps"),
+    shadow: buildWarpedSmokeCanvas("shadow"),
   };
   return cachedSet;
 }

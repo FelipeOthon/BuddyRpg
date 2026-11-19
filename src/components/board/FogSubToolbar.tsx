@@ -83,6 +83,8 @@ export default function FogSubToolbar({
     return null;
   }
 
+  const isDarknessOn = (scene.ambient_light ?? 1) < 0.85;
+
   return (
     <div className="pointer-events-auto absolute top-14 left-1/2 z-20 flex max-w-[92vw] -translate-x-1/2 flex-wrap items-center gap-1 rounded-xl border border-amber-500/35 bg-zinc-950/95 px-2 py-1.5 text-xs shadow-2xl backdrop-blur">
       <button
@@ -100,17 +102,24 @@ export default function FogSubToolbar({
 
       <button
         type="button"
-        onClick={onEnableDungeonMode}
-        title="Ativa Névoa Híbrida + Escuridão de Masmorra para tochas e visão brilharem"
-        className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-semibold transition ${
-          scene.fog_enabled &&
-          scene.fog_mode === "hybrid" &&
-          (scene.ambient_light ?? 1) <= 0.25
+        onClick={() => onChangeAmbientLight(isDarknessOn ? 1 : 0.12)}
+        title="Ligar ou desligar a Escuridão da cena (respeita áreas reveladas e tochas)"
+        className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 font-bold transition ${
+          isDarknessOn
             ? "border-indigo-400/60 bg-indigo-500/25 text-indigo-200"
-            : "border-zinc-700 bg-zinc-900 text-indigo-200 hover:border-indigo-400/40"
+            : "border-zinc-700 bg-zinc-800 text-zinc-400 hover:text-indigo-200"
         }`}
       >
-        <Moon className="h-3 w-3" />
+        <Moon className="h-3.5 w-3.5" />
+        Escuridão {isDarknessOn ? "ON" : "OFF"}
+      </button>
+
+      <button
+        type="button"
+        onClick={onEnableDungeonMode}
+        title="Ativa Névoa + Escuridão juntos (Modo Masmorra)"
+        className="inline-flex items-center gap-1 rounded-lg border border-zinc-700 bg-zinc-900 px-2 py-1 text-[11px] font-semibold text-amber-200 transition hover:border-amber-400/50"
+      >
         Masmorra
       </button>
 

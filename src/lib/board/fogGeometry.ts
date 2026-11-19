@@ -147,3 +147,89 @@ export function slicePolygonByLine(
 
   return [polygonToFlatPoints(left), polygonToFlatPoints(right)];
 }
+
+export interface FogRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export function normalizeFogRect(r: FogRect): FogRect {
+  const x = r.width < 0 ? r.x + r.width : r.x;
+  const y = r.height < 0 ? r.y + r.height : r.y;
+  return {
+    x,
+    y,
+    width: Math.abs(r.width),
+    height: Math.abs(r.height),
+  };
+}
+
+/**
+ * Subtrai o retângulo `blocker` de `target`, retornando 0..4 sub-retângulos disjuntos.
+ */
+export function subtractFogRect(target: FogRect, blocker: FogRect): FogRect[] {
+  const a = normalizeFogRect(target);
+  const b = normalizeFogRect(blocker);
+  const ax2 = a.x + a.width;
+  const ay2 = a.y + a.height;
+  const bx2 = b.x + b.width;
+  const by2 = b.y + b.height;
+
+  const ix1 = Math.max(a.x, b.x);
+  const iy1 = Math.max(a.y, b.y);
+  const ix2 = Math.min(ax2, bx2);
+  const iy2 = Math.min(ay2, by2);
+
+  if (ix2 - ix1 <= 1 || iy2 - iy1 <= 1) {
+    return a.width > 1 && a.height > 1 ? [a] : [];
+  }
+
+  const out: FogRect[] = [];
+  if (iy1 > a.y + 1) {
+    out.push({ x: a.x, y: a.y, width: a.width, height: iy1 - a.y });
+  }
+  if (ay2 > iy2 + 1) {
+    out.push({ x: a.x, y: iy2, width: a.width, height: ay2 - iy2 });
+  }
+  if (ix1 > a.x + 1) {
+    out.push({ x: a.x, y: iy1, width: ix1 - a.x, height: iy2 - iy1 });
+  }
+  if (ax2 > ix2 + 1) {
+    out.push({ x: ix2, y: iy1, width: ax2 - ix2, height: iy2 - iy1 });
+  }
+  return out;
+}
+
+export function subtractFogRects(
+  targets: FogRect[],
+  blockers: FogRect[]
+): FogRect[] {
+  let current = targets.map(normalizeFogRect).filter((r) => r.width > 1 && r.height > 1);
+  for (const blocker of blockers) {
+    if (current.length === 0) break;
+    const next: FogRect[] = [];
+    for (const piece of current) {
+      next.push(...subtractFogRect(piece, blocker));
+    }
+    current = next;
+  }
+  return current;
+}
+
+/**
+ * Calcula apenas as partes ainda não cobertas ao desenhar um novo retângulo de névoa,
+ * evitando sobreposição dupla em áreas que já possuem névoa.
+ */
+export function computeNonOverlappingCoverRects(
+  newRect: FogRect,
+  existingCoverRects: FogRect[],
+  existingRevealRects: FogRect[] = []
+): FogRect[] {
+  const effectiveCover = subtractFogRects(
+    existingCoverRects,
+    existingRevealRects
+  );
+  return subtractFogRects([newRect], effectiveCover);
+}
