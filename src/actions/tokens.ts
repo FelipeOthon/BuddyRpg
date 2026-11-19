@@ -100,6 +100,7 @@ export async function updateTokenStatsAction(input: {
   tokenId: string;
   campaignId: string;
   name?: string;
+  imageUrl?: string | null;
   hpCurrent?: number;
   hpMax?: number;
   size?: number;
@@ -133,6 +134,7 @@ export async function updateTokenStatsAction(input: {
 
   const patch: Database["public"]["Tables"]["tokens"]["Update"] = {};
   if (v.name !== undefined) patch.name = v.name;
+  if (v.imageUrl !== undefined) patch.image_url = v.imageUrl;
   if (v.hpMax !== undefined) patch.hp_max = v.hpMax;
   if (v.hpCurrent !== undefined) patch.hp_current = v.hpCurrent;
   if (v.size !== undefined) patch.size = v.size;

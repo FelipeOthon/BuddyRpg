@@ -1596,6 +1596,7 @@ export default function BoardCanvas({
           setWeatherSelectedIds([id]);
         }
       }
+      setSelectedTokenId(null);
       setSelectedElementId(id);
     },
     onMoveElement: (elId: string, nx: number, ny: number) => {
@@ -2142,7 +2143,10 @@ export default function BoardCanvas({
                 snapEnabled={scene.snap_to_grid}
                 canMove={canMove}
                 isSelected={selectedTokenId === token.id}
-                onSelect={setSelectedTokenId}
+                onSelect={(tid) => {
+                  setSelectedElementId(null);
+                  setSelectedTokenId(tid);
+                }}
                 onDragStart={handleTokenDragStart}
                 onDragMove={handleTokenDragMove}
                 onDragEnd={handleTokenDragEnd}

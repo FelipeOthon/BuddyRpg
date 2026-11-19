@@ -127,6 +127,7 @@ export const updateTokenStatsSchema = z.object({
     .optional(),
   ownerId: z.string().uuid("Dono inválido.").nullable().optional(),
   characterId: z.string().uuid("Personagem inválido.").nullable().optional(),
+  imageUrl: safeImageUrlSchema.nullable().optional(),
   isHidden: z.boolean().optional(),
   conditions: z.array(z.string().trim().min(1).max(24)).max(12).optional(),
   ringColor: z

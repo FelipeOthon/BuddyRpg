@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { loadOlderMessagesAction, sendChatMessageAction } from "@/actions/chat";
 import { createSceneAction } from "@/actions/scenes";
+import { updateTokenStatsAction } from "@/actions/tokens";
 import BoardClient from "@/components/board/BoardClient";
 import Dice3DOverlay from "@/components/board/Dice3DOverlay";
 import InitiativeTrackerBar from "@/components/board/InitiativeTrackerBar";
@@ -38,6 +39,7 @@ import {
   unlockAudioPlayback,
 } from "@/lib/audio/soundEngine";
 import type { Point2D } from "@/lib/board/geometry";
+import { normalizeSheetData } from "@/lib/validation/sheet";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { useBoardStore } from "@/stores/boardStore";
 import type {
@@ -287,7 +289,37 @@ export default function CampaignWorkspaceShell({
       if (!exists) return [...prev, char];
       return prev.map((c) => (c.id === char.id ? char : c));
     });
-  }, []);
+
+    // Sinergia Ficha -> Token: sincroniza PV e nome em tokens vinculados
+    const sh = normalizeSheetData(char.sheet_data);
+    const curTokens = useBoardStore.getState().tokens;
+    const upsertTok = useBoardStore.getState().upsertToken;
+    for (const tok of curTokens) {
+      if (tok.character_id !== char.id) continue;
+      const nextMax = sh.hpMax ?? tok.hp_max;
+      const nextCur = Math.min(Math.max(0, sh.hpCurrent ?? tok.hp_current), nextMax);
+      if (
+        tok.name !== char.name ||
+        tok.hp_max !== nextMax ||
+        tok.hp_current !== nextCur
+      ) {
+        upsertTok({
+          ...tok,
+          name: char.name,
+          hp_max: nextMax,
+          hp_current: nextCur,
+          updated_at: new Date().toISOString(),
+        });
+        void updateTokenStatsAction({
+          tokenId: tok.id,
+          campaignId: campaign.id,
+          name: char.name,
+          hpMax: nextMax,
+          hpCurrent: nextCur,
+        });
+      }
+    }
+  }, [campaign.id]);
 
   const removeCharacter = useCallback((charId: string) => {
     setCharacters((prev) => prev.filter((c) => c.id !== charId));
@@ -726,10 +758,13 @@ export default function CampaignWorkspaceShell({
               {!uiHidden && (
                 <SelectedTokenHud
                   campaignId={campaign.id}
+                  sceneId={viewedScene.id}
                   currentUserId={currentUserId}
                   role={role}
                   characters={characters}
+                  members={membersList}
                   onOpenCharacter={(c) => setOpenCharacterId(c.id)}
+                  onUpsertCharacter={upsertCharacter}
                   onFxBurst={handleFxBurst}
                   onError={showError}
                 />
@@ -894,6 +929,8 @@ export default function CampaignWorkspaceShell({
                 role={role}
                 members={membersList}
                 characters={characters}
+                onUpsertCharacter={upsertCharacter}
+                onOpenCharacter={(c) => setOpenCharacterId(c.id)}
               />
             )}
 

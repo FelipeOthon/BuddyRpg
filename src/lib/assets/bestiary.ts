@@ -1,5 +1,13 @@
 export type BestiaryCategory = "heroes" | "monsters" | "spells_props";
 
+export interface BestiaryAttackPreset {
+  name: string;
+  attackBonus: number;
+  damageFormula: string;
+  damageType: string;
+  rangeOrNotes?: string;
+}
+
 export interface BestiaryEntry {
   id: string;
   category: BestiaryCategory;
@@ -9,46 +17,15 @@ export interface BestiaryEntry {
   hpMax: number;
   armorClass: number;
   avatarUrl: string;
+  classOrArchetype?: string;
+  ancestryOrRace?: string;
+  speed?: string;
+  attacks?: BestiaryAttackPreset[];
+  isCustom?: boolean;
 }
 
 function svgToDataUri(svg: string): string {
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg.trim())}`;
-}
-
-function buildPortraitSvg(params: {
-  bgFrom: string;
-  bgTo: string;
-  ringColor: string;
-  iconSvg: string;
-  badgeText?: string;
-}): string {
-  const { bgFrom, bgTo, ringColor, iconSvg, badgeText } = params;
-  return svgToDataUri(`
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120">
-      <defs>
-        <radialGradient id="bg" cx="50%" cy="35%" r="65%">
-          <stop offset="0%" stop-color="${bgFrom}" />
-          <stop offset="100%" stop-color="${bgTo}" />
-        </radialGradient>
-        <linearGradient id="rim" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stop-color="#fef08a" />
-          <stop offset="50%" stop-color="${ringColor}" />
-          <stop offset="100%" stop-color="#78350f" />
-        </linearGradient>
-      </defs>
-      <circle cx="60" cy="60" r="56" fill="url(#bg)" stroke="url(#rim)" stroke-width="6" />
-      <circle cx="60" cy="60" r="49" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="1.5" stroke-dasharray="4 3" />
-      <g transform="translate(0, 0)">
-        ${iconSvg}
-      </g>
-      ${
-        badgeText
-          ? `<rect x="26" y="88" width="68" height="18" rx="9" fill="rgba(9,9,11,0.85)" stroke="${ringColor}" stroke-width="1.5"/>
-             <text x="60" y="100" text-anchor="middle" fill="#fef3c7" font-family="serif" font-weight="bold" font-size="10">${badgeText}</text>`
-          : ""
-      }
-    </svg>
-  `);
 }
 
 function buildSpellAoeSvg(params: {
@@ -77,7 +54,7 @@ function buildSpellAoeSvg(params: {
 
 export const FORGOTTEN_REALMS_BESTIARY: BestiaryEntry[] = [
   // ==========================================================================
-  // HERÓIS DE FAERÛN
+  // HERÓIS DE FAERÛN (com avatares reais do Pacote)
   // ==========================================================================
   {
     id: "hero-warrior",
@@ -87,59 +64,63 @@ export const FORGOTTEN_REALMS_BESTIARY: BestiaryEntry[] = [
     size: 1,
     hpMax: 28,
     armorClass: 18,
-    avatarUrl: buildPortraitSvg({
-      bgFrom: "#7c2d12",
-      bgTo: "#1c1917",
-      ringColor: "#f59e0b",
-      badgeText: "GUERREIRO",
-      iconSvg: `
-        <path d="M60 22 L76 34 L74 62 C74 74 60 82 60 82 C60 82 46 74 46 62 L44 34 Z" fill="#cbd5e1" stroke="#475569" stroke-width="3"/>
-        <path d="M60 26 L60 78" stroke="#f59e0b" stroke-width="3"/>
-        <path d="M48 48 L72 48" stroke="#94a3b8" stroke-width="4"/>
-        <rect x="50" y="43" width="8" height="4" rx="1" fill="#0f172a"/>
-        <rect x="62" y="43" width="8" height="4" rx="1" fill="#0f172a"/>
-      `,
-    }),
+    classOrArchetype: "Guerreiro",
+    ancestryOrRace: "Humano",
+    speed: "9m",
+    avatarUrl: "/icons/humans/humans-male/contemplative-warrior-in-forest.png",
+    attacks: [
+      {
+        name: "Espada Longa",
+        attackBonus: 6,
+        damageFormula: "1d8+4",
+        damageType: "Cortante",
+        rangeOrNotes: "Corpo a corpo",
+      },
+    ],
   },
   {
     id: "hero-paladin",
     category: "heroes",
     name: "Paladino de Tyr",
-    subtitle: "Meio-Elfo · CA 19 · Campeão Sagrado",
+    subtitle: "Anão / Campeão · CA 19 · Martelo Sagrado",
     size: 1,
     hpMax: 32,
     armorClass: 19,
-    avatarUrl: buildPortraitSvg({
-      bgFrom: "#854d0e",
-      bgTo: "#1e1b4b",
-      ringColor: "#fde047",
-      badgeText: "PALADINO",
-      iconSvg: `
-        <circle cx="60" cy="52" r="26" fill="rgba(253,224,71,0.2)" />
-        <path d="M60 18 L66 40 L88 46 L66 52 L60 76 L54 52 L32 46 L54 40 Z" fill="#fef08a" stroke="#ca8a04" stroke-width="2"/>
-        <circle cx="60" cy="46" r="8" fill="#ffffff"/>
-      `,
-    }),
+    classOrArchetype: "Paladino",
+    ancestryOrRace: "Anão",
+    speed: "7,5m",
+    avatarUrl: "/icons/dwarves/dwarf-paladin-2.png",
+    attacks: [
+      {
+        name: "Martelo de Guerra + Smite",
+        attackBonus: 6,
+        damageFormula: "1d8+3",
+        damageType: "Concussão",
+        rangeOrNotes: "+2d8 Radiante",
+      },
+    ],
   },
   {
     id: "hero-wizard",
     category: "heroes",
     name: "Arquimago de Waterdeep",
-    subtitle: "Elfo do Sol · CA 13 · Escola de Evocação",
+    subtitle: "Humano · CA 13 · Escola de Evocação",
     size: 1,
     hpMax: 22,
     armorClass: 13,
-    avatarUrl: buildPortraitSvg({
-      bgFrom: "#4c1d95",
-      bgTo: "#090d16",
-      ringColor: "#a855f7",
-      badgeText: "ARQUIMAGO",
-      iconSvg: `
-        <polygon points="60,16 36,56 84,56" fill="#581c87" stroke="#c084fc" stroke-width="2.5"/>
-        <ellipse cx="60" cy="56" rx="30" ry="7" fill="#6b21a8" stroke="#c084fc" stroke-width="2"/>
-        <circle cx="60" cy="68" r="10" fill="#38bdf8" stroke="#bae6fd" stroke-width="2"/>
-      `,
-    }),
+    classOrArchetype: "Mago (Evocação)",
+    ancestryOrRace: "Humano",
+    speed: "9m",
+    avatarUrl: "/icons/humans/humans-male/arcane-conjurer.png",
+    attacks: [
+      {
+        name: "Raio de Fogo",
+        attackBonus: 6,
+        damageFormula: "2d10",
+        damageType: "Fogo",
+        rangeOrNotes: "36m",
+      },
+    ],
   },
   {
     id: "hero-rogue",
@@ -149,17 +130,19 @@ export const FORGOTTEN_REALMS_BESTIARY: BestiaryEntry[] = [
     size: 1,
     hpMax: 24,
     armorClass: 16,
-    avatarUrl: buildPortraitSvg({
-      bgFrom: "#115e59",
-      bgTo: "#09090b",
-      ringColor: "#10b981",
-      badgeText: "LADINA",
-      iconSvg: `
-        <path d="M36 74 L78 24 L84 30 L42 80 Z" fill="#e2e8f0" stroke="#475569" stroke-width="2"/>
-        <path d="M84 74 L42 24 L36 30 L78 80 Z" fill="#e2e8f0" stroke="#475569" stroke-width="2"/>
-        <circle cx="60" cy="52" r="9" fill="#10b981" stroke="#a7f3d0" stroke-width="2"/>
-      `,
-    }),
+    classOrArchetype: "Ladino",
+    ancestryOrRace: "Tiefling",
+    speed: "9m",
+    avatarUrl: "/icons/tieflings/tiefling-blood-hunter.png",
+    attacks: [
+      {
+        name: "Adaga Furtiva",
+        attackBonus: 6,
+        damageFormula: "1d4+4",
+        damageType: "Perfurante",
+        rangeOrNotes: "+2d6 Furtivo",
+      },
+    ],
   },
   {
     id: "hero-cleric",
@@ -169,17 +152,18 @@ export const FORGOTTEN_REALMS_BESTIARY: BestiaryEntry[] = [
     size: 1,
     hpMax: 27,
     armorClass: 18,
-    avatarUrl: buildPortraitSvg({
-      bgFrom: "#0369a1",
-      bgTo: "#0f172a",
-      ringColor: "#38bdf8",
-      badgeText: "CLÉRIGA",
-      iconSvg: `
-        <path d="M68 24 A24 24 0 1 0 68 78 A18 18 0 1 1 68 24 Z" fill="#e0f2fe" stroke="#38bdf8" stroke-width="2"/>
-        <circle cx="48" cy="44" r="3" fill="#fef08a"/>
-        <circle cx="72" cy="52" r="4" fill="#fef08a"/>
-      `,
-    }),
+    classOrArchetype: "Clériga",
+    ancestryOrRace: "Anã",
+    speed: "7,5m",
+    avatarUrl: "/icons/dwarves/dwarf-cleric-with-hammer.png",
+    attacks: [
+      {
+        name: "Maça Sagrada",
+        attackBonus: 5,
+        damageFormula: "1d6+3",
+        damageType: "Concussão",
+      },
+    ],
   },
   {
     id: "hero-ranger",
@@ -189,38 +173,40 @@ export const FORGOTTEN_REALMS_BESTIARY: BestiaryEntry[] = [
     size: 1,
     hpMax: 28,
     armorClass: 16,
-    avatarUrl: buildPortraitSvg({
-      bgFrom: "#166534",
-      bgTo: "#052e16",
-      ringColor: "#4ade80",
-      badgeText: "PATRULHEIRO",
-      iconSvg: `
-        <path d="M44 22 C76 38 76 66 44 82" fill="none" stroke="#a16207" stroke-width="5" stroke-linecap="round"/>
-        <line x1="44" y1="22" x2="44" y2="82" stroke="#e2e8f0" stroke-width="1.5"/>
-        <line x1="32" y1="52" x2="82" y2="52" stroke="#fde047" stroke-width="3"/>
-        <polygon points="84,52 74,47 74,57" fill="#fde047"/>
-      `,
-    }),
+    classOrArchetype: "Patrulheiro",
+    ancestryOrRace: "Elfo da Floresta",
+    speed: "10,5m",
+    avatarUrl: "/icons/d-and-d-iconic-characters/varis-silverymoon-ranger.png",
+    attacks: [
+      {
+        name: "Arco Longo",
+        attackBonus: 7,
+        damageFormula: "1d8+4",
+        damageType: "Perfurante",
+        rangeOrNotes: "45m / 180m",
+      },
+    ],
   },
   {
     id: "hero-barbarian",
     category: "heroes",
     name: "Bárbaro do Vento Gélido",
-    subtitle: "Golias · CA 15 · Machado Grande",
+    subtitle: "Guerreiro Nórdico · CA 15 · Machado Grande",
     size: 1,
     hpMax: 38,
     armorClass: 15,
-    avatarUrl: buildPortraitSvg({
-      bgFrom: "#991b1b",
-      bgTo: "#18181b",
-      ringColor: "#ef4444",
-      badgeText: "BÁRBARO",
-      iconSvg: `
-        <line x1="60" y1="20" x2="60" y2="84" stroke="#78350f" stroke-width="6" stroke-linecap="round"/>
-        <path d="M60 28 C86 20 88 54 60 46 Z" fill="#cbd5e1" stroke="#ef4444" stroke-width="2"/>
-        <path d="M60 28 C34 20 32 54 60 46 Z" fill="#cbd5e1" stroke="#ef4444" stroke-width="2"/>
-      `,
-    }),
+    classOrArchetype: "Bárbaro",
+    ancestryOrRace: "Humano",
+    speed: "12m",
+    avatarUrl: "/icons/humans/humans-male/enraged-barbarian.png",
+    attacks: [
+      {
+        name: "Machado Grande (Fúria)",
+        attackBonus: 6,
+        damageFormula: "1d12+4",
+        damageType: "Cortante",
+      },
+    ],
   },
   {
     id: "hero-bard",
@@ -230,18 +216,18 @@ export const FORGOTTEN_REALMS_BESTIARY: BestiaryEntry[] = [
     size: 1,
     hpMax: 24,
     armorClass: 15,
-    avatarUrl: buildPortraitSvg({
-      bgFrom: "#9d174d",
-      bgTo: "#1e1b4b",
-      ringColor: "#f472b6",
-      badgeText: "BARDO",
-      iconSvg: `
-        <path d="M44 26 L44 68 C44 76 76 76 76 68 L76 26" fill="none" stroke="#fbbf24" stroke-width="4"/>
-        <line x1="52" y1="28" x2="52" y2="72" stroke="#fef08a" stroke-width="1.5"/>
-        <line x1="60" y1="28" x2="60" y2="73" stroke="#fef08a" stroke-width="1.5"/>
-        <line x1="68" y1="28" x2="68" y2="72" stroke="#fef08a" stroke-width="1.5"/>
-      `,
-    }),
+    classOrArchetype: "Bardo",
+    ancestryOrRace: "Meio-Elfo",
+    speed: "9m",
+    avatarUrl: "/icons/elves-and-half-elves/half-elf-bard.png",
+    attacks: [
+      {
+        name: "Rapieira",
+        attackBonus: 5,
+        damageFormula: "1d8+3",
+        damageType: "Perfurante",
+      },
+    ],
   },
 
   // ==========================================================================
@@ -255,20 +241,25 @@ export const FORGOTTEN_REALMS_BESTIARY: BestiaryEntry[] = [
     size: 1,
     hpMax: 7,
     armorClass: 15,
-    avatarUrl: buildPortraitSvg({
-      bgFrom: "#365314",
-      bgTo: "#14180d",
-      ringColor: "#84cc16",
-      badgeText: "GOBLIN",
-      iconSvg: `
-        <polygon points="20,46 42,40 40,56" fill="#65a30d"/>
-        <polygon points="100,46 78,40 80,56" fill="#65a30d"/>
-        <circle cx="60" cy="52" r="22" fill="#65a30d" stroke="#365314" stroke-width="2.5"/>
-        <circle cx="51" cy="48" r="4" fill="#ef4444"/>
-        <circle cx="69" cy="48" r="4" fill="#ef4444"/>
-        <path d="M48 62 Q60 68 72 62" fill="none" stroke="#1a2e05" stroke-width="3"/>
-      `,
-    }),
+    classOrArchetype: "Humanoide (Goblin)",
+    ancestryOrRace: "Goblin",
+    speed: "9m",
+    avatarUrl: "/icons/goblins-goblinoids/goblin-1.png",
+    attacks: [
+      {
+        name: "Cimitarra",
+        attackBonus: 4,
+        damageFormula: "1d6+2",
+        damageType: "Cortante",
+      },
+      {
+        name: "Arco Curto",
+        attackBonus: 4,
+        damageFormula: "1d6+2",
+        damageType: "Perfurante",
+        rangeOrNotes: "24m / 96m",
+      },
+    ],
   },
   {
     id: "monster-skeleton",
@@ -278,20 +269,18 @@ export const FORGOTTEN_REALMS_BESTIARY: BestiaryEntry[] = [
     size: 1,
     hpMax: 13,
     armorClass: 13,
-    avatarUrl: buildPortraitSvg({
-      bgFrom: "#334155",
-      bgTo: "#09090b",
-      ringColor: "#94a3b8",
-      badgeText: "ESQUELETO",
-      iconSvg: `
-        <circle cx="60" cy="46" r="20" fill="#e2e8f0"/>
-        <rect x="50" y="58" width="20" height="14" rx="3" fill="#e2e8f0"/>
-        <circle cx="52" cy="45" r="5" fill="#09090b"/>
-        <circle cx="68" cy="45" r="5" fill="#09090b"/>
-        <circle cx="52" cy="45" r="2" fill="#38bdf8"/>
-        <circle cx="68" cy="45" r="2" fill="#38bdf8"/>
-      `,
-    }),
+    classOrArchetype: "Morto-Vivo",
+    ancestryOrRace: "Esqueleto",
+    speed: "9m",
+    avatarUrl: "/icons/undead-misc/armored-undead-general.png",
+    attacks: [
+      {
+        name: "Espada Curta",
+        attackBonus: 4,
+        damageFormula: "1d6+2",
+        damageType: "Perfurante",
+      },
+    ],
   },
   {
     id: "monster-orc",
@@ -301,19 +290,18 @@ export const FORGOTTEN_REALMS_BESTIARY: BestiaryEntry[] = [
     size: 1,
     hpMax: 15,
     armorClass: 13,
-    avatarUrl: buildPortraitSvg({
-      bgFrom: "#7f1d1d",
-      bgTo: "#141414",
-      ringColor: "#dc2626",
-      badgeText: "ORC",
-      iconSvg: `
-        <circle cx="60" cy="52" r="23" fill="#4d7c0f" stroke="#1a2e05" stroke-width="2.5"/>
-        <circle cx="51" cy="46" r="4" fill="#fef08a"/>
-        <circle cx="69" cy="46" r="4" fill="#fef08a"/>
-        <polygon points="46,66 50,54 54,66" fill="#fef9c3"/>
-        <polygon points="66,66 70,54 74,66" fill="#fef9c3"/>
-      `,
-    }),
+    classOrArchetype: "Humanoide (Orc)",
+    ancestryOrRace: "Orc",
+    speed: "9m",
+    avatarUrl: "/icons/orcs-and-half-orcs/determined-orc-fighter.png",
+    attacks: [
+      {
+        name: "Machado Grande",
+        attackBonus: 5,
+        damageFormula: "1d12+3",
+        damageType: "Cortante",
+      },
+    ],
   },
   {
     id: "monster-mimic",
@@ -323,17 +311,19 @@ export const FORGOTTEN_REALMS_BESTIARY: BestiaryEntry[] = [
     size: 1,
     hpMax: 58,
     armorClass: 12,
-    avatarUrl: buildPortraitSvg({
-      bgFrom: "#78350f",
-      bgTo: "#1c1917",
-      ringColor: "#d97706",
-      badgeText: "MÍMICO",
-      iconSvg: `
-        <rect x="34" y="34" width="52" height="40" rx="6" fill="#78350f" stroke="#fbbf24" stroke-width="3"/>
-        <polygon points="38,52 44,60 50,52 56,60 62,52 68,60 74,52 80,60" fill="#fef2f2"/>
-        <path d="M56 54 Q64 78 76 66" fill="none" stroke="#ec4899" stroke-width="6" stroke-linecap="round"/>
-      `,
-    }),
+    classOrArchetype: "Monstruosidade",
+    ancestryOrRace: "Mímico",
+    speed: "4,5m",
+    avatarUrl: "/icons/abberations/abberant-maw.png",
+    attacks: [
+      {
+        name: "Mordida / Pseudópode",
+        attackBonus: 5,
+        damageFormula: "1d8+3",
+        damageType: "Perfurante",
+        rangeOrNotes: "+1d8 Ácido",
+      },
+    ],
   },
   {
     id: "monster-mindflayer",
@@ -343,18 +333,18 @@ export const FORGOTTEN_REALMS_BESTIARY: BestiaryEntry[] = [
     size: 1,
     hpMax: 71,
     armorClass: 15,
-    avatarUrl: buildPortraitSvg({
-      bgFrom: "#581c87",
-      bgTo: "#090514",
-      ringColor: "#c084fc",
-      badgeText: "ILLITHID",
-      iconSvg: `
-        <ellipse cx="60" cy="42" rx="18" ry="20" fill="#9333ea"/>
-        <circle cx="53" cy="42" r="3.5" fill="#fef08a"/>
-        <circle cx="67" cy="42" r="3.5" fill="#fef08a"/>
-        <path d="M48 56 Q42 74 38 80 M55 58 Q53 76 50 82 M65 58 Q67 76 70 82 M72 56 Q78 74 82 80" fill="none" stroke="#a855f7" stroke-width="4" stroke-linecap="round"/>
-      `,
-    }),
+    classOrArchetype: "Aberração",
+    ancestryOrRace: "Illithid",
+    speed: "9m",
+    avatarUrl: "/icons/abberations/mind-flayer-1.png",
+    attacks: [
+      {
+        name: "Tentáculos",
+        attackBonus: 7,
+        damageFormula: "2d10+4",
+        damageType: "Psíquico",
+      },
+    ],
   },
   {
     id: "monster-ogre",
@@ -364,18 +354,18 @@ export const FORGOTTEN_REALMS_BESTIARY: BestiaryEntry[] = [
     size: 2,
     hpMax: 59,
     armorClass: 11,
-    avatarUrl: buildPortraitSvg({
-      bgFrom: "#713f12",
-      bgTo: "#1c1917",
-      ringColor: "#eab308",
-      badgeText: "OGRO 2x2",
-      iconSvg: `
-        <circle cx="60" cy="52" r="26" fill="#ca8a04" stroke="#713f12" stroke-width="3"/>
-        <circle cx="50" cy="46" r="4" fill="#1c1917"/>
-        <circle cx="70" cy="46" r="4" fill="#1c1917"/>
-        <rect x="46" y="60" width="28" height="7" rx="3" fill="#422006"/>
-      `,
-    }),
+    classOrArchetype: "Gigante",
+    ancestryOrRace: "Ogro",
+    speed: "12m",
+    avatarUrl: "/icons/miscellaneous-monsters/onnake-ogre.png",
+    attacks: [
+      {
+        name: "Clava Grande",
+        attackBonus: 6,
+        damageFormula: "2d8+4",
+        damageType: "Concussão",
+      },
+    ],
   },
   {
     id: "monster-beholder",
@@ -385,18 +375,18 @@ export const FORGOTTEN_REALMS_BESTIARY: BestiaryEntry[] = [
     size: 2,
     hpMax: 180,
     armorClass: 18,
-    avatarUrl: buildPortraitSvg({
-      bgFrom: "#701a75",
-      bgTo: "#090514",
-      ringColor: "#e879f9",
-      badgeText: "BEHOLDER",
-      iconSvg: `
-        <path d="M40 34 Q30 18 36 16 M52 30 Q50 14 56 14 M68 30 Q72 14 66 14 M80 34 Q90 18 84 16" fill="none" stroke="#c084fc" stroke-width="3.5"/>
-        <circle cx="60" cy="54" r="24" fill="#86198f" stroke="#f0abfc" stroke-width="2.5"/>
-        <circle cx="60" cy="50" r="11" fill="#fef9c3"/>
-        <circle cx="60" cy="50" r="5" fill="#dc2626"/>
-      `,
-    }),
+    classOrArchetype: "Aberração",
+    ancestryOrRace: "Observador",
+    speed: "0m (Voo 6m)",
+    avatarUrl: "/icons/abberations/beholder.png",
+    attacks: [
+      {
+        name: "Mordida / Raios Oculares",
+        attackBonus: 5,
+        damageFormula: "4d6",
+        damageType: "Cortante",
+      },
+    ],
   },
   {
     id: "monster-red-dragon",
@@ -406,19 +396,19 @@ export const FORGOTTEN_REALMS_BESTIARY: BestiaryEntry[] = [
     size: 3,
     hpMax: 256,
     armorClass: 19,
-    avatarUrl: buildPortraitSvg({
-      bgFrom: "#991b1b",
-      bgTo: "#1f0505",
-      ringColor: "#f59e0b",
-      badgeText: "DRAGÃO 3x3",
-      iconSvg: `
-        <polygon points="34,20 48,40 40,46" fill="#fef08a"/>
-        <polygon points="86,20 72,40 80,46" fill="#fef08a"/>
-        <polygon points="60,26 82,52 68,78 52,78 38,52" fill="#dc2626" stroke="#fbbf24" stroke-width="2.5"/>
-        <polygon points="46,48 56,52 48,56" fill="#fef08a"/>
-        <polygon points="74,48 64,52 72,56" fill="#fef08a"/>
-      `,
-    }),
+    classOrArchetype: "Dragão",
+    ancestryOrRace: "Dragão Vermelho",
+    speed: "12m (Voo 24m)",
+    avatarUrl: "/icons/dragons/red-dragon-1.png",
+    attacks: [
+      {
+        name: "Mordida Dracônica",
+        attackBonus: 14,
+        damageFormula: "2d10+8",
+        damageType: "Perfurante",
+        rangeOrNotes: "+2d6 Fogo",
+      },
+    ],
   },
 
   // ==========================================================================
@@ -477,16 +467,6 @@ export const FORGOTTEN_REALMS_BESTIARY: BestiaryEntry[] = [
     size: 1,
     hpMax: 25,
     armorClass: 15,
-    avatarUrl: buildPortraitSvg({
-      bgFrom: "#78350f",
-      bgTo: "#271506",
-      ringColor: "#fbbf24",
-      badgeText: "TESOURO",
-      iconSvg: `
-        <rect x="32" y="38" width="56" height="38" rx="5" fill="#92400e" stroke="#fbbf24" stroke-width="3"/>
-        <line x1="32" y1="54" x2="88" y2="54" stroke="#fbbf24" stroke-width="3"/>
-        <rect x="55" y="48" width="10" height="12" rx="2" fill="#fde047"/>
-      `,
-    }),
+    avatarUrl: "/icons/items/magic-vault.png",
   },
 ];
