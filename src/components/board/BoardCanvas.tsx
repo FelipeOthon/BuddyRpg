@@ -8,6 +8,7 @@ import type { KonvaEventObject } from "konva/lib/Node";
 import { clamp, screenToWorld, type Point2D } from "@/lib/board/geometry";
 import { computeVisibilityPolygon } from "@/lib/board/visibility";
 import { useKeyPressed } from "@/hooks/useKeyPressed";
+import { useExploredPersistence } from "@/hooks/useExploredPersistence";
 import { useBoardStore } from "@/stores/boardStore";
 import {
   clearSceneDrawingsAction,
@@ -19,6 +20,7 @@ import {
   createFogShapeAction,
   deleteFogShapeAction,
   replaceFogShapesAction,
+  resetSceneTrailAction,
   updateSceneFogSettingsAction,
 } from "@/actions/fog";
 import {
@@ -285,6 +287,8 @@ export default function BoardCanvas({
     demoTokenPos.y,
   ]);
 
+  useExploredPersistence(scene);
+
   const canUserMoveToken = (token: Token): boolean => {
     if (token.id.startsWith("demo-token-")) return true;
     if (role === "gm") return true;
@@ -425,9 +429,9 @@ export default function BoardCanvas({
         const snappedStart =
           fogToolConfig.mode === "rect" && fogToolConfig.snapToGrid && !altDown
             ? {
-                x: Math.floor((worldPt.x - ox) / g) * g + ox,
-                y: Math.floor((worldPt.y - oy) / g) * g + oy,
-              }
+              x: Math.floor((worldPt.x - ox) / g) * g + ox,
+              y: Math.floor((worldPt.y - oy) / g) * g + oy,
+            }
             : worldPt;
         setLocalFogPreview({
           mode: fogToolConfig.mode,
@@ -460,9 +464,9 @@ export default function BoardCanvas({
       const snappedStart =
         !altDown
           ? {
-              x: Math.floor((worldPt.x - ox) / g) * g + ox,
-              y: Math.floor((worldPt.y - oy) / g) * g + oy,
-            }
+            x: Math.floor((worldPt.x - ox) / g) * g + ox,
+            y: Math.floor((worldPt.y - oy) / g) * g + oy,
+          }
           : worldPt;
       setLocalWeatherPreview({
         start: snappedStart,
@@ -577,14 +581,14 @@ export default function BoardCanvas({
         setLocalWeatherPreview((prev) =>
           prev
             ? {
-                ...prev,
-                end: {
-                  x:
-                    rawEndX === prev.start.x ? prev.start.x + g : rawEndX,
-                  y:
-                    rawEndY === prev.start.y ? prev.start.y + g : rawEndY,
-                },
-              }
+              ...prev,
+              end: {
+                x:
+                  rawEndX === prev.start.x ? prev.start.x + g : rawEndX,
+                y:
+                  rawEndY === prev.start.y ? prev.start.y + g : rawEndY,
+              },
+            }
             : null
         );
         return;
@@ -729,11 +733,11 @@ export default function BoardCanvas({
               const poly =
                 target.shape_kind === "rect"
                   ? rectToFlatPolygon(
-                      d.x ?? 0,
-                      d.y ?? 0,
-                      d.width ?? 0,
-                      d.height ?? 0
-                    )
+                    d.x ?? 0,
+                    d.y ?? 0,
+                    d.width ?? 0,
+                    d.height ?? 0
+                  )
                   : (d.points ?? []);
               const sliced = slicePolygonByLine(
                 poly,
@@ -898,18 +902,18 @@ export default function BoardCanvas({
             const data: FogShapeData =
               shapeKind === "circle"
                 ? {
-                    layer: targetLayer,
-                    x: finishedFog.start.x,
-                    y: finishedFog.start.y,
-                    radius: Math.hypot(dx, dy),
-                  }
+                  layer: targetLayer,
+                  x: finishedFog.start.x,
+                  y: finishedFog.start.y,
+                  radius: Math.hypot(dx, dy),
+                }
                 : {
-                    layer: targetLayer,
-                    x: Math.min(finishedFog.start.x, finishedFog.end.x),
-                    y: Math.min(finishedFog.start.y, finishedFog.end.y),
-                    width: Math.abs(dx),
-                    height: Math.abs(dy),
-                  };
+                  layer: targetLayer,
+                  x: Math.min(finishedFog.start.x, finishedFog.end.x),
+                  y: Math.min(finishedFog.start.y, finishedFog.end.y),
+                  width: Math.abs(dx),
+                  height: Math.abs(dy),
+                };
 
             ensureTargetLayerVisible();
 
@@ -979,7 +983,7 @@ export default function BoardCanvas({
             ? Math.hypot(pts[2] ?? 0, pts[3] ?? 0) > 6
             : finished.kind === "rect"
               ? Math.abs(finished.data.width ?? 0) > 6 ||
-                Math.abs(finished.data.height ?? 0) > 6
+              Math.abs(finished.data.height ?? 0) > 6
               : (finished.data.radius ?? 0) > 6;
 
       if (hasSize) {
@@ -1220,6 +1224,8 @@ export default function BoardCanvas({
     scene.fog_enabled,
     scene.fog_reveal_mode,
     scene.darkness_reveal_mode,
+    scene.fog_trail_epoch,
+    scene.darkness_trail_epoch,
     hasDarknessLayer,
     renderedTokens,
     maybeRecordExploration,
@@ -1550,11 +1556,24 @@ export default function BoardCanvas({
     });
   };
 
+  const resetTrail = (layer: "fog" | "darkness") => {
+    clearExploredMemory(scene.id, layer);
+    if (role !== "gm") return;
+    const epochKey =
+      layer === "fog" ? "fog_trail_epoch" : "darkness_trail_epoch";
+    upsertScene({ ...scene, [epochKey]: (scene[epochKey] ?? 0) + 1 });
+    void resetSceneTrailAction({
+      sceneId: scene.id,
+      campaignId: scene.campaign_id,
+      layer,
+    });
+  };
+
   const handleChangeFogRevealMode = (fogRevealMode: RevealMode) => {
     if (role !== "gm") return;
     upsertScene({ ...scene, fog_reveal_mode: fogRevealMode });
     if (fogRevealMode === "vision") {
-      clearExploredMemory(scene.id, "fog");
+      resetTrail("fog");
     }
     void updateSceneFogSettingsAction({
       sceneId: scene.id,
@@ -1568,7 +1587,7 @@ export default function BoardCanvas({
     if (role !== "gm") return;
     upsertScene({ ...scene, darkness_reveal_mode: darknessRevealMode });
     if (darknessRevealMode === "vision") {
-      clearExploredMemory(scene.id, "darkness");
+      resetTrail("darkness");
     }
     void updateSceneEnvironmentAction({
       sceneId: scene.id,
@@ -1767,7 +1786,7 @@ export default function BoardCanvas({
       )
       .map((s) => s.id);
     existingIds.forEach((id) => removeFogShape(id));
-    clearExploredMemory(scene.id, layer);
+    resetTrail(layer);
 
     if (layer === "fog") {
       upsertScene({ ...scene, fog_enabled: true });
@@ -1814,7 +1833,7 @@ export default function BoardCanvas({
     setFogPolygonPoints([]);
     setLocalFogPreview(null);
     setSelectedFogShapeId(null);
-    clearExploredMemory(scene.id, layer);
+    resetTrail(layer);
     const layerIds = fogShapes
       .filter(
         (s) =>
@@ -1872,13 +1891,13 @@ export default function BoardCanvas({
       : spaceDown || tool === "pan"
         ? "cursor-grab"
         : tool === "ruler" ||
-            tool === "pointer" ||
-            tool === "draw" ||
-            tool === "text" ||
-            tool === "fog" ||
-            tool === "darkness" ||
-            (tool === "weather" && weatherToolConfig.mode === "draw") ||
-            tool === "wall"
+          tool === "pointer" ||
+          tool === "draw" ||
+          tool === "text" ||
+          tool === "fog" ||
+          tool === "darkness" ||
+          (tool === "weather" && weatherToolConfig.mode === "draw") ||
+          tool === "wall"
           ? "cursor-crosshair"
           : "cursor-default";
 
@@ -1972,7 +1991,7 @@ export default function BoardCanvas({
             onChangeFogIntensity={handleChangeFogIntensity}
             onChangeAmbientLight={handleChangeAmbientLight}
             onDeleteSelectedShape={handleDeleteSelectedFogShape}
-            onResetExplored={(layer) => clearExploredMemory(scene.id, layer)}
+            onResetExplored={(layer) => resetTrail(layer)}
             onCoverAllLayer={handleCoverAllLayer}
             onClearAllLayer={handleClearAllLayer}
           />
@@ -2476,11 +2495,10 @@ export default function BoardCanvas({
             type="button"
             onClick={() => setHelpOpen((v) => !v)}
             title="Atalhos e dicas de controle"
-            className={`flex h-8 w-8 items-center justify-center rounded-xl border shadow-lg backdrop-blur transition ${
-              helpOpen
-                ? "border-amber-400 bg-zinc-900 text-amber-200"
-                : "border-zinc-800 bg-zinc-950/85 text-zinc-400 hover:border-amber-500/40 hover:text-amber-200"
-            }`}
+            className={`flex h-8 w-8 items-center justify-center rounded-xl border shadow-lg backdrop-blur transition ${helpOpen
+              ? "border-amber-400 bg-zinc-900 text-amber-200"
+              : "border-zinc-800 bg-zinc-950/85 text-zinc-400 hover:border-amber-500/40 hover:text-amber-200"
+              }`}
           >
             <HelpCircle className="h-4 w-4" />
           </button>

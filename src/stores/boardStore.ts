@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { appendExploredSpot } from "@/lib/board/exploredSpots";
 import type { ViewportTransform } from "@/lib/board/geometry";
 import type {
   CampaignTrack,
@@ -183,6 +184,11 @@ interface BoardState {
     spot: ExploredSpot,
     minStepPx?: number,
     targetLayer?: "fog" | "darkness"
+  ) => void;
+  setExploredMemory: (
+    sceneId: string,
+    targetLayer: "fog" | "darkness",
+    spots: ExploredSpot[]
   ) => void;
   clearExploredMemory: (
     sceneId: string,
@@ -502,24 +508,25 @@ export const useBoardStore = create<BoardState>((set) => ({
           ? "exploredDarknessMemory"
           : "exploredMemory";
       const cur = state[key][sceneId] ?? [];
-      const minSq = minStepPx * minStepPx;
-      for (let i = cur.length - 1; i >= 0; i--) {
-        const s = cur[i]!;
-        const dx = s.x - spot.x;
-        const dy = s.y - spot.y;
-        if (
-          dx * dx + dy * dy < minSq &&
-          Math.abs(s.radiusPx - spot.radiusPx) < 12
-        ) {
-          return state;
-        }
-      }
+      const next = appendExploredSpot(cur, spot, minStepPx);
+      if (!next) return state;
       return {
         [key]: {
           ...state[key],
-          [sceneId]: [...cur, spot],
+          [sceneId]: next,
         },
       };
+    }),
+  setExploredMemory: (sceneId, targetLayer, spots) =>
+    set((state) => {
+      const key =
+        targetLayer === "darkness"
+          ? "exploredDarknessMemory"
+          : "exploredMemory";
+      const nextMap = { ...state[key] };
+      if (spots.length === 0) delete nextMap[sceneId];
+      else nextMap[sceneId] = spots;
+      return { [key]: nextMap };
     }),
   clearExploredMemory: (sceneId, targetLayer = "fog") =>
     set((state) => {

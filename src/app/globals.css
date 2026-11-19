@@ -36,3 +36,15 @@ body {
   border: 1px solid rgba(217, 119, 6, 0.38);
   box-shadow: inset 0 0 28px rgba(0, 0, 0, 0.65);
 }
+
+/* Acessibilidade: respeita usuários que preferem menos movimento */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -56,6 +56,7 @@ import {
   unlockAudioPlayback,
 } from "@/lib/audio/soundEngine";
 import { useBoardStore, type BoardTool } from "@/stores/boardStore";
+import QuickDiceRoller from "./QuickDiceRoller";
 import type { MusicPreset, MusicStatePayload, Scene } from "@/types/domain";
 
 function buildMusicPayload(
@@ -1172,32 +1173,7 @@ export default function BoardToolbar({
           )}
         </div>
 
-        {onQuickRoll && (
-          <div
-            className="pointer-events-auto flex flex-col gap-0.5 rounded-xl border border-zinc-800/90 bg-zinc-950/90 p-1 shadow-xl backdrop-blur"
-            title="Rolagem rápida de dados"
-          >
-            {[
-              { label: "d20", cmd: "/r 1d20", color: "text-amber-300" },
-              { label: "d12", cmd: "/r 1d12", color: "text-zinc-200" },
-              { label: "d10", cmd: "/r 1d10", color: "text-zinc-200" },
-              { label: "d8", cmd: "/r 1d8", color: "text-zinc-200" },
-              { label: "d6", cmd: "/r 1d6", color: "text-zinc-200" },
-              { label: "d4", cmd: "/r 1d4", color: "text-zinc-200" },
-              { label: "d%", cmd: "/r 1d%", color: "text-sky-300" },
-            ].map((die) => (
-              <button
-                key={die.label}
-                type="button"
-                onClick={() => onQuickRoll(die.cmd)}
-                title={`Rolar 1${die.label} no chat e 3D`}
-                className={`flex h-7 w-8 items-center justify-center rounded-lg font-mono text-[10px] font-bold transition hover:bg-amber-500/20 hover:text-amber-200 ${die.color}`}
-              >
-                {die.label}
-              </button>
-            ))}
-          </div>
-        )}
+        {onQuickRoll && <QuickDiceRoller onRoll={onQuickRoll} />}
       </div>
     </>
   );

@@ -5,7 +5,7 @@ import {
   createFogShapeSchema,
   updateSceneFogSettingsSchema,
 } from "@/lib/validation/schemas";
-import type { Json } from "@/types/database.types";
+import type { Database, Json } from "@/types/database.types";
 import type {
   FogMode,
   FogOperation,
@@ -203,4 +203,62 @@ export async function deleteFogShapeAction(input: {
   }
 
   return { ok: true };
+}
+
+/**
+ * Reseta o rastro de exploração (Névoa ou Escuridão) para TODOS os clientes:
+ * incrementa a "época" da cena; cada cliente descarta o rastro local antigo.
+ */
+export async function resetSceneTrailAction(input: {
+  sceneId: string;
+  campaignId: string;
+  layer: "fog" | "darkness";
+}): Promise<FogActionResult> {
+  if (!input.sceneId || !input.campaignId) {
+    return { ok: false, error: "Cena inválida." };
+  }
+  if (input.layer !== "fog" && input.layer !== "darkness") {
+    return { ok: false, error: "Camada inválida." };
+  }
+
+  const supabase = await createServerSupabaseClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "Sessão expirada." };
+
+  const column =
+    input.layer === "fog" ? "fog_trail_epoch" : "darkness_trail_epoch";
+
+  const { data: current, error: readError } = await supabase
+    .from("scenes")
+    .select("fog_trail_epoch, darkness_trail_epoch")
+    .eq("id", input.sceneId)
+    .single();
+  if (readError || !current) {
+    return {
+      ok: false,
+      error: readError?.message ?? "Cena não encontrada.",
+    };
+  }
+
+  const nextEpoch = ((current[column] as number | null) ?? 0) + 1;
+  const patch: Database["public"]["Tables"]["scenes"]["Update"] =
+    input.layer === "fog"
+      ? { fog_trail_epoch: nextEpoch }
+      : { darkness_trail_epoch: nextEpoch };
+  const { data, error } = await supabase
+    .from("scenes")
+    .update(patch)
+    .eq("id", input.sceneId)
+    .select("*")
+    .single();
+
+  if (error || !data) {
+    return {
+      ok: false,
+      error: error?.message ?? "Não foi possível resetar o rastro.",
+    };
+  }
+  return { ok: true, scene: data };
 }

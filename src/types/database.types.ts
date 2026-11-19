@@ -189,6 +189,8 @@ export interface Database {
           fog_mode: FogMode;
           fog_reveal_mode?: RevealMode;
           darkness_reveal_mode?: RevealMode;
+          fog_trail_epoch?: number;
+          darkness_trail_epoch?: number;
           fog_color: string;
           ambient_light: number;
           weather_preset: WeatherPreset;
@@ -217,6 +219,8 @@ export interface Database {
           fog_mode?: FogMode;
           fog_reveal_mode?: RevealMode;
           darkness_reveal_mode?: RevealMode;
+          fog_trail_epoch?: number;
+          darkness_trail_epoch?: number;
           fog_color?: string;
           ambient_light?: number;
           weather_preset?: WeatherPreset;
@@ -245,6 +249,8 @@ export interface Database {
           fog_mode?: FogMode;
           fog_reveal_mode?: RevealMode;
           darkness_reveal_mode?: RevealMode;
+          fog_trail_epoch?: number;
+          darkness_trail_epoch?: number;
           fog_color?: string;
           ambient_light?: number;
           weather_preset?: WeatherPreset;

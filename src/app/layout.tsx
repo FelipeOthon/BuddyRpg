@@ -1,5 +1,12 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  themeColor: "#09090b",
+  colorScheme: "dark",
+};
 
 export const metadata: Metadata = {
   title: "BuddyRPG — Tabuleiro Virtual de RPG",

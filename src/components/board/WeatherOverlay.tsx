@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useSyncExternalStore } from "react";
 import { getSmokeTextures } from "@/lib/board/smokeTexture";
 import { parseWeatherEffects } from "@/lib/board/weatherPresets";
 import { useBoardStore } from "@/stores/boardStore";
@@ -11,6 +11,9 @@ import type {
   WeatherEffect,
   WeatherPreset,
 } from "@/types/domain";
+
+const subscribeNoop = () => () => {};
+const getDeviceDpr = () => Math.min(window.devicePixelRatio || 1, 2);
 
 interface Particle {
   x: number;
@@ -468,8 +471,15 @@ function drawRain(
     ctx.restore();
   }
 
-  // Gotas em 3 camadas de profundidade com gradiente na cauda
+  // Gotas em 3 camadas de profundidade (traços agrupados por camada: 3 desenhos/quadro)
   ctx.lineCap = "round";
+  const RAIN_BUCKETS = [
+    { maxDepth: 0.34, alpha: 0.22, width: 0.8 },
+    { maxDepth: 0.67, alpha: 0.38, width: 1.15 },
+    { maxDepth: 1.01, alpha: 0.58, width: 1.7 },
+  ] as const;
+  const bucketPaths = RAIN_BUCKETS.map(() => new Path2D());
+
   for (const p of sim.particles) {
     p.x += p.vx * dt;
     p.y += p.vy * dt;
@@ -490,19 +500,19 @@ function drawRain(
       p.x = boundsW + 25;
     }
 
-    const tailX = p.x - p.vx * 0.025;
-    const tailY = p.y - p.vy * 0.025;
-    const g = ctx.createLinearGradient(tailX, tailY, p.x, p.y);
-    g.addColorStop(0, "rgba(186, 220, 255, 0)");
-    g.addColorStop(1, `rgba(220, 239, 255, ${p.alpha * clamped})`);
-
-    ctx.strokeStyle = g;
-    ctx.lineWidth = 0.75 + p.depth * 1.1;
-    ctx.beginPath();
-    ctx.moveTo(tailX, tailY);
-    ctx.lineTo(p.x, p.y);
-    ctx.stroke();
+    const tailX = p.x - p.vx * 0.026;
+    const tailY = p.y - p.vy * 0.026;
+    const bucketIdx = RAIN_BUCKETS.findIndex((b) => p.depth < b.maxDepth);
+    const path = bucketPaths[bucketIdx < 0 ? 2 : bucketIdx]!;
+    path.moveTo(tailX, tailY);
+    path.lineTo(p.x, p.y);
   }
+
+  RAIN_BUCKETS.forEach((bucket, idx) => {
+    ctx.strokeStyle = `rgba(214, 235, 255, ${bucket.alpha * clamped})`;
+    ctx.lineWidth = bucket.width;
+    ctx.stroke(bucketPaths[idx]!);
+  });
 
   // Coroas de impacto / respingos na superfície
   sim.ripples = sim.ripples.filter((r) => {
@@ -743,6 +753,11 @@ export default function WeatherOverlay({
   height: number;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const dpr = useSyncExternalStore(
+    subscribeNoop,
+    getDeviceDpr,
+    () => 1
+  );
   const renderedBurstsRef = useRef<Set<string>>(new Set());
   const burstParticlesRef = useRef<
     Array<{
@@ -853,6 +868,7 @@ export default function WeatherOverlay({
     if (!ctx) return;
 
     if (!activeGlobalWeather && !hasZoneWeather && !hasBursts) {
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, width, height);
       return;
     }
@@ -884,6 +900,7 @@ export default function WeatherOverlay({
     const frame = (now: number) => {
       const dt = Math.min((now - lastTime) / 1000, 0.05);
       lastTime = now;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, width, height);
 
       // 1. Climas Globais da Cena (combinados simultaneamente sobre toda a tela)
@@ -979,13 +996,15 @@ export default function WeatherOverlay({
     zonesSignature,
     width,
     height,
+    dpr,
   ]);
 
   return (
     <canvas
       ref={canvasRef}
-      width={width}
-      height={height}
+      width={Math.round(width * dpr)}
+      height={Math.round(height * dpr)}
+      style={{ width, height }}
       className="pointer-events-none absolute inset-0 z-10"
     />
   );
