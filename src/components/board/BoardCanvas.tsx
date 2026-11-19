@@ -164,12 +164,6 @@ export default function BoardCanvas({
     halfSize: number;
   } | null>(null);
 
-  // Token de demonstração local caso a cena ainda não tenha tokens no banco
-  const [demoTokenPos, setDemoTokenPos] = useState<Point2D>({
-    x: scene.grid_size * 2,
-    y: scene.grid_size * 2,
-  });
-
   const spaceDown = useKeyPressed(" ");
   const shiftDown = useKeyPressed("Shift");
   const altDown = useKeyPressed("Alt");
@@ -253,45 +247,11 @@ export default function BoardCanvas({
     [tokens, scene.id, role]
   );
 
-  const renderedTokens = useMemo<Token[]>(() => {
-    if (sceneTokens.length > 0) return sceneTokens;
-    return [
-      {
-        id: `demo-token-${scene.id}`,
-        scene_id: scene.id,
-        campaign_id: scene.campaign_id,
-        owner_id: currentUserId,
-        character_id: null,
-        name: "Herói (Demo)",
-        image_url: null,
-        pos_x: demoTokenPos.x,
-        pos_y: demoTokenPos.y,
-        size: 1,
-        hp_current: 24,
-        hp_max: 30,
-        is_hidden: false,
-        conditions: [],
-        ring_color: null,
-        is_locked: false,
-        vision_range: 4.5,
-        light_radius: 0,
-        light_color: "#fbbf24",
-        updated_at: "2026-01-01T00:00:00.000Z",
-      },
-    ];
-  }, [
-    sceneTokens,
-    scene.id,
-    scene.campaign_id,
-    currentUserId,
-    demoTokenPos.x,
-    demoTokenPos.y,
-  ]);
+  const renderedTokens = sceneTokens;
 
   useExploredPersistence(scene);
 
   const canUserMoveToken = (token: Token): boolean => {
-    if (token.id.startsWith("demo-token-")) return true;
     if (role === "gm") return true;
     if (token.is_locked) return false;
     return token.owner_id === currentUserId;
@@ -1257,7 +1217,6 @@ export default function BoardCanvas({
         end: { x: x + halfSize, y: y + halfSize },
       });
     }
-    if (tokenId.startsWith("demo-token-")) return;
     onTokenDragBroadcast?.(tokenId, x, y);
   };
 
@@ -1267,11 +1226,6 @@ export default function BoardCanvas({
     setLocalTokenDragPos(null);
     tokenDragCenterRef.current = null;
     setTokenDragRuler(null);
-
-    if (tokenId.startsWith("demo-token-")) {
-      setDemoTokenPos({ x, y });
-      return;
-    }
 
     const existing = tokens.find((t) => t.id === tokenId);
     const prevX = existing?.pos_x ?? x;
