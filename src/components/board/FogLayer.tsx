@@ -4,6 +4,10 @@ import { useEffect, useMemo, useRef } from "react";
 import type Konva from "konva";
 import { Circle, Group, Line, Rect } from "react-konva";
 import { parseFogColor } from "@/lib/board/fogColor";
+import {
+  buildOrganicCircleCloudPoints,
+  buildOrganicRectCloudPoints,
+} from "@/lib/board/fogCloudGeometry";
 import type { Point2D } from "@/lib/board/geometry";
 import { getSmokeTextures } from "@/lib/board/smokeTexture";
 import { computeVisibilityPolygon } from "@/lib/board/visibility";
@@ -75,6 +79,7 @@ function renderFogShape(params: {
           y={y}
           width={Math.abs(d.width ?? 0)}
           height={Math.abs(d.height ?? 0)}
+          cornerRadius={14}
           {...commonReveal}
         />
       );
@@ -97,16 +102,17 @@ function renderFogShape(params: {
         key={id}
         points={d.points ?? []}
         closed
+        tension={0.28}
         {...commonReveal}
       />
     );
   }
 
-  // Modo Cobrir (cover): base escura + 3 camadas FBM volumétricas em direções distintas
+  // Modo Cobrir (cover): contornos orgânicos de nuvem + 3 camadas FBM volumétricas sem borda quadrada dura
   const borderStroke = isSelected
     ? "#38bdf8"
-    : isGm
-      ? "rgba(245, 158, 11, 0.35)"
+    : canSelect && isGm
+      ? "rgba(245, 158, 11, 0.42)"
       : undefined;
   const selectHandlers = canSelect
     ? {
@@ -121,175 +127,107 @@ function renderFogShape(params: {
         },
       }
     : { listening: false };
-  const baseShadow = {
-    shadowColor: fogColor,
-    shadowBlur: 36,
-    shadowOpacity: 0.95 * backingOpacity,
-  };
+
+  const renderCloudPolygonLayers = (
+    innerPts: number[],
+    outerPts: number[],
+    tensionVal: number
+  ) => (
+    <Group key={id} {...selectHandlers}>
+      <Line
+        points={outerPts}
+        closed
+        tension={tensionVal}
+        fill={fogColor}
+        opacity={backingOpacity * 0.42}
+        shadowColor={fogColor}
+        shadowBlur={42}
+        shadowOpacity={0.9 * backingOpacity}
+      />
+      <Line
+        points={innerPts}
+        closed
+        tension={tensionVal}
+        fill={fogColor}
+        opacity={backingOpacity * 0.9}
+        stroke={borderStroke}
+        strokeWidth={isSelected ? 3 : borderStroke ? 1.5 : 0}
+        dash={borderStroke ? [8, 6] : undefined}
+        shadowColor={fogColor}
+        shadowBlur={26}
+        shadowOpacity={0.85 * backingOpacity}
+      />
+      {smokeDense && smokeWisps && (
+        <>
+          <Line
+            name="fog-smoke-1"
+            points={innerPts}
+            closed
+            tension={tensionVal}
+            fillPatternImage={smokeDense as unknown as HTMLImageElement}
+            fillPatternRepeat="repeat"
+            fillPatternScale={{ x: 2.1, y: 2.1 }}
+            opacity={0.82}
+          />
+          <Line
+            name="fog-smoke-2"
+            points={innerPts}
+            closed
+            tension={tensionVal}
+            fillPatternImage={smokeDense as unknown as HTMLImageElement}
+            fillPatternRepeat="repeat"
+            fillPatternScale={{ x: 3.2, y: 3.2 }}
+            opacity={0.52}
+          />
+          <Line
+            name="fog-smoke-3"
+            points={outerPts}
+            closed
+            tension={tensionVal}
+            fillPatternImage={smokeWisps as unknown as HTMLImageElement}
+            fillPatternRepeat="repeat"
+            fillPatternScale={{ x: 1.8, y: 1.8 }}
+            opacity={0.55}
+          />
+        </>
+      )}
+    </Group>
+  );
 
   if (shape_kind === "rect") {
     const x = d.width && d.width < 0 ? (d.x ?? 0) + d.width : (d.x ?? 0);
     const y = d.height && d.height < 0 ? (d.y ?? 0) + d.height : (d.y ?? 0);
     const w = Math.abs(d.width ?? 0);
     const h = Math.abs(d.height ?? 0);
-
-    return (
-      <Group key={id} {...selectHandlers}>
-        <Rect
-          x={x}
-          y={y}
-          width={w}
-          height={h}
-          fill={fogColor}
-          opacity={backingOpacity}
-          stroke={borderStroke}
-          strokeWidth={isSelected ? 3 : borderStroke ? 1.5 : 0}
-          dash={borderStroke ? [8, 6] : undefined}
-          {...baseShadow}
-        />
-        {smokeDense && smokeWisps && (
-          <>
-            <Rect
-              name="fog-smoke-1"
-              x={x}
-              y={y}
-              width={w}
-              height={h}
-              fillPatternImage={smokeDense as unknown as HTMLImageElement}
-              fillPatternRepeat="repeat"
-              fillPatternScale={{ x: 2.1, y: 2.1 }}
-              opacity={0.85}
-            />
-            <Rect
-              name="fog-smoke-2"
-              x={x}
-              y={y}
-              width={w}
-              height={h}
-              fillPatternImage={smokeDense as unknown as HTMLImageElement}
-              fillPatternRepeat="repeat"
-              fillPatternScale={{ x: 3.2, y: 3.2 }}
-              opacity={0.55}
-            />
-            <Rect
-              name="fog-smoke-3"
-              x={x}
-              y={y}
-              width={w}
-              height={h}
-              fillPatternImage={smokeWisps as unknown as HTMLImageElement}
-              fillPatternRepeat="repeat"
-              fillPatternScale={{ x: 1.7, y: 1.7 }}
-              opacity={0.5}
-            />
-          </>
-        )}
-      </Group>
+    const innerPts = buildOrganicRectCloudPoints(x, y, w, h, id, 18);
+    const outerPts = buildOrganicRectCloudPoints(
+      x - 8,
+      y - 8,
+      w + 16,
+      h + 16,
+      `${id}-outer`,
+      24
     );
+    return renderCloudPolygonLayers(innerPts, outerPts, 0.46);
   }
 
   if (shape_kind === "circle") {
     const cx = d.x ?? 0;
     const cy = d.y ?? 0;
     const r = Math.max(d.radius ?? 0, 2);
-
-    return (
-      <Group key={id} {...selectHandlers}>
-        <Circle
-          x={cx}
-          y={cy}
-          radius={r}
-          fill={fogColor}
-          opacity={backingOpacity}
-          stroke={borderStroke}
-          strokeWidth={isSelected ? 3 : borderStroke ? 1.5 : 0}
-          dash={borderStroke ? [8, 6] : undefined}
-          {...baseShadow}
-        />
-        {smokeDense && smokeWisps && (
-          <>
-            <Circle
-              name="fog-smoke-1"
-              x={cx}
-              y={cy}
-              radius={r}
-              fillPatternImage={smokeDense as unknown as HTMLImageElement}
-              fillPatternRepeat="repeat"
-              fillPatternScale={{ x: 2.1, y: 2.1 }}
-              opacity={0.85}
-            />
-            <Circle
-              name="fog-smoke-2"
-              x={cx}
-              y={cy}
-              radius={r}
-              fillPatternImage={smokeDense as unknown as HTMLImageElement}
-              fillPatternRepeat="repeat"
-              fillPatternScale={{ x: 3.2, y: 3.2 }}
-              opacity={0.55}
-            />
-            <Circle
-              name="fog-smoke-3"
-              x={cx}
-              y={cy}
-              radius={r}
-              fillPatternImage={smokeWisps as unknown as HTMLImageElement}
-              fillPatternRepeat="repeat"
-              fillPatternScale={{ x: 1.7, y: 1.7 }}
-              opacity={0.5}
-            />
-          </>
-        )}
-      </Group>
+    const innerPts = buildOrganicCircleCloudPoints(cx, cy, r, id, 16);
+    const outerPts = buildOrganicCircleCloudPoints(
+      cx,
+      cy,
+      r + 10,
+      `${id}-outer`,
+      22
     );
+    return renderCloudPolygonLayers(innerPts, outerPts, 0.48);
   }
 
   const pts = d.points ?? [];
-  return (
-    <Group key={id} {...selectHandlers}>
-      <Line
-        points={pts}
-        closed
-        fill={fogColor}
-        opacity={backingOpacity}
-        stroke={borderStroke}
-        strokeWidth={isSelected ? 3 : borderStroke ? 1.5 : 0}
-        dash={borderStroke ? [8, 6] : undefined}
-        {...baseShadow}
-      />
-      {smokeDense && smokeWisps && (
-        <>
-          <Line
-            name="fog-smoke-1"
-            points={pts}
-            closed
-            fillPatternImage={smokeDense as unknown as HTMLImageElement}
-            fillPatternRepeat="repeat"
-            fillPatternScale={{ x: 2.1, y: 2.1 }}
-            opacity={0.85}
-          />
-          <Line
-            name="fog-smoke-2"
-            points={pts}
-            closed
-            fillPatternImage={smokeDense as unknown as HTMLImageElement}
-            fillPatternRepeat="repeat"
-            fillPatternScale={{ x: 3.2, y: 3.2 }}
-            opacity={0.55}
-          />
-          <Line
-            name="fog-smoke-3"
-            points={pts}
-            closed
-            fillPatternImage={smokeWisps as unknown as HTMLImageElement}
-            fillPatternRepeat="repeat"
-            fillPatternScale={{ x: 1.7, y: 1.7 }}
-            opacity={0.5}
-          />
-        </>
-      )}
-    </Group>
-  );
+  return renderCloudPolygonLayers(pts, pts, 0.28);
 }
 
 export default function FogLayer({

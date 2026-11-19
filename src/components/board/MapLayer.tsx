@@ -27,23 +27,33 @@ function LoadedMapImage({
   );
 }
 
-export default function MapLayer({ scene }: { scene: Scene }) {
+export default function MapLayer({
+  scene,
+  mode = "full",
+}: {
+  scene: Scene;
+  mode?: "full" | "backdrop" | "image";
+}) {
   const width = scene.map_width || 2000;
   const height = scene.map_height || 2000;
+  const showBackdrop = mode === "full" || mode === "backdrop";
+  const showImage = mode === "full" || mode === "image";
 
   return (
     <Group listening={false}>
-      <Rect
-        x={0}
-        y={0}
-        width={width}
-        height={height}
-        fill="#13151a"
-        stroke="#27272a"
-        strokeWidth={2}
-        listening={false}
-      />
-      {scene.map_url && (
+      {showBackdrop && (
+        <Rect
+          x={0}
+          y={0}
+          width={width}
+          height={height}
+          fill="#13151a"
+          stroke="#27272a"
+          strokeWidth={2}
+          listening={false}
+        />
+      )}
+      {showImage && scene.map_url && (
         <LoadedMapImage
           url={scene.map_url}
           width={width}

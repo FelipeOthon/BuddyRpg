@@ -220,6 +220,8 @@ export interface ViewportSyncPayload {
   scale: number;
 }
 
+export type ElementDepthLayer = "under_map" | "above_map" | "above_tokens";
+
 export interface SceneElementData {
   points?: number[];
   width?: number;
@@ -234,6 +236,10 @@ export interface SceneElementData {
   fontSize?: number;
   imageUrl?: string;
   label?: string;
+  zLayer?: ElementDepthLayer;
+  zIndex?: number;
+  weatherPreset?: WeatherPreset;
+  weatherIntensity?: number;
 }
 
 export interface DrawPreviewPayload {

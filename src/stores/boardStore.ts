@@ -17,6 +17,7 @@ import type {
   SceneWall,
   Token,
   WallType,
+  WeatherPreset,
 } from "@/types/domain";
 
 export type BoardTool =
@@ -27,7 +28,15 @@ export type BoardTool =
   | "draw"
   | "text"
   | "fog"
+  | "darkness"
+  | "weather"
   | "wall";
+
+export interface WeatherToolConfig {
+  mode: "select" | "draw";
+  preset: WeatherPreset;
+  intensity: number;
+}
 
 export interface FogToolConfig {
   operation: FogOperation;
@@ -119,6 +128,7 @@ interface BoardState {
   gmFogOpacity: number;
   walls: SceneWall[];
   wallToolType: WallType;
+  weatherToolConfig: WeatherToolConfig;
   gmPreviewVision: boolean;
   fxBursts: FxBurstPayload[];
   selectedTokenId: string | null;
@@ -172,6 +182,7 @@ interface BoardState {
   removeWall: (wallId: string) => void;
   clearWallsForScene: (sceneId: string) => void;
   setWallToolType: (wallType: WallType) => void;
+  setWeatherToolConfig: (patch: Partial<WeatherToolConfig>) => void;
   setGmPreviewVision: (preview: boolean) => void;
   triggerFxBurst: (burst: FxBurstPayload) => void;
   pruneFxBursts: (nowTs: number) => void;
@@ -219,6 +230,11 @@ export const useBoardStore = create<BoardState>((set) => ({
   gmFogOpacity: 0.62,
   walls: [],
   wallToolType: "wall",
+  weatherToolConfig: {
+    mode: "select",
+    preset: "rain",
+    intensity: 0.6,
+  },
   gmPreviewVision: false,
   fxBursts: [],
   selectedTokenId: null,
@@ -254,7 +270,18 @@ export const useBoardStore = create<BoardState>((set) => ({
   soundMuted: false,
   audioAutoplayBlocked: false,
 
-  setTool: (tool) => set({ tool }),
+  setTool: (tool) =>
+    set((state) => ({
+      tool,
+      selectedFogShapeId:
+        tool === "fog" || tool === "darkness" ? state.selectedFogShapeId : null,
+      fogToolConfig:
+        tool === "fog"
+          ? { ...state.fogToolConfig, targetLayer: "fog" }
+          : tool === "darkness"
+            ? { ...state.fogToolConfig, targetLayer: "darkness" }
+            : state.fogToolConfig,
+    })),
   setViewport: (viewport) => set({ viewport }),
   resetViewport: () => set({ viewport: { x: 40, y: 40, scale: 1 } }),
 
@@ -492,6 +519,10 @@ export const useBoardStore = create<BoardState>((set) => ({
       walls: state.walls.filter((w) => w.scene_id !== sceneId),
     })),
   setWallToolType: (wallToolType) => set({ wallToolType }),
+  setWeatherToolConfig: (patch) =>
+    set((state) => ({
+      weatherToolConfig: { ...state.weatherToolConfig, ...patch },
+    })),
   setGmPreviewVision: (gmPreviewVision) => set({ gmPreviewVision }),
   triggerFxBurst: (burst) =>
     set((state) => ({

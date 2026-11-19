@@ -1,31 +1,15 @@
 "use client";
 
-import {
-  BrickWall,
-  CloudRain,
-  DoorClosed,
-  Eye,
-  Flame,
-  Sun,
-  Trash2,
-} from "lucide-react";
+import { BrickWall, DoorClosed, Eye, Flame, Trash2 } from "lucide-react";
 import { useBoardStore } from "@/stores/boardStore";
-import type { Scene, WallType, WeatherPreset } from "@/types/domain";
+import type { WallType } from "@/types/domain";
 
 export default function WallEnvSubToolbar({
-  scene,
   isGm,
   onClearWalls,
-  onUpdateEnvironment,
 }: {
-  scene: Scene;
   isGm: boolean;
   onClearWalls: () => void;
-  onUpdateEnvironment: (patch: {
-    ambientLight?: number;
-    weatherPreset?: WeatherPreset;
-    weatherIntensity?: number;
-  }) => void;
 }) {
   const {
     tool,
@@ -69,72 +53,10 @@ export default function WallEnvSubToolbar({
 
       <div className="h-4 w-px bg-zinc-800" />
 
-      <div className="flex items-center gap-1.5" title="Luz Ambiente da Cena">
-        <Sun className="h-3.5 w-3.5 text-amber-300" />
-        <span className="text-[11px] text-zinc-400">Luz:</span>
-        <input
-          type="range"
-          min={0}
-          max={1}
-          step={0.05}
-          value={scene.ambient_light ?? 1}
-          onChange={(e) =>
-            onUpdateEnvironment({ ambientLight: Number(e.target.value) })
-          }
-          className="w-20 accent-amber-400"
-        />
-        <span className="w-8 font-mono text-[10px] text-amber-200">
-          {Math.round((scene.ambient_light ?? 1) * 100)}%
-        </span>
-      </div>
-
-      <div className="h-4 w-px bg-zinc-800" />
-
-      <div className="flex items-center gap-1.5" title="Clima & Partículas VFX">
-        <CloudRain className="h-3.5 w-3.5 text-sky-300" />
-        <select
-          value={scene.weather_preset ?? "none"}
-          onChange={(e) =>
-            onUpdateEnvironment({
-              weatherPreset: e.target.value as WeatherPreset,
-            })
-          }
-          className="rounded-lg border border-zinc-800 bg-zinc-900 px-2 py-1 text-[11px] text-zinc-200"
-        >
-          <option value="none">Sem Clima</option>
-          <option value="rain">🌧️ Chuva</option>
-          <option value="snow">❄️ Neve</option>
-          <option value="fog_mist">🌫️ Neblina</option>
-          <option value="embers">🔥 Brasas (Embers)</option>
-          <option value="ash">🌋 Cinzas</option>
-        </select>
-        {scene.weather_preset && scene.weather_preset !== "none" && (
-          <>
-            <input
-              type="range"
-              min={0.05}
-              max={1}
-              step={0.05}
-              value={scene.weather_intensity ?? 0.5}
-              onChange={(e) =>
-                onUpdateEnvironment({
-                  weatherIntensity: Number(e.target.value),
-                })
-              }
-              title="Intensidade do Clima"
-              className="w-16 accent-sky-400"
-            />
-            <span className="w-8 font-mono text-[10px] text-sky-200">
-              {Math.round((scene.weather_intensity ?? 0.5) * 100)}%
-            </span>
-          </>
-        )}
-      </div>
-
       <button
         type="button"
         onClick={() => setGmPreviewVision(!gmPreviewVision)}
-        title="Simular exatamente o que o token selecionado enxerga"
+        title="Simular exatamente o que o token selecionado enxerga com estas paredes"
         className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-semibold transition ${
           gmPreviewVision
             ? "border-sky-500/50 bg-sky-500/20 text-sky-200"
@@ -152,6 +74,7 @@ export default function WallEnvSubToolbar({
         className="inline-flex items-center gap-1 rounded-lg border border-rose-500/30 bg-rose-500/10 px-2 py-1 text-rose-300 hover:bg-rose-500/20"
       >
         <Trash2 className="h-3.5 w-3.5" />
+        <span className="hidden sm:inline">Limpar Paredes</span>
       </button>
     </div>
   );

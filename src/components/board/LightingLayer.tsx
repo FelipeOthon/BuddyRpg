@@ -3,6 +3,10 @@
 import { useEffect, useMemo, useRef } from "react";
 import type Konva from "konva";
 import { Circle, Group, Line, Rect } from "react-konva";
+import {
+  buildOrganicCircleCloudPoints,
+  buildOrganicRectCloudPoints,
+} from "@/lib/board/fogCloudGeometry";
 import { getSmokeTextures } from "@/lib/board/smokeTexture";
 import { computeVisibilityPolygon } from "@/lib/board/visibility";
 import type { ExploredSpot, RemoteDragPosition } from "@/stores/boardStore";
@@ -276,13 +280,13 @@ export default function LightingLayer({
             </>
           )}
 
-          {/* Blocos individuais de Escuridão (fundem em tonalidade índigo-violeta sobre a névoa) */}
+          {/* Blocos individuais de Escuridão (contornos orgânicos sombrios que fundem sobre a névoa) */}
           {darknessCoverShapes.map((s) => {
             const d = (s.data ?? {}) as FogShapeData;
             const isSel = selectedFogShapeId === s.id;
             const stroke = isSel
               ? "#38bdf8"
-              : isGm
+              : canSelectDarkness && isGm
                 ? "rgba(129, 140, 248, 0.45)"
                 : undefined;
             const selectProps = canSelectDarkness
@@ -299,6 +303,68 @@ export default function LightingLayer({
                 }
               : { listening: false };
 
+            const renderDarkCloud = (
+              innerPts: number[],
+              outerPts: number[],
+              tensionVal: number
+            ) => (
+              <Group key={`dark-blk-${s.id}`} {...selectProps}>
+                <Line
+                  points={outerPts}
+                  closed
+                  tension={tensionVal}
+                  fill="#060417"
+                  opacity={blockDarknessOpacity * 0.4}
+                  shadowColor="#050314"
+                  shadowBlur={38}
+                  shadowOpacity={0.92}
+                />
+                <Line
+                  points={innerPts}
+                  closed
+                  tension={tensionVal}
+                  fill="#0c0720"
+                  opacity={blockDarknessOpacity * 0.78}
+                  stroke={stroke}
+                  strokeWidth={isSel ? 3 : stroke ? 1.5 : 0}
+                  dash={stroke ? [8, 6] : undefined}
+                  shadowColor="#050314"
+                  shadowBlur={26}
+                  shadowOpacity={0.9}
+                />
+                {shadowTextures?.shadow && (
+                  <>
+                    <Line
+                      name="dark-shadow-1"
+                      points={innerPts}
+                      closed
+                      tension={tensionVal}
+                      fillPatternImage={
+                        shadowTextures.shadow as unknown as HTMLImageElement
+                      }
+                      fillPatternRepeat="repeat"
+                      fillPatternScale={{ x: 2.3, y: 2.3 }}
+                      opacity={blockDarknessOpacity}
+                      listening={false}
+                    />
+                    <Line
+                      name="dark-shadow-2"
+                      points={outerPts}
+                      closed
+                      tension={tensionVal}
+                      fillPatternImage={
+                        shadowTextures.shadow as unknown as HTMLImageElement
+                      }
+                      fillPatternRepeat="repeat"
+                      fillPatternScale={{ x: 3.4, y: 3.4 }}
+                      opacity={blockDarknessOpacity * 0.45}
+                      listening={false}
+                    />
+                  </>
+                )}
+              </Group>
+            );
+
             if (s.shape_kind === "rect") {
               const rx =
                 d.width && d.width < 0 ? (d.x ?? 0) + d.width : (d.x ?? 0);
@@ -306,39 +372,17 @@ export default function LightingLayer({
                 d.height && d.height < 0 ? (d.y ?? 0) + d.height : (d.y ?? 0);
               const rw = Math.abs(d.width ?? 0);
               const rh = Math.abs(d.height ?? 0);
-              return (
-                <Group key={`dark-blk-${s.id}`} {...selectProps}>
-                  <Rect
-                    x={rx}
-                    y={ry}
-                    width={rw}
-                    height={rh}
-                    fill="#0c0720"
-                    opacity={blockDarknessOpacity * 0.78}
-                    stroke={stroke}
-                    strokeWidth={isSel ? 3 : stroke ? 1.5 : 0}
-                    dash={stroke ? [8, 6] : undefined}
-                    shadowColor="#050314"
-                    shadowBlur={28}
-                    shadowOpacity={0.9}
-                  />
-                  {shadowTextures?.shadow && (
-                    <Rect
-                      name="dark-shadow-1"
-                      x={rx}
-                      y={ry}
-                      width={rw}
-                      height={rh}
-                      fillPatternImage={
-                        shadowTextures.shadow as unknown as HTMLImageElement
-                      }
-                      fillPatternRepeat="repeat"
-                      fillPatternScale={{ x: 2.3, y: 2.3 }}
-                      opacity={blockDarknessOpacity}
-                      listening={false}
-                    />
-                  )}
-                </Group>
+              return renderDarkCloud(
+                buildOrganicRectCloudPoints(rx, ry, rw, rh, `dark-${s.id}`, 16),
+                buildOrganicRectCloudPoints(
+                  rx - 7,
+                  ry - 7,
+                  rw + 14,
+                  rh + 14,
+                  `dark-${s.id}-out`,
+                  22
+                ),
+                0.46
               );
             }
 
@@ -346,71 +390,21 @@ export default function LightingLayer({
               const cx = d.x ?? 0;
               const cy = d.y ?? 0;
               const r = Math.max(d.radius ?? 0, 2);
-              return (
-                <Group key={`dark-blk-${s.id}`} {...selectProps}>
-                  <Circle
-                    x={cx}
-                    y={cy}
-                    radius={r}
-                    fill="#0c0720"
-                    opacity={blockDarknessOpacity * 0.78}
-                    stroke={stroke}
-                    strokeWidth={isSel ? 3 : stroke ? 1.5 : 0}
-                    dash={stroke ? [8, 6] : undefined}
-                    shadowColor="#050314"
-                    shadowBlur={28}
-                    shadowOpacity={0.9}
-                  />
-                  {shadowTextures?.shadow && (
-                    <Circle
-                      name="dark-shadow-1"
-                      x={cx}
-                      y={cy}
-                      radius={r}
-                      fillPatternImage={
-                        shadowTextures.shadow as unknown as HTMLImageElement
-                      }
-                      fillPatternRepeat="repeat"
-                      fillPatternScale={{ x: 2.3, y: 2.3 }}
-                      opacity={blockDarknessOpacity}
-                      listening={false}
-                    />
-                  )}
-                </Group>
+              return renderDarkCloud(
+                buildOrganicCircleCloudPoints(cx, cy, r, `dark-${s.id}`, 15),
+                buildOrganicCircleCloudPoints(
+                  cx,
+                  cy,
+                  r + 8,
+                  `dark-${s.id}-out`,
+                  20
+                ),
+                0.48
               );
             }
 
             const pts = d.points ?? [];
-            return (
-              <Group key={`dark-blk-${s.id}`} {...selectProps}>
-                <Line
-                  points={pts}
-                  closed
-                  fill="#0c0720"
-                  opacity={blockDarknessOpacity * 0.78}
-                  stroke={stroke}
-                  strokeWidth={isSel ? 3 : stroke ? 1.5 : 0}
-                  dash={stroke ? [8, 6] : undefined}
-                  shadowColor="#050314"
-                  shadowBlur={28}
-                  shadowOpacity={0.9}
-                />
-                {shadowTextures?.shadow && (
-                  <Line
-                    name="dark-shadow-1"
-                    points={pts}
-                    closed
-                    fillPatternImage={
-                      shadowTextures.shadow as unknown as HTMLImageElement
-                    }
-                    fillPatternRepeat="repeat"
-                    fillPatternScale={{ x: 2.3, y: 2.3 }}
-                    opacity={blockDarknessOpacity}
-                    listening={false}
-                  />
-                )}
-              </Group>
-            );
+            return renderDarkCloud(pts, pts, 0.28);
           })}
 
           {/* Áreas de Escuridão reveladas manualmente pelo Mestre */}
@@ -435,6 +429,7 @@ export default function LightingLayer({
                   y={ry}
                   width={Math.abs(d.width ?? 0)}
                   height={Math.abs(d.height ?? 0)}
+                  cornerRadius={14}
                   {...revealProps}
                 />
               );

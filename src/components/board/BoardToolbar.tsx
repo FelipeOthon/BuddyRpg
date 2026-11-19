@@ -6,6 +6,7 @@ import {
   Check,
   ChevronDown,
   CloudFog,
+  CloudRain,
   Crosshair,
   Dices,
   EyeOff,
@@ -16,6 +17,7 @@ import {
   Lock,
   LockOpen,
   Magnet,
+  Moon,
   MousePointer,
   Music,
   Pause,
@@ -391,6 +393,8 @@ export default function BoardToolbar({
       else if (key === "d") setTool("draw");
       else if (key === "t") setTool("text");
       else if (key === "f" && isGm) setTool("fog");
+      else if (key === "e" && isGm) setTool("darkness");
+      else if (key === "c" && isGm) setTool("weather");
       else if (key === "p" && isGm) setTool("wall");
       else if (key === "0") resetViewport();
     };
@@ -402,8 +406,8 @@ export default function BoardToolbar({
   const zoomBy = (factor: number) => {
     const nextScale = clamp(
       Math.round(viewport.scale * factor * 100) / 100,
-      0.15,
-      4
+      0.1,
+      10
     );
     setViewport({ ...viewport, scale: nextScale });
   };
@@ -454,13 +458,25 @@ export default function BoardToolbar({
       ? [
           {
             id: "fog" as BoardTool,
-            label: "Névoa de Guerra",
+            label: "Névoa / Nuvens",
             shortcut: "F",
             icon: CloudFog,
           },
           {
+            id: "darkness" as BoardTool,
+            label: "Escuridão",
+            shortcut: "E",
+            icon: Moon,
+          },
+          {
+            id: "weather" as BoardTool,
+            label: "Clima & Efeitos",
+            shortcut: "C",
+            icon: CloudRain,
+          },
+          {
             id: "wall" as BoardTool,
-            label: "Paredes & Clima",
+            label: "Paredes & Portas",
             shortcut: "P",
             icon: BrickWall,
           },
@@ -988,7 +1004,7 @@ export default function BoardToolbar({
                       ref={mapPropsInputRef}
                       type="file"
                       multiple
-                      accept="image/png,image/jpeg,image/webp"
+                      accept="image/png,image/jpeg,image/webp,image/gif"
                       className="hidden"
                       onChange={(e) => {
                         const list = e.target.files

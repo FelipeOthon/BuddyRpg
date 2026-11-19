@@ -216,12 +216,18 @@ const sceneElementDataSchema = z.object({
   angle: z.number().finite().optional(),
   stroke: z.string().max(32).optional(),
   fill: z.string().max(32).optional(),
-  strokeWidth: z.number().finite().min(1).max(40).optional(),
+  strokeWidth: z.number().finite().min(0).max(40).optional(),
   opacity: z.number().finite().min(0).max(1).optional(),
   text: z.string().max(500).optional(),
   fontSize: z.number().finite().min(8).max(120).optional(),
   imageUrl: safeImageUrlSchema.optional(),
   label: z.string().max(80).optional(),
+  zLayer: z.enum(["under_map", "above_map", "above_tokens"]).optional(),
+  zIndex: z.number().finite().optional(),
+  weatherPreset: z
+    .enum(["none", "rain", "snow", "fog_mist", "embers", "ash"])
+    .optional(),
+  weatherIntensity: z.number().finite().min(0).max(1).optional(),
 });
 
 export const createSceneElementSchema = z.object({

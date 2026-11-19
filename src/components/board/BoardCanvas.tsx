@@ -15,7 +15,6 @@ import {
   updateSceneElementAction,
 } from "@/actions/elements";
 import {
-  clearSceneFogAction,
   createFogShapeAction,
   deleteFogShapeAction,
   replaceFogShapesAction,
@@ -47,6 +46,7 @@ import type {
   MusicStatePayload,
   PinnedRuler,
   Scene,
+  SceneElementData,
   Token,
 } from "@/types/domain";
 import MapLayer from "./MapLayer";
@@ -58,6 +58,7 @@ import FogSubToolbar from "./FogSubToolbar";
 import LightingLayer from "./LightingLayer";
 import WallsLayer, { type LocalWallPreview } from "./WallsLayer";
 import WallEnvSubToolbar from "./WallEnvSubToolbar";
+import WeatherSubToolbar from "./WeatherSubToolbar";
 import WeatherOverlay from "./WeatherOverlay";
 import TokenNode from "./TokenNode";
 import RulerLayer, { type LocalRulerState } from "./RulerLayer";
@@ -127,6 +128,10 @@ export default function BoardCanvas({
   const [localDraw, setLocalDraw] = useState<LocalDrawState | null>(null);
   const [localFogPreview, setLocalFogPreview] =
     useState<LocalFogPreview | null>(null);
+  const [localWeatherPreview, setLocalWeatherPreview] = useState<{
+    start: Point2D;
+    end: Point2D;
+  } | null>(null);
   const [fogPolygonPoints, setFogPolygonPoints] = useState<number[]>([]);
   const [localWall, setLocalWall] = useState<LocalWallPreview | null>(null);
   const [textDraft, setTextDraft] = useState<{
@@ -179,6 +184,8 @@ export default function BoardCanvas({
     setGmFogOpacity,
     walls,
     wallToolType,
+    weatherToolConfig,
+    setWeatherToolConfig,
     gmPreviewVision,
     selectedTokenId,
     selectedElementId,
@@ -192,7 +199,6 @@ export default function BoardCanvas({
     clearDrawingsForScene,
     upsertFogShape,
     removeFogShape,
-    clearFogForScene,
     upsertWall,
     removeWall,
     clearWallsForScene,
@@ -275,11 +281,11 @@ export default function BoardCanvas({
     if (!pointer) return;
 
     const oldScale = viewport.scale;
-    const zoomFactor = e.evt.deltaY > 0 ? 1 / 1.12 : 1.12;
+    const zoomFactor = e.evt.deltaY > 0 ? 1 / 1.15 : 1.15;
     const nextScale = clamp(
       Math.round(oldScale * zoomFactor * 1000) / 1000,
-      0.15,
-      4
+      0.1,
+      10
     );
 
     const worldPoint = screenToWorld(pointer, viewport);
@@ -370,7 +376,9 @@ export default function BoardCanvas({
       return;
     }
 
-    if (isLeftClick && tool === "fog" && role === "gm") {
+    if (isLeftClick && (tool === "fog" || tool === "darkness") && role === "gm") {
+      const activeCoverLayer: "fog" | "darkness" =
+        tool === "darkness" ? "darkness" : "fog";
       if (fogToolConfig.mode === "select") {
         if (e.target === stage) {
           setSelectedFogShapeId(null);
@@ -387,7 +395,7 @@ export default function BoardCanvas({
         setLocalFogPreview({
           mode: "polygon",
           operation: fogToolConfig.operation,
-          layer: fogToolConfig.targetLayer ?? "fog",
+          layer: activeCoverLayer,
           points: nextPts,
         });
       } else {
@@ -404,7 +412,7 @@ export default function BoardCanvas({
         setLocalFogPreview({
           mode: fogToolConfig.mode,
           operation: fogToolConfig.operation,
-          layer: fogToolConfig.targetLayer ?? "fog",
+          layer: activeCoverLayer,
           start: snappedStart,
           end:
             fogToolConfig.mode === "rect" && fogToolConfig.snapToGrid && !altDown
@@ -412,6 +420,35 @@ export default function BoardCanvas({
               : worldPt,
         });
       }
+      return;
+    }
+
+    if (isLeftClick && tool === "weather" && role === "gm") {
+      if (weatherToolConfig.mode === "select") {
+        if (e.target === stage) {
+          setSelectedElementId(null);
+        }
+        return;
+      }
+      const pointer = stage.getPointerPosition();
+      if (!pointer) return;
+      const worldPt = screenToWorld(pointer, viewport);
+      const g = Math.max(scene.grid_size || 70, 10);
+      const ox = scene.grid_offset_x ?? 0;
+      const oy = scene.grid_offset_y ?? 0;
+      const snappedStart =
+        !altDown
+          ? {
+              x: Math.floor((worldPt.x - ox) / g) * g + ox,
+              y: Math.floor((worldPt.y - oy) / g) * g + oy,
+            }
+          : worldPt;
+      setLocalWeatherPreview({
+        start: snappedStart,
+        end: !altDown
+          ? { x: snappedStart.x + g, y: snappedStart.y + g }
+          : worldPt,
+      });
       return;
     }
 
@@ -495,6 +532,43 @@ export default function BoardCanvas({
         return;
       }
       setLocalFogPreview((prev) => (prev ? { ...prev, end: worldPt } : null));
+      return;
+    }
+
+    if (localWeatherPreview) {
+      const stage = stageRef.current;
+      if (!stage) return;
+      const pointer = stage.getPointerPosition();
+      if (!pointer) return;
+      const worldPt = screenToWorld(pointer, viewport);
+      if (!altDown) {
+        const g = Math.max(scene.grid_size || 70, 10);
+        const ox = scene.grid_offset_x ?? 0;
+        const oy = scene.grid_offset_y ?? 0;
+        const rawEndX =
+          worldPt.x >= localWeatherPreview.start.x
+            ? Math.ceil((worldPt.x - ox) / g) * g + ox
+            : Math.floor((worldPt.x - ox) / g) * g + ox;
+        const rawEndY =
+          worldPt.y >= localWeatherPreview.start.y
+            ? Math.ceil((worldPt.y - oy) / g) * g + oy
+            : Math.floor((worldPt.y - oy) / g) * g + oy;
+        setLocalWeatherPreview((prev) =>
+          prev
+            ? {
+                ...prev,
+                end: {
+                  x:
+                    rawEndX === prev.start.x ? prev.start.x + g : rawEndX,
+                  y:
+                    rawEndY === prev.start.y ? prev.start.y + g : rawEndY,
+                },
+              }
+            : null
+        );
+        return;
+      }
+      setLocalWeatherPreview((prev) => (prev ? { ...prev, end: worldPt } : null));
       return;
     }
 
@@ -677,7 +751,8 @@ export default function BoardCanvas({
             }
           } else {
             const shapeKind = finishedFog.mode === "circle" ? "circle" : "rect";
-            const targetLayer = fogToolConfig.targetLayer ?? "fog";
+            const targetLayer =
+              finishedFog.layer ?? (tool === "darkness" ? "darkness" : "fog");
             const ensureTargetLayerVisible = () => {
               if (targetLayer === "fog") {
                 if (!scene.fog_enabled) {
@@ -832,6 +907,44 @@ export default function BoardCanvas({
         }
       }
     }
+    if (localWeatherPreview) {
+      const finishedWeather = localWeatherPreview;
+      setLocalWeatherPreview(null);
+      const dx = finishedWeather.end.x - finishedWeather.start.x;
+      const dy = finishedWeather.end.y - finishedWeather.start.y;
+      if (Math.hypot(dx, dy) > 10) {
+        const wx = Math.min(finishedWeather.start.x, finishedWeather.end.x);
+        const wy = Math.min(finishedWeather.start.y, finishedWeather.end.y);
+        const ww = Math.abs(dx);
+        const wh = Math.abs(dy);
+        void createSceneElementAction({
+          sceneId: scene.id,
+          campaignId: scene.campaign_id,
+          layer: "prop",
+          kind: "rect",
+          x: wx,
+          y: wy,
+          data: {
+            width: ww,
+            height: wh,
+            stroke: "#38bdf8",
+            fill: "#38bdf8",
+            strokeWidth: 2,
+            opacity: 0.06,
+            label: "__weather_zone__",
+            zLayer: "above_map",
+            weatherPreset: weatherToolConfig.preset,
+            weatherIntensity: weatherToolConfig.intensity,
+          },
+        }).then((res) => {
+          if (res.ok && res.element) {
+            upsertElement(res.element);
+            setSelectedElementId(res.element.id);
+            setWeatherToolConfig({ mode: "select" });
+          }
+        });
+      }
+    }
     if (localDraw) {
       const finished = localDraw;
       setLocalDraw(null);
@@ -954,8 +1067,8 @@ export default function BoardCanvas({
       };
       const nextScale = clamp(
         Math.round(viewport.scale * scaleBy * 1000) / 1000,
-        0.15,
-        4
+        0.1,
+        10
       );
       const worldPoint = screenToWorld(centerScreen, viewport);
       setViewport({
@@ -1289,7 +1402,8 @@ export default function BoardCanvas({
     }
     const pts = fogPolygonPoints;
     const op = fogToolConfig.operation;
-    const targetLayer = fogToolConfig.targetLayer ?? "fog";
+    const targetLayer: "fog" | "darkness" =
+      tool === "darkness" ? "darkness" : "fog";
     setFogPolygonPoints([]);
     setLocalFogPreview(null);
 
@@ -1408,7 +1522,13 @@ export default function BoardCanvas({
   };
 
   useEffect(() => {
-    if (role !== "gm" || tool !== "fog" || !selectedFogShapeId) return;
+    if (
+      role !== "gm" ||
+      (tool !== "fog" && tool !== "darkness") ||
+      !selectedFogShapeId
+    ) {
+      return;
+    }
     const onKeyDown = (e: KeyboardEvent) => {
       const target = e.target;
       if (
@@ -1446,39 +1566,90 @@ export default function BoardCanvas({
     }, 200);
   };
 
-  const handleEnableDungeonMode = () => {
-    if (role !== "gm") return;
-    upsertScene({
-      ...scene,
-      fog_enabled: true,
-      fog_mode: "hybrid",
-      ambient_light: 0.14,
-    });
-    void updateSceneFogSettingsAction({
-      sceneId: scene.id,
-      campaignId: scene.campaign_id,
-      fogEnabled: true,
-      fogMode: "hybrid",
-    });
-    void updateSceneEnvironmentAction({
-      sceneId: scene.id,
-      campaignId: scene.campaign_id,
-      ambientLight: 0.14,
-    });
+  const canSelectElements =
+    (tool === "select" ||
+      (tool === "weather" && weatherToolConfig.mode === "select")) &&
+    !spaceDown;
+
+  const sharedElementsProps = {
+    elements,
+    tokens: renderedTokens,
+    remoteTokenDrags,
+    localTokenDragPos,
+    sceneId: scene.id,
+    currentUserId,
+    isGm: role === "gm",
+    canSelect: canSelectElements,
+    weatherToolActive: tool === "weather",
+    selectedElementId,
+    gridSize: scene.grid_size,
+    gridOffsetX: scene.grid_offset_x ?? 0,
+    gridOffsetY: scene.grid_offset_y ?? 0,
+    gridType: scene.grid_type ?? "square",
+    snapEnabled: scene.snap_to_grid,
+    onSelectElement: setSelectedElementId,
+    onMoveElement: (elId: string, nx: number, ny: number) => {
+      const cur = elements.find((x) => x.id === elId);
+      if (cur) upsertElement({ ...cur, x: nx, y: ny });
+      void updateSceneElementAction({
+        elementId: elId,
+        campaignId: scene.campaign_id,
+        x: nx,
+        y: ny,
+      });
+    },
+    onTransformElement: (
+      elId: string,
+      patch: { x: number; y: number; rotation: number; data: SceneElementData }
+    ) => {
+      const cur = elements.find((x) => x.id === elId);
+      if (cur) {
+        upsertElement({
+          ...cur,
+          x: patch.x,
+          y: patch.y,
+          rotation: patch.rotation,
+          data: patch.data as unknown as Json,
+        });
+      }
+      void updateSceneElementAction({
+        elementId: elId,
+        campaignId: scene.campaign_id,
+        x: patch.x,
+        y: patch.y,
+        rotation: patch.rotation,
+        data: patch.data,
+      });
+    },
   };
 
-  const handleCoverAllFog = () => {
+  const handleCoverAllLayer = (layer: "fog" | "darkness") => {
     if (role !== "gm") return;
     const existingIds = fogShapes
-      .filter((s) => s.scene_id === scene.id)
+      .filter(
+        (s) =>
+          s.scene_id === scene.id &&
+          ((s.data as FogShapeData | null)?.layer ?? "fog") === layer
+      )
       .map((s) => s.id);
-    clearFogForScene(scene.id);
-    upsertScene({ ...scene, fog_enabled: true });
-    void updateSceneFogSettingsAction({
-      sceneId: scene.id,
-      campaignId: scene.campaign_id,
-      fogEnabled: true,
-    });
+    existingIds.forEach((id) => removeFogShape(id));
+
+    if (layer === "fog") {
+      upsertScene({ ...scene, fog_enabled: true });
+      void updateSceneFogSettingsAction({
+        sceneId: scene.id,
+        campaignId: scene.campaign_id,
+        fogEnabled: true,
+      });
+    } else if ((scene.ambient_light ?? 1) >= 0.99) {
+      upsertScene({ ...scene, ambient_light: 0.98 });
+      void updateSceneEnvironmentAction({
+        sceneId: scene.id,
+        campaignId: scene.campaign_id,
+        ambientLight: 0.98,
+      });
+    }
+
     void replaceFogShapesAction({
       sceneId: scene.id,
       campaignId: scene.campaign_id,
@@ -1488,6 +1659,7 @@ export default function BoardCanvas({
           operation: "cover",
           shapeKind: "rect",
           data: {
+            layer,
             x: 0,
             y: 0,
             width: scene.map_width || 2000,
@@ -1502,12 +1674,26 @@ export default function BoardCanvas({
     });
   };
 
-  const handleClearAllFog = () => {
+  const handleClearAllLayer = (layer: "fog" | "darkness") => {
     if (role !== "gm") return;
     setFogPolygonPoints([]);
     setLocalFogPreview(null);
-    clearFogForScene(scene.id);
-    void clearSceneFogAction({ sceneId: scene.id });
+    setSelectedFogShapeId(null);
+    const layerIds = fogShapes
+      .filter(
+        (s) =>
+          s.scene_id === scene.id &&
+          ((s.data as FogShapeData | null)?.layer ?? "fog") === layer
+      )
+      .map((s) => s.id);
+    if (layerIds.length === 0) return;
+    layerIds.forEach((id) => removeFogShape(id));
+    void replaceFogShapesAction({
+      sceneId: scene.id,
+      campaignId: scene.campaign_id,
+      deleteIds: layerIds,
+      newShapes: [],
+    });
   };
 
   const selectedElement =
@@ -1554,6 +1740,8 @@ export default function BoardCanvas({
             tool === "draw" ||
             tool === "text" ||
             tool === "fog" ||
+            tool === "darkness" ||
+            (tool === "weather" && weatherToolConfig.mode === "draw") ||
             tool === "wall"
           ? "cursor-crosshair"
           : "cursor-default";
@@ -1644,25 +1832,29 @@ export default function BoardCanvas({
             onChangeFogMode={handleChangeFogMode}
             onChangeFogIntensity={handleChangeFogIntensity}
             onChangeAmbientLight={handleChangeAmbientLight}
-            onEnableDungeonMode={handleEnableDungeonMode}
             onDeleteSelectedShape={handleDeleteSelectedFogShape}
             onResetExplored={() => clearExploredMemory(scene.id)}
-            onCoverAll={handleCoverAllFog}
-            onClearAll={handleClearAllFog}
+            onCoverAllLayer={handleCoverAllLayer}
+            onClearAllLayer={handleClearAllLayer}
           />
-          <WallEnvSubToolbar
+          <WeatherSubToolbar
             scene={scene}
             isGm={role === "gm"}
-            onClearWalls={() => {
-              clearWallsForScene(scene.id);
-              void clearSceneWallsAction({ sceneId: scene.id });
+            sceneProps={elements.filter(
+              (el) =>
+                el.scene_id === scene.id &&
+                el.layer === "prop" &&
+                (el.kind === "image" || el.kind === "rect")
+            )}
+            selectedElement={selectedElement}
+            onSelectElement={setSelectedElementId}
+            onDeleteElement={(elId) => {
+              removeElement(elId);
+              void deleteSceneElementAction({ elementId: elId });
             }}
-            onUpdateEnvironment={(patch) => {
+            onUpdateSceneWeather={(patch) => {
               upsertScene({
                 ...scene,
-                ...(patch.ambientLight !== undefined
-                  ? { ambient_light: patch.ambientLight }
-                  : {}),
                 ...(patch.weatherPreset !== undefined
                   ? { weather_preset: patch.weatherPreset }
                   : {}),
@@ -1680,6 +1872,33 @@ export default function BoardCanvas({
                   ...patch,
                 });
               }, 200);
+            }}
+            onUpdateElementWeather={(elId, patch) => {
+              const cur = elements.find((x) => x.id === elId);
+              if (!cur) return;
+              const curData = (cur.data ?? {}) as SceneElementData;
+              const nextData: SceneElementData = {
+                ...curData,
+                weatherPreset: patch.weatherPreset ?? curData.weatherPreset,
+                weatherIntensity:
+                  patch.weatherIntensity ?? curData.weatherIntensity ?? 0.6,
+              };
+              upsertElement({
+                ...cur,
+                data: nextData as unknown as Json,
+              });
+              void updateSceneElementAction({
+                elementId: elId,
+                campaignId: scene.campaign_id,
+                data: nextData,
+              });
+            }}
+          />
+          <WallEnvSubToolbar
+            isGm={role === "gm"}
+            onClearWalls={() => {
+              clearWallsForScene(scene.id);
+              void clearSceneWallsAction({ sceneId: scene.id });
             }}
           />
         </>
@@ -1803,125 +2022,59 @@ export default function BoardCanvas({
         onTouchMove={handleTouchMove}
         onTouchEnd={finishInteraction}
       >
-        {/* Camada 1A: Mapa de Fundo */}
+        {/* Camada 0A: Fundo base da área principal do mapa */}
         <Layer listening={false}>
-          <MapLayer scene={scene} />
+          <MapLayer scene={scene} mode="backdrop" />
         </Layer>
 
-        {/* Camada 1B: Peças de Mapa Particionadas / Props (encaixadas e redimensionáveis sob o Grid) */}
+        {/* Camada 0B: Assets / PNGs colocados ABAIXO do mapa */}
         <Layer>
           <ElementsLayer
-            elements={elements}
-            tokens={renderedTokens}
-            remoteTokenDrags={remoteTokenDrags}
-            localTokenDragPos={localTokenDragPos}
+            {...sharedElementsProps}
             localDraw={null}
             remoteDrawPreviews={{}}
-            sceneId={scene.id}
-            currentUserId={currentUserId}
-            isGm={role === "gm"}
-            canSelect={tool === "select" && !spaceDown}
-            selectedElementId={selectedElementId}
             layerFilter="prop"
-            gridSize={scene.grid_size}
-            gridOffsetX={scene.grid_offset_x ?? 0}
-            gridOffsetY={scene.grid_offset_y ?? 0}
-            gridType={scene.grid_type ?? "square"}
-            snapEnabled={scene.snap_to_grid}
-            onSelectElement={setSelectedElementId}
-            onMoveElement={(elId, nx, ny) => {
-              const cur = elements.find((x) => x.id === elId);
-              if (cur) upsertElement({ ...cur, x: nx, y: ny });
-              void updateSceneElementAction({
-                elementId: elId,
-                campaignId: scene.campaign_id,
-                x: nx,
-                y: ny,
-              });
-            }}
-            onTransformElement={(elId, patch) => {
-              const cur = elements.find((x) => x.id === elId);
-              if (cur) {
-                upsertElement({
-                  ...cur,
-                  x: patch.x,
-                  y: patch.y,
-                  rotation: patch.rotation,
-                  data: patch.data as unknown as Json,
-                });
-              }
-              void updateSceneElementAction({
-                elementId: elId,
-                campaignId: scene.campaign_id,
-                x: patch.x,
-                y: patch.y,
-                rotation: patch.rotation,
-                data: patch.data,
-              });
-            }}
+            depthFilter="under_map"
           />
         </Layer>
 
-        {/* Camada 1C: Grade (acima dos mapas/peças para encaixe preciso) */}
+        {/* Camada 1A: Imagem principal do mapa da cena */}
         <Layer listening={false}>
-          <GridLayer scene={scene} />
+          <MapLayer scene={scene} mode="image" />
+        </Layer>
+
+        {/* Camada 1B: Mapas Extras & Peças SOBRE o mapa (sob o Grid) */}
+        <Layer>
+          <ElementsLayer
+            {...sharedElementsProps}
+            localDraw={null}
+            remoteDrawPreviews={{}}
+            layerFilter="prop"
+            depthFilter="above_map"
+          />
+        </Layer>
+
+        {/* Camada 1C: Malha quadriculada infinita sobrepondo o fundo e os mapas */}
+        <Layer listening={false}>
+          <GridLayer
+            scene={scene}
+            viewport={viewport}
+            stageWidth={size.width}
+            stageHeight={size.height}
+          />
         </Layer>
 
         {/* Camada 2: Desenhos, Textos, Templates de Magia & Attachments */}
         <Layer>
           <ElementsLayer
-            elements={elements}
-            tokens={renderedTokens}
-            remoteTokenDrags={remoteTokenDrags}
-            localTokenDragPos={localTokenDragPos}
+            {...sharedElementsProps}
             localDraw={localDraw}
             remoteDrawPreviews={remoteDrawPreviews}
-            sceneId={scene.id}
-            currentUserId={currentUserId}
-            isGm={role === "gm"}
-            canSelect={tool === "select" && !spaceDown}
-            selectedElementId={selectedElementId}
             layerFilter="overlay"
-            gridSize={scene.grid_size}
-            gridOffsetX={scene.grid_offset_x ?? 0}
-            gridOffsetY={scene.grid_offset_y ?? 0}
-            gridType={scene.grid_type ?? "square"}
-            snapEnabled={scene.snap_to_grid}
-            onSelectElement={setSelectedElementId}
-            onMoveElement={(elId, nx, ny) => {
-              const cur = elements.find((x) => x.id === elId);
-              if (cur) upsertElement({ ...cur, x: nx, y: ny });
-              void updateSceneElementAction({
-                elementId: elId,
-                campaignId: scene.campaign_id,
-                x: nx,
-                y: ny,
-              });
-            }}
-            onTransformElement={(elId, patch) => {
-              const cur = elements.find((x) => x.id === elId);
-              if (cur) {
-                upsertElement({
-                  ...cur,
-                  x: patch.x,
-                  y: patch.y,
-                  rotation: patch.rotation,
-                  data: patch.data as unknown as Json,
-                });
-              }
-              void updateSceneElementAction({
-                elementId: elId,
-                campaignId: scene.campaign_id,
-                x: patch.x,
-                y: patch.y,
-                rotation: patch.rotation,
-                data: patch.data,
-              });
-            }}
           />
         </Layer>
 
-        {/* Camada 3: Tokens */}
+        {/* Camada 3A: Tokens */}
         <Layer>
           {localTokenDragPos &&
             scene.snap_to_grid &&
@@ -1984,7 +2137,18 @@ export default function BoardCanvas({
           })}
         </Layer>
 
-        {/* Camada 4A: Névoa de Guerra (fumaça volumétrica) */}
+        {/* Camada 3B: Assets / PNGs por cima dos tokens (teto, copas, pontes) */}
+        <Layer>
+          <ElementsLayer
+            {...sharedElementsProps}
+            localDraw={null}
+            remoteDrawPreviews={{}}
+            layerFilter="prop"
+            depthFilter="above_tokens"
+          />
+        </Layer>
+
+        {/* Camada 4A: Névoa de Guerra / Nuvem orgânica (F) */}
         <Layer
           opacity={
             role === "gm"
@@ -1994,8 +2158,7 @@ export default function BoardCanvas({
           listening={
             role === "gm" &&
             tool === "fog" &&
-            fogToolConfig.mode === "select" &&
-            fogToolConfig.targetLayer !== "darkness"
+            fogToolConfig.mode === "select"
           }
         >
           <FogLayer
@@ -2014,21 +2177,19 @@ export default function BoardCanvas({
             canSelectFog={
               role === "gm" &&
               tool === "fog" &&
-              fogToolConfig.mode === "select" &&
-              fogToolConfig.targetLayer !== "darkness"
+              fogToolConfig.mode === "select"
             }
             selectedFogShapeId={selectedFogShapeId}
             onSelectFogShape={setSelectedFogShapeId}
           />
         </Layer>
 
-        {/* Camada 4B: Escuridão & Iluminação Dinâmica (funde tonalidade sombria sobre a névoa) */}
+        {/* Camada 4B: Escuridão & Iluminação Dinâmica (E — funde sobre a névoa) */}
         <Layer
           listening={
             role === "gm" &&
-            tool === "fog" &&
-            fogToolConfig.mode === "select" &&
-            fogToolConfig.targetLayer === "darkness"
+            tool === "darkness" &&
+            fogToolConfig.mode === "select"
           }
         >
           <LightingLayer
@@ -2040,9 +2201,8 @@ export default function BoardCanvas({
             gmFogOpacity={gmFogOpacity}
             canSelectDarkness={
               role === "gm" &&
-              tool === "fog" &&
-              fogToolConfig.mode === "select" &&
-              fogToolConfig.targetLayer === "darkness"
+              tool === "darkness" &&
+              fogToolConfig.mode === "select"
             }
             selectedFogShapeId={selectedFogShapeId}
             onSelectFogShape={setSelectedFogShapeId}
@@ -2055,7 +2215,7 @@ export default function BoardCanvas({
           />
         </Layer>
 
-        {/* Camada 4C: Paredes e Portas Interativas (Apenas GM) */}
+        {/* Camada 4C: Paredes e Portas Interativas (P — Apenas GM) */}
         {role === "gm" && (
           <Layer>
             <WallsLayer
@@ -2077,8 +2237,25 @@ export default function BoardCanvas({
           </Layer>
         )}
 
-        {/* Camada 5: Régua de Medição e Pointer Laser */}
+        {/* Camada 5: Régua de Medição, Pointer Laser e Preview de Bloco de Clima */}
         <Layer>
+          {localWeatherPreview && (
+            <Rect
+              x={Math.min(localWeatherPreview.start.x, localWeatherPreview.end.x)}
+              y={Math.min(localWeatherPreview.start.y, localWeatherPreview.end.y)}
+              width={Math.abs(
+                localWeatherPreview.end.x - localWeatherPreview.start.x
+              )}
+              height={Math.abs(
+                localWeatherPreview.end.y - localWeatherPreview.start.y
+              )}
+              fill="rgba(56, 189, 248, 0.16)"
+              stroke="#38bdf8"
+              strokeWidth={2}
+              dash={[6, 4]}
+              listening={false}
+            />
+          )}
           <RulerLayer
             localRuler={localRuler}
             tokenDragRuler={tokenDragRuler}
@@ -2102,11 +2279,12 @@ export default function BoardCanvas({
         </Layer>
       </Stage>
 
-      {/* Camada VFX 60fps: Clima (Chuva/Neve/Neblina/Brasas) & Explosões de Magia */}
+      {/* Camada VFX 60fps: Clima Global e Zonas por Bloco + Explosões de Magia */}
       <WeatherOverlay
         sceneId={scene.id}
         preset={scene.weather_preset ?? "none"}
         intensity={scene.weather_intensity ?? 0.5}
+        elements={elements}
         width={size.width}
         height={size.height}
       />

@@ -2,9 +2,13 @@
 
 import { useRef } from "react";
 import {
+  ArrowDown,
+  ArrowUp,
   Circle,
+  CloudRain,
   Eraser,
   ImagePlus,
+  Layers,
   Link2,
   Lock,
   Minus,
@@ -16,8 +20,15 @@ import {
   Triangle,
   Unlock,
 } from "lucide-react";
+import { WEATHER_PRESET_OPTIONS } from "@/lib/board/weatherPresets";
 import { useBoardStore } from "@/stores/boardStore";
-import type { SceneElement, SceneElementData, Token } from "@/types/domain";
+import type {
+  ElementDepthLayer,
+  SceneElement,
+  SceneElementData,
+  Token,
+  WeatherPreset,
+} from "@/types/domain";
 
 const DRAW_COLORS = [
   "#f59e0b",
@@ -69,12 +80,16 @@ export default function DrawingSubToolbar({
           !selectedElement.is_locked))
   );
 
-  if (tool !== "draw" && !selectedElement) {
+  if (tool === "weather" || (tool !== "draw" && !selectedElement)) {
     return null;
   }
 
   const selectedData = (selectedElement?.data ?? {}) as SceneElementData;
   const isImageProp = selectedElement?.kind === "image";
+  const isPropOrWeatherBlock =
+    selectedElement?.layer === "prop" &&
+    (selectedElement.kind === "image" || selectedElement.kind === "rect");
+  const currentZLayer: ElementDepthLayer = selectedData.zLayer ?? "above_map";
 
   const scaleImagePropBy = (deltaCells: number) => {
     if (!selectedElement || !isImageProp) return;
@@ -159,7 +174,7 @@ export default function DrawingSubToolbar({
               <input
                 ref={propInputRef}
                 type="file"
-                accept="image/png,image/jpeg,image/webp"
+                accept="image/png,image/jpeg,image/webp,image/gif"
                 onChange={(e) => {
                   const file = e.target.files?.[0];
                   e.target.value = "";
@@ -227,6 +242,85 @@ export default function DrawingSubToolbar({
                     <span className="text-[10px]">90°</span>
                   </button>
                 </>
+              )}
+
+              {isGm && isImageProp && (
+                <div className="flex items-center gap-1">
+                  <Layers className="h-3 w-3 text-amber-300" />
+                  <select
+                    value={currentZLayer}
+                    onChange={(e) =>
+                      onUpdateElement(selectedElement.id, {
+                        data: {
+                          ...selectedData,
+                          zLayer: e.target.value as ElementDepthLayer,
+                        },
+                      })
+                    }
+                    title="Camada do asset/mapa no tabuleiro"
+                    className="rounded-lg border border-zinc-700 bg-zinc-900 px-1.5 py-1 text-[11px] text-zinc-200"
+                  >
+                    <option value="under_map">Abaixo do Mapa</option>
+                    <option value="above_map">Sobre o Mapa</option>
+                    <option value="above_tokens">Por Cima (Teto)</option>
+                  </select>
+                  <button
+                    type="button"
+                    title="Descer ordem na camada"
+                    onClick={() =>
+                      onUpdateElement(selectedElement.id, {
+                        data: {
+                          ...selectedData,
+                          zIndex: (selectedData.zIndex ?? 0) - 1,
+                        },
+                      })
+                    }
+                    className="rounded-lg border border-zinc-700 bg-zinc-900 p-1 text-zinc-300 hover:text-white"
+                  >
+                    <ArrowDown className="h-3 w-3" />
+                  </button>
+                  <button
+                    type="button"
+                    title="Subir ordem na camada"
+                    onClick={() =>
+                      onUpdateElement(selectedElement.id, {
+                        data: {
+                          ...selectedData,
+                          zIndex: (selectedData.zIndex ?? 0) + 1,
+                        },
+                      })
+                    }
+                    className="rounded-lg border border-zinc-700 bg-zinc-900 p-1 text-zinc-300 hover:text-white"
+                  >
+                    <ArrowUp className="h-3 w-3" />
+                  </button>
+                </div>
+              )}
+
+              {isGm && isPropOrWeatherBlock && (
+                <div className="flex items-center gap-1">
+                  <CloudRain className="h-3 w-3 text-sky-300" />
+                  <select
+                    value={selectedData.weatherPreset ?? "none"}
+                    onChange={(e) =>
+                      onUpdateElement(selectedElement.id, {
+                        data: {
+                          ...selectedData,
+                          weatherPreset: e.target.value as WeatherPreset,
+                          weatherIntensity: selectedData.weatherIntensity ?? 0.6,
+                        },
+                      })
+                    }
+                    title="Aplicar clima apenas sobre este bloco / mapa extra"
+                    className="rounded-lg border border-sky-500/30 bg-zinc-900 px-1.5 py-1 text-[11px] text-sky-200"
+                  >
+                    {WEATHER_PRESET_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               )}
 
               {!isImageProp && (

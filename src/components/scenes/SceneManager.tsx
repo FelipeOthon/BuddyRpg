@@ -31,14 +31,17 @@ import {
   updateSceneSettingsAction,
 } from "@/actions/scenes";
 import { screenToWorld, snapToGrid as snapPointToGrid } from "@/lib/board/geometry";
+import { WEATHER_PRESET_OPTIONS } from "@/lib/board/weatherPresets";
 import { uploadCampaignImage } from "@/lib/utils/storage";
 import { useBoardStore } from "@/stores/boardStore";
 import type {
   DistanceRule,
+  ElementDepthLayer,
   GridType,
   Scene,
   SceneElement,
   SceneElementData,
+  WeatherPreset,
 } from "@/types/domain";
 import MapAlignmentModal from "./MapAlignmentModal";
 import MapStudioModal from "./MapStudioModal";
@@ -711,7 +714,7 @@ export default function SceneManager({
             <input
               type="file"
               multiple
-              accept="image/png,image/jpeg,image/webp"
+              accept="image/png,image/jpeg,image/webp,image/gif"
               disabled={isUploadingProps}
               onChange={async (e) => {
                 const list = e.target.files ? Array.from(e.target.files) : [];
@@ -960,6 +963,59 @@ export default function SceneManager({
                             <Plus className="h-2.5 w-2.5" />
                           </button>
                         </div>
+
+                        <select
+                          value={d.zLayer ?? "above_map"}
+                          onChange={(e) => {
+                            const nextData: SceneElementData = {
+                              ...d,
+                              zLayer: e.target.value as ElementDepthLayer,
+                            };
+                            upsertElement({
+                              ...el,
+                              data: nextData as unknown as SceneElement["data"],
+                            });
+                            void updateSceneElementAction({
+                              elementId: el.id,
+                              campaignId,
+                              data: nextData,
+                            });
+                          }}
+                          title="Camada de profundidade da peça/asset"
+                          className="rounded border border-zinc-700 bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-200"
+                        >
+                          <option value="under_map">Abaixo Mapa</option>
+                          <option value="above_map">Sobre Mapa</option>
+                          <option value="above_tokens">Por Cima (Teto)</option>
+                        </select>
+
+                        <select
+                          value={d.weatherPreset ?? "none"}
+                          onChange={(e) => {
+                            const nextData: SceneElementData = {
+                              ...d,
+                              weatherPreset: e.target.value as WeatherPreset,
+                              weatherIntensity: d.weatherIntensity ?? 0.6,
+                            };
+                            upsertElement({
+                              ...el,
+                              data: nextData as unknown as SceneElement["data"],
+                            });
+                            void updateSceneElementAction({
+                              elementId: el.id,
+                              campaignId,
+                              data: nextData,
+                            });
+                          }}
+                          title="Clima localizado nesta peça/mapa"
+                          className="rounded border border-sky-500/30 bg-zinc-800 px-1.5 py-0.5 text-[10px] text-sky-200"
+                        >
+                          {WEATHER_PRESET_OPTIONS.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </option>
+                          ))}
+                        </select>
                       </div>
                     </div>
                   );

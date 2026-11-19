@@ -1,8 +1,13 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useBoardStore } from "@/stores/boardStore";
-import type { FxBurstPreset, WeatherPreset } from "@/types/domain";
+import type {
+  FxBurstPreset,
+  SceneElement,
+  SceneElementData,
+  WeatherPreset,
+} from "@/types/domain";
 
 interface Particle {
   x: number;
@@ -12,8 +17,17 @@ interface Particle {
   size: number;
   alpha: number;
   phase: number;
-  life: number;
-  maxLife: number;
+}
+
+interface WeatherZone {
+  id: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  rotation: number;
+  preset: WeatherPreset;
+  intensity: number;
 }
 
 const BURST_COLORS: Record<FxBurstPreset, [string, string]> = {
@@ -23,16 +37,159 @@ const BURST_COLORS: Record<FxBurstPreset, [string, string]> = {
   heal: ["#34d399", "#10b981"],
 };
 
+function buildParticlePool(
+  preset: WeatherPreset,
+  intensity: number,
+  boundsW: number,
+  boundsH: number,
+  areaScale = 1
+): Particle[] {
+  const clamped = Math.min(Math.max(intensity, 0.1), 1);
+  const baseCount =
+    preset === "rain"
+      ? 140
+      : preset === "snow"
+        ? 100
+        : preset === "fog_mist"
+          ? 16
+          : preset === "embers" || preset === "ash"
+            ? 75
+            : 0;
+  const count =
+    baseCount > 0
+      ? Math.max(6, Math.round(baseCount * clamped * areaScale))
+      : 0;
+
+  const pool: Particle[] = [];
+  for (let i = 0; i < count; i++) {
+    pool.push({
+      x: Math.random() * boundsW,
+      y: Math.random() * boundsH,
+      vx:
+        preset === "rain"
+          ? -140
+          : preset === "fog_mist"
+            ? 18 + Math.random() * 22
+            : (Math.random() - 0.5) * 28,
+      vy:
+        preset === "rain"
+          ? 780 + Math.random() * 260
+          : preset === "snow"
+            ? 38 + Math.random() * 45
+            : preset === "embers"
+              ? -(36 + Math.random() * 64)
+              : preset === "ash"
+                ? 18 + Math.random() * 26
+                : (Math.random() - 0.5) * 8,
+      size:
+        preset === "fog_mist"
+          ? Math.min(180, Math.max(55, boundsW * 0.25)) + Math.random() * 80
+          : preset === "rain"
+            ? 14 + Math.random() * 12
+            : 1.8 + Math.random() * 3.2,
+      alpha:
+        preset === "fog_mist"
+          ? 0.08 + Math.random() * 0.09
+          : 0.4 + Math.random() * 0.5,
+      phase: Math.random() * Math.PI * 2,
+    });
+  }
+  return pool;
+}
+
+function stepAndRenderWeatherPool(
+  ctx: CanvasRenderingContext2D,
+  pool: Particle[],
+  preset: WeatherPreset,
+  boundsW: number,
+  boundsH: number,
+  dt: number
+) {
+  ctx.save();
+  if (preset === "embers") {
+    ctx.globalCompositeOperation = "lighter";
+  }
+
+  for (const p of pool) {
+    p.phase += dt * 2.2;
+    p.x +=
+      (p.vx +
+        (preset === "snow" || preset === "embers"
+          ? Math.sin(p.phase) * 22
+          : 0)) *
+      dt;
+    p.y += p.vy * dt;
+
+    if (p.y > boundsH + 30) {
+      p.y = -25;
+      p.x = Math.random() * (boundsW + 60);
+    } else if (p.y < -30) {
+      p.y = boundsH + 20;
+      p.x = Math.random() * boundsW;
+    }
+    if (p.x < -120) p.x = boundsW + 60;
+    if (p.x > boundsW + 120) p.x = -60;
+
+    if (preset === "rain") {
+      ctx.strokeStyle = `rgba(147, 197, 253, ${p.alpha * 0.58})`;
+      ctx.lineWidth = 1.35;
+      ctx.beginPath();
+      ctx.moveTo(p.x, p.y);
+      ctx.lineTo(p.x - 4, p.y + p.size);
+      ctx.stroke();
+    } else if (preset === "snow") {
+      ctx.fillStyle = `rgba(241, 245, 249, ${p.alpha})`;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (preset === "fog_mist") {
+      const grad = ctx.createRadialGradient(p.x, p.y, 10, p.x, p.y, p.size);
+      grad.addColorStop(0, `rgba(203, 213, 225, ${p.alpha})`);
+      grad.addColorStop(1, "rgba(203, 213, 225, 0)");
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (preset === "embers") {
+      const flicker = 0.65 + 0.35 * Math.sin(p.phase * 3);
+      const grad = ctx.createRadialGradient(
+        p.x,
+        p.y,
+        0.5,
+        p.x,
+        p.y,
+        p.size * 2.5
+      );
+      grad.addColorStop(0, `rgba(254, 240, 138, ${p.alpha * flicker})`);
+      grad.addColorStop(
+        0.5,
+        `rgba(249, 115, 22, ${p.alpha * 0.6 * flicker})`
+      );
+      grad.addColorStop(1, "rgba(249, 115, 22, 0)");
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size * 2.5, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (preset === "ash") {
+      ctx.fillStyle = `rgba(161, 161, 170, ${p.alpha * 0.65})`;
+      ctx.fillRect(p.x, p.y, p.size, p.size * 0.7);
+    }
+  }
+  ctx.restore();
+}
+
 export default function WeatherOverlay({
   sceneId,
   preset,
   intensity,
+  elements = [],
   width,
   height,
 }: {
   sceneId: string;
   preset: WeatherPreset;
   intensity: number;
+  elements?: SceneElement[];
   width: number;
   height: number;
 }) {
@@ -67,7 +224,6 @@ export default function WeatherOverlay({
     viewportRef.current = viewport;
   }, [viewport]);
 
-  // Converte novos fxBursts em partículas e ondas expansivas
   useEffect(() => {
     const now = performance.now();
     for (const b of fxBursts) {
@@ -105,8 +261,40 @@ export default function WeatherOverlay({
     }
   }, [fxBursts, sceneId, pruneFxBursts]);
 
+  const weatherZones = useMemo<WeatherZone[]>(() => {
+    const list: WeatherZone[] = [];
+    for (const el of elements) {
+      if (el.scene_id !== sceneId) continue;
+      if (el.kind !== "image" && el.kind !== "rect") continue;
+      const d = (el.data ?? {}) as SceneElementData;
+      if (!d.weatherPreset || d.weatherPreset === "none") continue;
+      const rawW = d.width ?? 280;
+      const rawH = d.height ?? 280;
+      const x = rawW < 0 ? el.x + rawW : el.x;
+      const y = rawH < 0 ? el.y + rawH : el.y;
+      const w = Math.max(Math.abs(rawW), 24);
+      const h = Math.max(Math.abs(rawH), 24);
+      list.push({
+        id: el.id,
+        x,
+        y,
+        w,
+        h,
+        rotation: el.rotation ?? 0,
+        preset: d.weatherPreset,
+        intensity: d.weatherIntensity ?? 0.6,
+      });
+    }
+    return list;
+  }, [elements, sceneId]);
+
+  const zonesSignature = weatherZones
+    .map((z) => `${z.id}:${z.w}x${z.h}:${z.preset}:${z.intensity}`)
+    .join("|");
+
   const hasBursts = fxBursts.some((b) => b.sceneId === sceneId);
-  const activeWeather = preset !== "none";
+  const activeGlobalWeather = preset !== "none";
+  const hasZoneWeather = weatherZones.length > 0;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -114,59 +302,31 @@ export default function WeatherOverlay({
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    if (!activeWeather && !hasBursts) {
+    if (!activeGlobalWeather && !hasZoneWeather && !hasBursts) {
       ctx.clearRect(0, 0, width, height);
       return;
     }
 
-    const clampedIntensity = Math.min(Math.max(intensity, 0.1), 1);
-    const targetCount =
-      preset === "rain"
-        ? Math.round(140 * clampedIntensity)
-        : preset === "snow"
-          ? Math.round(100 * clampedIntensity)
-          : preset === "fog_mist"
-            ? Math.round(16 * clampedIntensity)
-            : preset === "embers" || preset === "ash"
-              ? Math.round(75 * clampedIntensity)
-              : 0;
+    const globalPool = activeGlobalWeather
+      ? buildParticlePool(preset, intensity, width, height, 1)
+      : [];
 
-    const pool: Particle[] = [];
-    for (let i = 0; i < targetCount; i++) {
-      pool.push({
-        x: Math.random() * width,
-        y: Math.random() * height,
-        vx:
-          preset === "rain"
-            ? -140
-            : preset === "fog_mist"
-              ? 18 + Math.random() * 22
-              : (Math.random() - 0.5) * 28,
-        vy:
-          preset === "rain"
-            ? 780 + Math.random() * 260
-            : preset === "snow"
-              ? 38 + Math.random() * 45
-              : preset === "embers"
-                ? -(36 + Math.random() * 64)
-                : preset === "ash"
-                  ? 18 + Math.random() * 26
-                  : (Math.random() - 0.5) * 8,
-        size:
-          preset === "fog_mist"
-            ? 140 + Math.random() * 180
-            : preset === "rain"
-              ? 14 + Math.random() * 12
-              : 1.8 + Math.random() * 3.2,
-        alpha:
-          preset === "fog_mist"
-            ? 0.06 + Math.random() * 0.08
-            : 0.4 + Math.random() * 0.5,
-        phase: Math.random() * Math.PI * 2,
-        life: Math.random(),
-        maxLife: 1,
-      });
-    }
+    const zonePools = weatherZones.map((zone) => {
+      const areaScale = Math.min(
+        Math.max((zone.w * zone.h) / (680 * 680), 0.25),
+        2.2
+      );
+      return {
+        zone,
+        pool: buildParticlePool(
+          zone.preset,
+          zone.intensity,
+          zone.w,
+          zone.h,
+          areaScale
+        ),
+      };
+    });
 
     let rafId = 0;
     let lastTime = performance.now();
@@ -176,69 +336,40 @@ export default function WeatherOverlay({
       lastTime = now;
       ctx.clearRect(0, 0, width, height);
 
-      // 1. Clima / Atmosfera
-      if (activeWeather) {
+      // 1. Clima Global da Cena (sobre toda a tela)
+      if (activeGlobalWeather && globalPool.length > 0) {
+        stepAndRenderWeatherPool(ctx, globalPool, preset, width, height, dt);
+      }
+
+      // 2. Climas Localizados por Bloco / Mapa Extra (no espaço do mundo)
+      const vp = viewportRef.current;
+      if (zonePools.length > 0) {
         ctx.save();
-        if (preset === "embers") {
-          ctx.globalCompositeOperation = "lighter";
+        ctx.translate(vp.x, vp.y);
+        ctx.scale(vp.scale, vp.scale);
+
+        for (const entry of zonePools) {
+          const z = entry.zone;
+          ctx.save();
+          ctx.translate(z.x, z.y);
+          if (z.rotation) {
+            ctx.rotate((z.rotation * Math.PI) / 180);
+          }
+          ctx.beginPath();
+          ctx.rect(0, 0, z.w, z.h);
+          ctx.clip();
+          stepAndRenderWeatherPool(ctx, entry.pool, z.preset, z.w, z.h, dt);
+          ctx.restore();
         }
 
-        for (const p of pool) {
-          p.phase += dt * 2.2;
-          p.x += (p.vx + (preset === "snow" || preset === "embers" ? Math.sin(p.phase) * 22 : 0)) * dt;
-          p.y += p.vy * dt;
-
-          if (p.y > height + 40) {
-            p.y = -30;
-            p.x = Math.random() * (width + 120);
-          } else if (p.y < -40) {
-            p.y = height + 20;
-            p.x = Math.random() * width;
-          }
-          if (p.x < -200) p.x = width + 120;
-          if (p.x > width + 200) p.x = -120;
-
-          if (preset === "rain") {
-            ctx.strokeStyle = `rgba(147, 197, 253, ${p.alpha * 0.55})`;
-            ctx.lineWidth = 1.25;
-            ctx.beginPath();
-            ctx.moveTo(p.x, p.y);
-            ctx.lineTo(p.x - 4, p.y + p.size);
-            ctx.stroke();
-          } else if (preset === "snow") {
-            ctx.fillStyle = `rgba(241, 245, 249, ${p.alpha})`;
-            ctx.beginPath();
-            ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-            ctx.fill();
-          } else if (preset === "fog_mist") {
-            const grad = ctx.createRadialGradient(p.x, p.y, 10, p.x, p.y, p.size);
-            grad.addColorStop(0, `rgba(203, 213, 225, ${p.alpha})`);
-            grad.addColorStop(1, "rgba(203, 213, 225, 0)");
-            ctx.fillStyle = grad;
-            ctx.beginPath();
-            ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-            ctx.fill();
-          } else if (preset === "embers") {
-            const flicker = 0.65 + 0.35 * Math.sin(p.phase * 3);
-            const grad = ctx.createRadialGradient(p.x, p.y, 0.5, p.x, p.y, p.size * 2.5);
-            grad.addColorStop(0, `rgba(254, 240, 138, ${p.alpha * flicker})`);
-            grad.addColorStop(0.5, `rgba(249, 115, 22, ${p.alpha * 0.6 * flicker})`);
-            grad.addColorStop(1, "rgba(249, 115, 22, 0)");
-            ctx.fillStyle = grad;
-            ctx.beginPath();
-            ctx.arc(p.x, p.y, p.size * 2.5, 0, Math.PI * 2);
-            ctx.fill();
-          } else if (preset === "ash") {
-            ctx.fillStyle = `rgba(161, 161, 170, ${p.alpha * 0.65})`;
-            ctx.fillRect(p.x, p.y, p.size, p.size * 0.7);
-          }
-        }
         ctx.restore();
       }
 
-      // 2. Explosões / Efeitos de Magia pontuais (fx:burst) no espaço do mundo
-      const vp = viewportRef.current;
-      if (shockwavesRef.current.length > 0 || burstParticlesRef.current.length > 0) {
+      // 3. Explosões / Efeitos de Magia pontuais (fx:burst) no espaço do mundo
+      if (
+        shockwavesRef.current.length > 0 ||
+        burstParticlesRef.current.length > 0
+      ) {
         ctx.save();
         ctx.translate(vp.x, vp.y);
         ctx.scale(vp.scale, vp.scale);
@@ -276,14 +407,29 @@ export default function WeatherOverlay({
         ctx.restore();
       }
 
-      if (activeWeather || shockwavesRef.current.length > 0 || burstParticlesRef.current.length > 0) {
+      if (
+        activeGlobalWeather ||
+        hasZoneWeather ||
+        shockwavesRef.current.length > 0 ||
+        burstParticlesRef.current.length > 0
+      ) {
         rafId = requestAnimationFrame(frame);
       }
     };
 
     rafId = requestAnimationFrame(frame);
     return () => cancelAnimationFrame(rafId);
-  }, [activeWeather, hasBursts, preset, intensity, width, height]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    activeGlobalWeather,
+    hasZoneWeather,
+    hasBursts,
+    preset,
+    intensity,
+    zonesSignature,
+    width,
+    height,
+  ]);
 
   return (
     <canvas

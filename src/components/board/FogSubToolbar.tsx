@@ -32,11 +32,10 @@ export default function FogSubToolbar({
   onChangeFogMode,
   onChangeFogIntensity,
   onChangeAmbientLight,
-  onEnableDungeonMode,
   onDeleteSelectedShape,
   onResetExplored,
-  onCoverAll,
-  onClearAll,
+  onCoverAllLayer,
+  onClearAllLayer,
 }: {
   scene: Scene;
   isGm: boolean;
@@ -48,11 +47,10 @@ export default function FogSubToolbar({
   onChangeFogMode: (mode: FogMode) => void;
   onChangeFogIntensity: (opacity: number) => void;
   onChangeAmbientLight: (light: number) => void;
-  onEnableDungeonMode: () => void;
   onDeleteSelectedShape: () => void;
   onResetExplored: () => void;
-  onCoverAll: () => void;
-  onClearAll: () => void;
+  onCoverAllLayer: (layer: "fog" | "darkness") => void;
+  onClearAllLayer: (layer: "fog" | "darkness") => void;
 }) {
   const {
     tool,
@@ -61,6 +59,8 @@ export default function FogSubToolbar({
     selectedFogShapeId,
     gmFogOpacity,
     setGmFogOpacity,
+    gmPreviewVision,
+    setGmPreviewVision,
   } = useBoardStore();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const settingsRef = useRef<HTMLDivElement>(null);
@@ -79,79 +79,49 @@ export default function FogSubToolbar({
     return () => window.removeEventListener("mousedown", onDown);
   }, [settingsOpen]);
 
-  if (!isGm || tool !== "fog") {
+  if (!isGm || (tool !== "fog" && tool !== "darkness")) {
     return null;
   }
 
+  const isDarknessMode = tool === "darkness";
+  const activeLayer: "fog" | "darkness" = isDarknessMode ? "darkness" : "fog";
   const isDarknessOn = (scene.ambient_light ?? 1) < 0.99;
 
   return (
-    <div className="pointer-events-auto absolute top-14 left-1/2 z-20 flex max-w-[92vw] -translate-x-1/2 flex-wrap items-center gap-1 rounded-xl border border-amber-500/35 bg-zinc-950/95 px-2 py-1.5 text-xs shadow-2xl backdrop-blur">
-      <button
-        type="button"
-        onClick={() => onToggleFogEnabled(!scene.fog_enabled)}
-        className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 font-bold transition ${
-          scene.fog_enabled
-            ? "border-amber-500/50 bg-amber-500/20 text-amber-200"
-            : "border-zinc-700 bg-zinc-800 text-zinc-400"
-        }`}
-      >
-        <CloudFog className="h-3.5 w-3.5" />
-        Névoa {scene.fog_enabled ? "ON" : "OFF"}
-      </button>
-
-      <button
-        type="button"
-        onClick={() => onChangeAmbientLight(isDarknessOn ? 1 : 0.14)}
-        title="Ligar ou desligar toda a Escuridão (global e blocos)"
-        className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 font-bold transition ${
-          isDarknessOn
-            ? "border-indigo-400/60 bg-indigo-500/25 text-indigo-200"
-            : "border-zinc-700 bg-zinc-800 text-zinc-400 hover:text-indigo-200"
-        }`}
-      >
-        <Moon className="h-3.5 w-3.5" />
-        Escuridão {isDarknessOn ? "ON" : "OFF"}
-      </button>
-
-      <button
-        type="button"
-        onClick={onEnableDungeonMode}
-        title="Ativa Névoa + Escuridão global juntos (Modo Masmorra)"
-        className="inline-flex items-center gap-1 rounded-lg border border-zinc-700 bg-zinc-900 px-2 py-1 text-[11px] font-semibold text-amber-200 transition hover:border-amber-400/50"
-      >
-        Masmorra
-      </button>
-
-      <div className="mx-0.5 h-4 w-px bg-zinc-800" />
-
-      {/* Seletor independente de qual camada o pincel desenha */}
-      <div className="flex items-center rounded-lg border border-zinc-800 bg-zinc-900 p-0.5">
+    <div
+      className={`pointer-events-auto absolute top-14 left-1/2 z-20 flex max-w-[92vw] -translate-x-1/2 flex-wrap items-center gap-1 rounded-xl border bg-zinc-950/95 px-2 py-1.5 text-xs shadow-2xl backdrop-blur ${
+        isDarknessMode ? "border-indigo-400/45" : "border-amber-500/35"
+      }`}
+    >
+      {isDarknessMode ? (
         <button
           type="button"
-          onClick={() => setFogToolConfig({ targetLayer: "fog" })}
-          title="Desenhar blocos de Névoa (fumaça)"
-          className={`rounded-md px-2 py-0.5 text-[11px] font-semibold transition ${
-            fogToolConfig.targetLayer === "fog"
-              ? "bg-amber-500/25 text-amber-200"
-              : "text-zinc-400 hover:text-zinc-200"
+          onClick={() => onChangeAmbientLight(isDarknessOn ? 1 : 0.98)}
+          title="Ligar ou desligar a camada de Escuridão (global e blocos)"
+          className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 font-bold transition ${
+            isDarknessOn
+              ? "border-indigo-400/60 bg-indigo-500/25 text-indigo-200"
+              : "border-zinc-700 bg-zinc-800 text-zinc-400 hover:text-indigo-200"
           }`}
         >
-          Pintar Névoa
+          <Moon className="h-3.5 w-3.5" />
+          Escuridão {isDarknessOn ? "ON" : "OFF"}
         </button>
+      ) : (
         <button
           type="button"
-          onClick={() => setFogToolConfig({ targetLayer: "darkness" })}
-          title="Desenhar blocos de Escuridão (funde com névoa onde sobrepor)"
-          className={`rounded-md px-2 py-0.5 text-[11px] font-semibold transition ${
-            fogToolConfig.targetLayer === "darkness"
-              ? "bg-indigo-500/30 text-indigo-200"
-              : "text-zinc-400 hover:text-zinc-200"
+          onClick={() => onToggleFogEnabled(!scene.fog_enabled)}
+          title="Ligar ou desligar a camada de Névoa / Nuvem"
+          className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 font-bold transition ${
+            scene.fog_enabled
+              ? "border-amber-500/50 bg-amber-500/20 text-amber-200"
+              : "border-zinc-700 bg-zinc-800 text-zinc-400"
           }`}
         >
-          Pintar Escuridão
+          <CloudFog className="h-3.5 w-3.5" />
+          Névoa {scene.fog_enabled ? "ON" : "OFF"}
         </button>
-      </div>
+      )}
 
       <div className="mx-0.5 h-4 w-px bg-zinc-800" />
 
@@ -160,7 +130,9 @@ export default function FogSubToolbar({
         onClick={() => setFogToolConfig({ operation: "cover" })}
         className={`inline-flex items-center gap-1 rounded-lg px-2 py-1 font-semibold transition ${
           fogToolConfig.operation === "cover"
-            ? "bg-amber-500 text-zinc-950"
+            ? isDarknessMode
+              ? "bg-indigo-500 text-white"
+              : "bg-amber-500 text-zinc-950"
             : "text-zinc-300 hover:bg-zinc-800"
         }`}
       >
@@ -216,7 +188,11 @@ export default function FogSubToolbar({
         <button
           type="button"
           onClick={onDeleteSelectedShape}
-          title="Excluir bloco de névoa selecionado (Delete)"
+          title={
+            isDarknessMode
+              ? "Excluir bloco de escuridão selecionado (Delete)"
+              : "Excluir bloco de névoa selecionado (Delete)"
+          }
           className="inline-flex items-center gap-1 rounded-lg border border-rose-500/50 bg-rose-500/20 px-2 py-1 font-bold text-rose-200 hover:bg-rose-500/30"
         >
           <Trash2 className="h-3.5 w-3.5" />
@@ -234,7 +210,7 @@ export default function FogSubToolbar({
         </button>
       )}
 
-      {exploredCount > 0 && (
+      {!isDarknessMode && exploredCount > 0 && (
         <button
           type="button"
           onClick={onResetExplored}
@@ -248,22 +224,28 @@ export default function FogSubToolbar({
 
       <button
         type="button"
-        onClick={onClearAll}
-        title="Limpar toda a névoa da cena"
+        onClick={() => onClearAllLayer(activeLayer)}
+        title={
+          isDarknessMode
+            ? "Limpar somente os blocos de escuridão desta cena"
+            : "Limpar somente a névoa desta cena"
+        }
         className="inline-flex items-center gap-1 rounded-lg border border-rose-500/30 bg-rose-500/10 px-2 py-1 font-medium text-rose-300 hover:bg-rose-500/20"
       >
         <Eraser className="h-3.5 w-3.5" />
         <span className="hidden sm:inline">Limpar</span>
       </button>
 
-      {/* Popover de Ajustes da Névoa & Escuridão */}
+      {/* Popover de Ajustes específico do modo ativo (Névoa OU Escuridão) */}
       <div ref={settingsRef} className="relative">
         <button
           type="button"
           onClick={() => setSettingsOpen((v) => !v)}
           className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 font-semibold transition ${
             settingsOpen
-              ? "border-amber-400 bg-zinc-800 text-amber-200"
+              ? isDarknessMode
+                ? "border-indigo-400 bg-zinc-800 text-indigo-200"
+                : "border-amber-400 bg-zinc-800 text-amber-200"
               : "border-zinc-700 bg-zinc-900 text-zinc-200 hover:border-amber-500/40"
           }`}
         >
@@ -277,19 +259,43 @@ export default function FogSubToolbar({
         </button>
 
         {settingsOpen && (
-          <div className="absolute top-full right-0 z-30 mt-2 w-72 space-y-2.5 rounded-2xl border border-amber-500/35 bg-zinc-950/95 p-3 text-xs shadow-2xl backdrop-blur">
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-[11px] text-zinc-400">Modo da Névoa</span>
-              <select
-                value={scene.fog_mode ?? "static"}
-                onChange={(e) => onChangeFogMode(e.target.value as FogMode)}
-                className="rounded-lg border border-zinc-800 bg-zinc-900 px-2 py-1 text-[11px] font-medium text-zinc-200"
-              >
-                <option value="static">Estática</option>
-                <option value="dynamic">Dinâmica (Luz/Paredes)</option>
-                <option value="hybrid">Híbrida (Ambas)</option>
-              </select>
-            </div>
+          <div
+            className={`absolute top-full right-0 z-30 mt-2 w-72 space-y-2.5 rounded-2xl border bg-zinc-950/95 p-3 text-xs shadow-2xl backdrop-blur ${
+              isDarknessMode ? "border-indigo-400/40" : "border-amber-500/35"
+            }`}
+          >
+            {!isDarknessMode ? (
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[11px] text-zinc-400">Modo da Névoa</span>
+                <select
+                  value={scene.fog_mode ?? "static"}
+                  onChange={(e) => onChangeFogMode(e.target.value as FogMode)}
+                  className="rounded-lg border border-zinc-800 bg-zinc-900 px-2 py-1 text-[11px] font-medium text-zinc-200"
+                >
+                  <option value="static">Estática</option>
+                  <option value="dynamic">Dinâmica (Luz/Paredes)</option>
+                  <option value="hybrid">Híbrida (Ambas)</option>
+                </select>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[11px] text-zinc-400">
+                  Preview Visão do Token
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setGmPreviewVision(!gmPreviewVision)}
+                  className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-semibold ${
+                    gmPreviewVision
+                      ? "border-sky-500/50 bg-sky-500/20 text-sky-200"
+                      : "border-zinc-700 bg-zinc-900 text-zinc-400"
+                  }`}
+                >
+                  <Eye className="h-3 w-3" />
+                  {gmPreviewVision ? "ON" : "OFF"}
+                </button>
+              </div>
+            )}
 
             <div className="flex items-center justify-between gap-2">
               <span className="text-[11px] text-zinc-400">
@@ -311,41 +317,50 @@ export default function FogSubToolbar({
               </button>
             </div>
 
-            <div className="space-y-1 border-t border-zinc-800/80 pt-2">
-              <div className="flex items-center justify-between text-[11px]">
-                <span className="text-zinc-400">Luz / Escuridão</span>
-                <span className="font-mono text-indigo-200">
-                  {Math.round((scene.ambient_light ?? 1) * 100)}%
-                </span>
+            {isDarknessMode ? (
+              <div className="space-y-1 border-t border-zinc-800/80 pt-2">
+                <div className="flex items-center justify-between text-[11px]">
+                  <span className="text-zinc-400">Luz Ambiente Global</span>
+                  <span className="font-mono text-indigo-200">
+                    {Math.round((scene.ambient_light ?? 1) * 100)}%
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  value={scene.ambient_light ?? 1}
+                  onChange={(e) =>
+                    onChangeAmbientLight(Number(e.target.value))
+                  }
+                  className="w-full accent-indigo-400"
+                />
+                <p className="text-[10px] text-zinc-500">
+                  98% = apenas blocos pintados · menor = escurece o mapa todo
+                </p>
               </div>
-              <input
-                type="range"
-                min={0}
-                max={1}
-                step={0.05}
-                value={scene.ambient_light ?? 1}
-                onChange={(e) => onChangeAmbientLight(Number(e.target.value))}
-                className="w-full accent-indigo-400"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <div className="flex items-center justify-between text-[11px]">
-                <span className="text-zinc-400">Intensidade (Mesa)</span>
-                <span className="font-mono text-amber-200">
-                  {Math.round(fogIntensity * 100)}%
-                </span>
+            ) : (
+              <div className="space-y-1 border-t border-zinc-800/80 pt-2">
+                <div className="flex items-center justify-between text-[11px]">
+                  <span className="text-zinc-400">Intensidade (Mesa)</span>
+                  <span className="font-mono text-amber-200">
+                    {Math.round(fogIntensity * 100)}%
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min={0.05}
+                  max={1}
+                  step={0.05}
+                  value={fogIntensity}
+                  onChange={(e) =>
+                    onChangeFogIntensity(Number(e.target.value))
+                  }
+                  className="w-full accent-amber-400"
+                />
               </div>
-              <input
-                type="range"
-                min={0.05}
-                max={1}
-                step={0.05}
-                value={fogIntensity}
-                onChange={(e) => onChangeFogIntensity(Number(e.target.value))}
-                className="w-full accent-amber-400"
-              />
-            </div>
+            )}
 
             <div className="space-y-1">
               <div className="flex items-center justify-between text-[11px]">
@@ -369,12 +384,18 @@ export default function FogSubToolbar({
               <button
                 type="button"
                 onClick={() => {
-                  onCoverAll();
+                  onCoverAllLayer(activeLayer);
                   setSettingsOpen(false);
                 }}
-                className="w-full rounded-xl border border-amber-500/40 bg-amber-500/15 py-1.5 text-[11px] font-bold text-amber-200 hover:bg-amber-500/25"
+                className={`w-full rounded-xl border py-1.5 text-[11px] font-bold transition ${
+                  isDarknessMode
+                    ? "border-indigo-400/40 bg-indigo-500/20 text-indigo-200 hover:bg-indigo-500/30"
+                    : "border-amber-500/40 bg-amber-500/15 text-amber-200 hover:bg-amber-500/25"
+                }`}
               >
-                Cobrir Todo o Mapa
+                {isDarknessMode
+                  ? "Cobrir Todo o Mapa com Escuridão"
+                  : "Cobrir Todo o Mapa com Névoa"}
               </button>
             </div>
           </div>

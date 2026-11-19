@@ -15,9 +15,11 @@ import {
 import useImage from "use-image";
 import { useKeyPressed } from "@/hooks/useKeyPressed";
 import { snapToGrid } from "@/lib/board/geometry";
+import { formatWeatherBadge } from "@/lib/board/weatherPresets";
 import type { RemoteDragPosition } from "@/stores/boardStore";
 import type {
   DrawPreviewPayload,
+  ElementDepthLayer,
   GridType,
   SceneElement,
   SceneElementData,
@@ -91,22 +93,51 @@ function renderShapeGraphic(params: {
   kind: SceneElementKind;
   data: SceneElementData;
   isSelected?: boolean;
+  isGm?: boolean;
+  weatherToolActive?: boolean;
 }) {
-  const { kind, data, isSelected } = params;
+  const { kind, data, isSelected, isGm, weatherToolActive } = params;
   const stroke = data.stroke ?? "#f59e0b";
   const fill = data.fill ?? "#f59e0b";
   const strokeWidth = data.strokeWidth ?? 3;
   const opacity = data.opacity ?? 0.35;
+  const hasWeather = Boolean(data.weatherPreset && data.weatherPreset !== "none");
 
   if (kind === "image" && data.imageUrl) {
+    const imgW = Math.max(data.width ?? 280, 20);
+    const imgH = Math.max(data.height ?? 280, 20);
     return (
-      <LoadedElementImage
-        url={data.imageUrl}
-        width={Math.max(data.width ?? 280, 20)}
-        height={Math.max(data.height ?? 280, 20)}
-        opacity={data.opacity ?? 1}
-        isSelected={isSelected}
-      />
+      <Group>
+        <LoadedElementImage
+          url={data.imageUrl}
+          width={imgW}
+          height={imgH}
+          opacity={data.opacity ?? 1}
+          isSelected={isSelected}
+        />
+        {isGm && hasWeather && (
+          <Group listening={false}>
+            <Rect
+              x={8}
+              y={8}
+              width={118}
+              height={22}
+              cornerRadius={6}
+              fill="rgba(9, 9, 11, 0.82)"
+              stroke="rgba(56, 189, 248, 0.65)"
+              strokeWidth={1}
+            />
+            <Text
+              x={14}
+              y={13}
+              text={formatWeatherBadge(data.weatherPreset!)}
+              fontSize={11}
+              fontStyle="bold"
+              fill="#7dd3fc"
+            />
+          </Group>
+        )}
+      </Group>
     );
   }
 
@@ -126,6 +157,52 @@ function renderShapeGraphic(params: {
   if (kind === "rect") {
     const w = data.width ?? 0;
     const h = data.height ?? 0;
+    const isWeatherZone = hasWeather || data.label === "__weather_zone__";
+    if (isWeatherZone) {
+      if (!isGm) return null;
+      const rx = w < 0 ? w : 0;
+      const ry = h < 0 ? h : 0;
+      const absW = Math.abs(w);
+      const absH = Math.abs(h);
+      const badgeText = hasWeather
+        ? formatWeatherBadge(data.weatherPreset!)
+        : "☁️ Zona de Clima";
+      return (
+        <Group opacity={isSelected || weatherToolActive ? 0.95 : 0.45}>
+          <Rect
+            x={rx}
+            y={ry}
+            width={absW}
+            height={absH}
+            stroke={isSelected ? "#fef08a" : "#38bdf8"}
+            strokeWidth={isSelected ? 2.5 : 1.5}
+            dash={[8, 6]}
+            fill="rgba(56, 189, 248, 0.06)"
+          />
+          <Rect
+            x={rx + 6}
+            y={ry + 6}
+            width={Math.min(absW - 12, 128)}
+            height={22}
+            cornerRadius={6}
+            fill="rgba(9, 9, 11, 0.82)"
+            stroke="rgba(56, 189, 248, 0.5)"
+            strokeWidth={1}
+            listening={false}
+          />
+          <Text
+            x={rx + 12}
+            y={ry + 11}
+            text={badgeText}
+            fontSize={11}
+            fontStyle="bold"
+            fill="#bae6fd"
+            listening={false}
+          />
+        </Group>
+      );
+    }
+
     return (
       <Rect
         x={w < 0 ? w : 0}
@@ -227,8 +304,10 @@ export default function ElementsLayer({
   currentUserId,
   isGm,
   canSelect,
+  weatherToolActive = false,
   selectedElementId,
   layerFilter = "all",
+  depthFilter,
   gridSize = 70,
   gridOffsetX = 0,
   gridOffsetY = 0,
@@ -248,8 +327,10 @@ export default function ElementsLayer({
   currentUserId: string;
   isGm: boolean;
   canSelect: boolean;
+  weatherToolActive?: boolean;
   selectedElementId: string | null;
   layerFilter?: "all" | "prop" | "overlay";
+  depthFilter?: ElementDepthLayer;
   gridSize?: number;
   gridOffsetX?: number;
   gridOffsetY?: number;
@@ -267,13 +348,27 @@ export default function ElementsLayer({
   const trRef = useRef<Konva.Transformer>(null);
   const nodeRefs = useRef<Map<string, Konva.Group>>(new Map());
 
-  const sceneElements = elements.filter((el) => {
-    if (el.scene_id !== sceneId) return false;
-    if (!isGm && el.is_hidden) return false;
-    if (layerFilter === "prop") return el.layer === "prop";
-    if (layerFilter === "overlay") return el.layer !== "prop";
-    return true;
-  });
+  const sceneElements = elements
+    .filter((el) => {
+      if (el.scene_id !== sceneId) return false;
+      if (!isGm && el.is_hidden) return false;
+      if (layerFilter === "prop") {
+        if (el.layer !== "prop") return false;
+        if (depthFilter) {
+          const elDepth =
+            ((el.data ?? {}) as SceneElementData).zLayer ?? "above_map";
+          if (elDepth !== depthFilter) return false;
+        }
+        return true;
+      }
+      if (layerFilter === "overlay") return el.layer !== "prop";
+      return true;
+    })
+    .sort((a, b) => {
+      const za = ((a.data ?? {}) as SceneElementData).zIndex ?? 0;
+      const zb = ((b.data ?? {}) as SceneElementData).zIndex ?? 0;
+      return za - zb;
+    });
 
   const remotePreviews =
     layerFilter === "prop"
@@ -434,6 +529,8 @@ export default function ElementsLayer({
               kind: el.kind,
               data,
               isSelected: selectedElementId === el.id,
+              isGm,
+              weatherToolActive,
             })}
           </Group>
         );
