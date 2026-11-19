@@ -487,7 +487,7 @@ export default function BoardToolbar({
   return (
     <>
       {/* Barra Superior Limpa (Áudio/Músicas · Cena · Zoom) */}
-      <div className="pointer-events-none absolute inset-x-0 top-3 z-20 flex items-center justify-between gap-2 px-3">
+      <div className="pointer-events-none absolute inset-x-0 top-3 z-40 flex items-center justify-between gap-2 px-3">
         <div className="pointer-events-auto flex items-center gap-1 rounded-xl border border-amber-500/30 bg-zinc-950/90 p-1 shadow-xl backdrop-blur">
           <button
             type="button"
@@ -870,7 +870,7 @@ export default function BoardToolbar({
         </button>
 
         {sceneMenuOpen && (
-          <div className="absolute top-full right-0 z-40 mt-2 w-80 max-w-[92vw] rounded-2xl border border-amber-500/35 bg-zinc-950/95 p-3 text-xs shadow-2xl backdrop-blur">
+          <div className="absolute top-full left-1/2 z-50 mt-2 w-80 max-w-[92vw] -translate-x-1/2 rounded-2xl border border-amber-500/35 bg-zinc-950/95 p-3 text-xs shadow-2xl backdrop-blur">
             <div className="mb-2 flex items-center justify-between border-b border-zinc-800/80 pb-2">
               <div className="flex items-center gap-1.5 font-semibold text-amber-200">
                 <Layers className="h-3.5 w-3.5 text-amber-400" />

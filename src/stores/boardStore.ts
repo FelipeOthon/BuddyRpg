@@ -133,6 +133,7 @@ interface BoardState {
   fxBursts: FxBurstPayload[];
   selectedTokenId: string | null;
   selectedElementId: string | null;
+  weatherSelectedIds: string[];
   drawConfig: DrawConfig;
   remoteDrawPreviews: Record<string, DrawPreviewPayload>;
   draggingLocalTokenId: string | null;
@@ -188,6 +189,8 @@ interface BoardState {
   pruneFxBursts: (nowTs: number) => void;
   setSelectedTokenId: (tokenId: string | null) => void;
   setSelectedElementId: (elementId: string | null) => void;
+  setWeatherSelectedIds: (ids: string[]) => void;
+  toggleWeatherSelectedId: (id: string) => void;
   setDrawConfig: (patch: Partial<DrawConfig>) => void;
   setRemoteDrawPreview: (payload: DrawPreviewPayload) => void;
   setDraggingLocalTokenId: (tokenId: string | null) => void;
@@ -239,6 +242,7 @@ export const useBoardStore = create<BoardState>((set) => ({
   fxBursts: [],
   selectedTokenId: null,
   selectedElementId: null,
+  weatherSelectedIds: [],
   drawConfig: {
     kind: "freehand",
     stroke: "#f59e0b",
@@ -522,6 +526,13 @@ export const useBoardStore = create<BoardState>((set) => ({
   setWeatherToolConfig: (patch) =>
     set((state) => ({
       weatherToolConfig: { ...state.weatherToolConfig, ...patch },
+    })),
+  setWeatherSelectedIds: (weatherSelectedIds) => set({ weatherSelectedIds }),
+  toggleWeatherSelectedId: (id) =>
+    set((state) => ({
+      weatherSelectedIds: state.weatherSelectedIds.includes(id)
+        ? state.weatherSelectedIds.filter((x) => x !== id)
+        : [...state.weatherSelectedIds, id],
     })),
   setGmPreviewVision: (gmPreviewVision) => set({ gmPreviewVision }),
   triggerFxBurst: (burst) =>

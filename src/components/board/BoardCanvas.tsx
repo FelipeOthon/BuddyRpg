@@ -187,6 +187,9 @@ export default function BoardCanvas({
     wallToolType,
     weatherToolConfig,
     setWeatherToolConfig,
+    weatherSelectedIds,
+    setWeatherSelectedIds,
+    toggleWeatherSelectedId,
     gmPreviewVision,
     selectedTokenId,
     selectedElementId,
@@ -428,6 +431,7 @@ export default function BoardCanvas({
       if (weatherToolConfig.mode === "select") {
         if (e.target === stage) {
           setSelectedElementId(null);
+          setWeatherSelectedIds([]);
         }
         return;
       }
@@ -1573,12 +1577,27 @@ export default function BoardCanvas({
     canSelect: canSelectElements,
     weatherToolActive: tool === "weather",
     selectedElementId,
+    weatherSelectedIds,
     gridSize: scene.grid_size,
     gridOffsetX: scene.grid_offset_x ?? 0,
     gridOffsetY: scene.grid_offset_y ?? 0,
     gridType: scene.grid_type ?? "square",
     snapEnabled: scene.snap_to_grid,
-    onSelectElement: setSelectedElementId,
+    onSelectElement: (id: string | null, multi?: boolean) => {
+      if (!id) {
+        setSelectedElementId(null);
+        if (tool === "weather") setWeatherSelectedIds([]);
+        return;
+      }
+      if (tool === "weather") {
+        if (multi) {
+          toggleWeatherSelectedId(id);
+        } else {
+          setWeatherSelectedIds([id]);
+        }
+      }
+      setSelectedElementId(id);
+    },
     onMoveElement: (elId: string, nx: number, ny: number) => {
       const cur = elements.find((x) => x.id === elId);
       if (cur) upsertElement({ ...cur, x: nx, y: ny });
@@ -1864,25 +1883,27 @@ export default function BoardCanvas({
                 });
               }, 200);
             }}
-            onUpdateElementWeather={(elId, patch) => {
-              const cur = elements.find((x) => x.id === elId);
-              if (!cur) return;
-              const curData = (cur.data ?? {}) as SceneElementData;
-              const nextData: SceneElementData = {
-                ...curData,
-                weatherPreset: patch.weatherPreset ?? curData.weatherPreset,
-                weatherIntensity:
-                  patch.weatherIntensity ?? curData.weatherIntensity ?? 0.6,
-              };
-              upsertElement({
-                ...cur,
-                data: nextData as unknown as Json,
-              });
-              void updateSceneElementAction({
-                elementId: elId,
-                campaignId: scene.campaign_id,
-                data: nextData,
-              });
+            onUpdateElementsWeather={(elementIds, patch) => {
+              for (const elId of elementIds) {
+                const cur = elements.find((x) => x.id === elId);
+                if (!cur) continue;
+                const curData = (cur.data ?? {}) as SceneElementData;
+                const nextData: SceneElementData = {
+                  ...curData,
+                  weatherPreset: patch.weatherPreset ?? curData.weatherPreset,
+                  weatherIntensity:
+                    patch.weatherIntensity ?? curData.weatherIntensity ?? 0.6,
+                };
+                upsertElement({
+                  ...cur,
+                  data: nextData as unknown as Json,
+                });
+                void updateSceneElementAction({
+                  elementId: elId,
+                  campaignId: scene.campaign_id,
+                  data: nextData,
+                });
+              }
             }}
           />
           <WallEnvSubToolbar

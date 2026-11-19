@@ -996,105 +996,109 @@ export default function SceneManager({
                           </button>
                         </div>
 
-                      <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-zinc-800/80 pt-1.5 text-[10px] text-zinc-300">
-                        <div className="flex items-center gap-1">
-                          <span className="text-zinc-400">Larg:</span>
-                          <button
-                            type="button"
-                            onClick={() => resizePropCells(el, -1, 0)}
-                            className="rounded bg-zinc-800 p-1 hover:bg-zinc-700"
-                            title="Diminuir largura em 1 quadrado"
-                          >
-                            <Minus className="h-2.5 w-2.5" />
-                          </button>
-                          <span className="min-w-[26px] text-center font-mono font-semibold text-amber-200">
-                            {cellsW}q
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => resizePropCells(el, 1, 0)}
-                            className="rounded bg-zinc-800 p-1 hover:bg-zinc-700"
-                            title="Aumentar largura em 1 quadrado"
-                          >
-                            <Plus className="h-2.5 w-2.5" />
-                          </button>
+                      <div className="mt-2 space-y-1.5 border-t border-zinc-800/80 pt-1.5 text-[10px] text-zinc-300">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-1">
+                            <span className="text-zinc-400">Larg:</span>
+                            <button
+                              type="button"
+                              onClick={() => resizePropCells(el, -1, 0)}
+                              className="rounded bg-zinc-800 p-1 hover:bg-zinc-700"
+                              title="Diminuir largura em 1 quadrado"
+                            >
+                              <Minus className="h-2.5 w-2.5" />
+                            </button>
+                            <span className="min-w-[26px] text-center font-mono font-semibold text-amber-200">
+                              {cellsW}q
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => resizePropCells(el, 1, 0)}
+                              className="rounded bg-zinc-800 p-1 hover:bg-zinc-700"
+                              title="Aumentar largura em 1 quadrado"
+                            >
+                              <Plus className="h-2.5 w-2.5" />
+                            </button>
+                          </div>
+
+                          <div className="flex items-center gap-1">
+                            <span className="text-zinc-400">Alt:</span>
+                            <button
+                              type="button"
+                              onClick={() => resizePropCells(el, 0, -1)}
+                              className="rounded bg-zinc-800 p-1 hover:bg-zinc-700"
+                              title="Diminuir altura em 1 quadrado"
+                            >
+                              <Minus className="h-2.5 w-2.5" />
+                            </button>
+                            <span className="min-w-[26px] text-center font-mono font-semibold text-amber-200">
+                              {cellsH}q
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => resizePropCells(el, 0, 1)}
+                              className="rounded bg-zinc-800 p-1 hover:bg-zinc-700"
+                              title="Aumentar altura em 1 quadrado"
+                            >
+                              <Plus className="h-2.5 w-2.5" />
+                            </button>
+                          </div>
                         </div>
 
-                        <div className="flex items-center gap-1">
-                          <span className="text-zinc-400">Alt:</span>
-                          <button
-                            type="button"
-                            onClick={() => resizePropCells(el, 0, -1)}
-                            className="rounded bg-zinc-800 p-1 hover:bg-zinc-700"
-                            title="Diminuir altura em 1 quadrado"
+                        <div className="grid grid-cols-2 gap-1.5">
+                          <select
+                            value={d.zLayer ?? "above_map"}
+                            onChange={(e) => {
+                              const nextData: SceneElementData = {
+                                ...d,
+                                zLayer: e.target.value as ElementDepthLayer,
+                              };
+                              upsertElement({
+                                ...el,
+                                data: nextData as unknown as SceneElement["data"],
+                              });
+                              void updateSceneElementAction({
+                                elementId: el.id,
+                                campaignId,
+                                data: nextData,
+                              });
+                            }}
+                            title="Camada de profundidade da peça/asset"
+                            className="w-full rounded border border-zinc-700 bg-zinc-800 px-1.5 py-1 text-[10px] text-zinc-200"
                           >
-                            <Minus className="h-2.5 w-2.5" />
-                          </button>
-                          <span className="min-w-[26px] text-center font-mono font-semibold text-amber-200">
-                            {cellsH}q
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => resizePropCells(el, 0, 1)}
-                            className="rounded bg-zinc-800 p-1 hover:bg-zinc-700"
-                            title="Aumentar altura em 1 quadrado"
+                            <option value="under_map">Abaixo Mapa</option>
+                            <option value="above_map">Sobre Mapa</option>
+                            <option value="above_tokens">Por Cima (Teto)</option>
+                          </select>
+
+                          <select
+                            value={d.weatherPreset ?? "none"}
+                            onChange={(e) => {
+                              const nextData: SceneElementData = {
+                                ...d,
+                                weatherPreset: e.target.value as WeatherPreset,
+                                weatherIntensity: d.weatherIntensity ?? 0.6,
+                              };
+                              upsertElement({
+                                ...el,
+                                data: nextData as unknown as SceneElement["data"],
+                              });
+                              void updateSceneElementAction({
+                                elementId: el.id,
+                                campaignId,
+                                data: nextData,
+                              });
+                            }}
+                            title="Clima localizado nesta peça/mapa"
+                            className="w-full rounded border border-sky-500/30 bg-zinc-800 px-1.5 py-1 text-[10px] text-sky-200"
                           >
-                            <Plus className="h-2.5 w-2.5" />
-                          </button>
+                            {WEATHER_PRESET_OPTIONS.map((opt) => (
+                              <option key={opt.value} value={opt.value}>
+                                {opt.label}
+                              </option>
+                            ))}
+                          </select>
                         </div>
-
-                        <select
-                          value={d.zLayer ?? "above_map"}
-                          onChange={(e) => {
-                            const nextData: SceneElementData = {
-                              ...d,
-                              zLayer: e.target.value as ElementDepthLayer,
-                            };
-                            upsertElement({
-                              ...el,
-                              data: nextData as unknown as SceneElement["data"],
-                            });
-                            void updateSceneElementAction({
-                              elementId: el.id,
-                              campaignId,
-                              data: nextData,
-                            });
-                          }}
-                          title="Camada de profundidade da peça/asset"
-                          className="rounded border border-zinc-700 bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-200"
-                        >
-                          <option value="under_map">Abaixo Mapa</option>
-                          <option value="above_map">Sobre Mapa</option>
-                          <option value="above_tokens">Por Cima (Teto)</option>
-                        </select>
-
-                        <select
-                          value={d.weatherPreset ?? "none"}
-                          onChange={(e) => {
-                            const nextData: SceneElementData = {
-                              ...d,
-                              weatherPreset: e.target.value as WeatherPreset,
-                              weatherIntensity: d.weatherIntensity ?? 0.6,
-                            };
-                            upsertElement({
-                              ...el,
-                              data: nextData as unknown as SceneElement["data"],
-                            });
-                            void updateSceneElementAction({
-                              elementId: el.id,
-                              campaignId,
-                              data: nextData,
-                            });
-                          }}
-                          title="Clima localizado nesta peça/mapa"
-                          className="rounded border border-sky-500/30 bg-zinc-800 px-1.5 py-0.5 text-[10px] text-sky-200"
-                        >
-                          {WEATHER_PRESET_OPTIONS.map((opt) => (
-                            <option key={opt.value} value={opt.value}>
-                              {opt.label}
-                            </option>
-                          ))}
-                        </select>
                       </div>
                     </div>
                   );

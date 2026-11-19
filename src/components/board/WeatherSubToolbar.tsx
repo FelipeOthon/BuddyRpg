@@ -1,7 +1,20 @@
 "use client";
 
-import { CloudRain, Eraser, MousePointer, Square, Trash2 } from "lucide-react";
-import { WEATHER_PRESET_OPTIONS } from "@/lib/board/weatherPresets";
+import { useEffect, useRef, useState } from "react";
+import {
+  Check,
+  ChevronDown,
+  CloudRain,
+  Eraser,
+  Layers,
+  MousePointer,
+  Square,
+  Trash2,
+} from "lucide-react";
+import {
+  formatWeatherBadge,
+  WEATHER_PRESET_OPTIONS,
+} from "@/lib/board/weatherPresets";
 import { useBoardStore } from "@/stores/boardStore";
 import type {
   Scene,
@@ -10,6 +23,12 @@ import type {
   WeatherPreset,
 } from "@/types/domain";
 
+function getBlockDisplayName(p: SceneElement, idx: number): string {
+  const pd = (p.data ?? {}) as SceneElementData;
+  if (pd.label && pd.label !== "__weather_zone__") return pd.label;
+  return p.kind === "image" ? `Mapa Extra ${idx + 1}` : `Zona Clima ${idx + 1}`;
+}
+
 export default function WeatherSubToolbar({
   scene,
   isGm,
@@ -17,7 +36,7 @@ export default function WeatherSubToolbar({
   selectedElement,
   onSelectElement,
   onUpdateSceneWeather,
-  onUpdateElementWeather,
+  onUpdateElementsWeather,
   onDeleteElement,
 }: {
   scene: Scene;
@@ -29,28 +48,57 @@ export default function WeatherSubToolbar({
     weatherPreset?: WeatherPreset;
     weatherIntensity?: number;
   }) => void;
-  onUpdateElementWeather: (
-    elementId: string,
+  onUpdateElementsWeather: (
+    elementIds: string[],
     patch: { weatherPreset?: WeatherPreset; weatherIntensity?: number }
   ) => void;
   onDeleteElement: (elementId: string) => void;
 }) {
-  const { tool, weatherToolConfig, setWeatherToolConfig } = useBoardStore();
+  const {
+    tool,
+    weatherToolConfig,
+    setWeatherToolConfig,
+    weatherSelectedIds,
+    setWeatherSelectedIds,
+    toggleWeatherSelectedId,
+  } = useBoardStore();
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const pickerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!pickerOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
+        setPickerOpen(false);
+      }
+    };
+    window.addEventListener("mousedown", onDown);
+    return () => window.removeEventListener("mousedown", onDown);
+  }, [pickerOpen]);
 
   if (!isGm || tool !== "weather") {
     return null;
   }
 
-  const targetBlock =
-    selectedElement &&
-    (selectedElement.kind === "image" || selectedElement.kind === "rect")
-      ? selectedElement
-      : null;
-  const targetData = (targetBlock?.data ?? {}) as SceneElementData;
-  const targetPreset = targetData.weatherPreset ?? "none";
-  const targetIntensity = targetData.weatherIntensity ?? 0.6;
-  const isWeatherOnlyZone =
-    targetBlock?.kind === "rect" && targetData.label === "__weather_zone__";
+  const validSelectedIds = weatherSelectedIds.filter((id) =>
+    sceneProps.some((p) => p.id === id)
+  );
+  const effectiveIds =
+    validSelectedIds.length > 0
+      ? validSelectedIds
+      : selectedElement &&
+          (selectedElement.kind === "image" || selectedElement.kind === "rect")
+        ? [selectedElement.id]
+        : [];
+  const selectedBlocks = sceneProps.filter((p) => effectiveIds.includes(p.id));
+  const primaryBlock = selectedBlocks[0] ?? null;
+  const primaryData = (primaryBlock?.data ?? {}) as SceneElementData;
+  const targetPreset = primaryData.weatherPreset ?? "none";
+  const targetIntensity = primaryData.weatherIntensity ?? 0.6;
+  const isSingleWeatherZone =
+    selectedBlocks.length === 1 &&
+    primaryBlock?.kind === "rect" &&
+    primaryData.label === "__weather_zone__";
 
   return (
     <div className="pointer-events-auto absolute top-14 left-1/2 z-20 flex max-w-[95vw] -translate-x-1/2 flex-wrap items-center gap-2 rounded-xl border border-sky-500/40 bg-zinc-950/95 px-3 py-1.5 text-xs shadow-2xl backdrop-blur">
@@ -100,12 +148,12 @@ export default function WeatherSubToolbar({
 
       <div className="h-4 w-px bg-zinc-800" />
 
-      {/* Alternar entre Selecionar Peça/Mapa Extra OU Desenhar Bloco de Clima */}
+      {/* Alternar entre Escolher Mapas/Blocos OU Desenhar Bloco de Clima */}
       <div className="flex items-center rounded-lg border border-zinc-800 bg-zinc-900 p-0.5">
         <button
           type="button"
           onClick={() => setWeatherToolConfig({ mode: "select" })}
-          title="Clique em qualquer mapa extra ou peça para escolher o clima só nele"
+          title="Clique em um mapa ou use Shift+Clique para marcar vários mapas no tabuleiro"
           className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-semibold transition ${
             weatherToolConfig.mode === "select"
               ? "bg-sky-500/25 text-sky-200"
@@ -113,7 +161,7 @@ export default function WeatherSubToolbar({
           }`}
         >
           <MousePointer className="h-3 w-3" />
-          Escolher Bloco
+          Escolher Mapas
         </button>
         <button
           type="button"
@@ -130,7 +178,7 @@ export default function WeatherSubToolbar({
         </button>
       </div>
 
-      {/* Quando está desenhando um novo bloco: escolher clima padrão do pincel */}
+      {/* Quando está desenhando um novo bloco */}
       {weatherToolConfig.mode === "draw" && (
         <div className="flex items-center gap-1.5">
           <select
@@ -165,48 +213,135 @@ export default function WeatherSubToolbar({
         </div>
       )}
 
-      {/* Seletor rápido dos blocos / mapas extras da cena */}
+      {/* Popover Multi-Seleção de Mapas Extras & Blocos */}
       {sceneProps.length > 0 && (
-        <select
-          value={targetBlock?.id ?? ""}
-          onChange={(e) => onSelectElement(e.target.value || null)}
-          title="Escolha um mapa extra ou bloco de clima desta cena"
-          className="max-w-[160px] rounded-lg border border-zinc-800 bg-zinc-900 px-2 py-1 text-[11px] text-zinc-200"
-        >
-          <option value="">Selecionar Bloco/Mapa ({sceneProps.length})...</option>
-          {sceneProps.map((p, idx) => {
-            const pd = (p.data ?? {}) as SceneElementData;
-            const name =
-              pd.label && pd.label !== "__weather_zone__"
-                ? pd.label
-                : p.kind === "image"
-                  ? `Mapa Extra ${idx + 1}`
-                  : `Zona Clima ${idx + 1}`;
-            return (
-              <option key={p.id} value={p.id}>
-                {name}
-                {pd.weatherPreset && pd.weatherPreset !== "none" ? " • *" : ""}
-              </option>
-            );
-          })}
-        </select>
+        <div ref={pickerRef} className="relative">
+          <button
+            type="button"
+            onClick={() => setPickerOpen((v) => !v)}
+            className={`inline-flex items-center gap-1.5 rounded-lg border px-2 py-1 text-[11px] font-semibold transition ${
+              selectedBlocks.length > 0
+                ? "border-sky-400/60 bg-sky-500/20 text-sky-200"
+                : "border-zinc-700 bg-zinc-900 text-zinc-200 hover:border-sky-500/40"
+            }`}
+          >
+            <Layers className="h-3.5 w-3.5 text-sky-300" />
+            <span>
+              {selectedBlocks.length > 0
+                ? `${selectedBlocks.length} selecionado${selectedBlocks.length > 1 ? "s" : ""}`
+                : `Mapas / Blocos (${sceneProps.length})`}
+            </span>
+            <ChevronDown
+              className={`h-3 w-3 transition-transform ${
+                pickerOpen ? "rotate-180" : ""
+              }`}
+            />
+          </button>
+
+          {pickerOpen && (
+            <div className="absolute top-full left-0 z-30 mt-2 w-72 rounded-2xl border border-sky-500/35 bg-zinc-950/95 p-2.5 text-xs shadow-2xl backdrop-blur">
+              <div className="mb-2 flex items-center justify-between border-b border-zinc-800 pb-1.5 text-[11px]">
+                <span className="font-semibold text-sky-200">
+                  Marcar vários mapas / blocos
+                </span>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const allIds = sceneProps.map((p) => p.id);
+                      setWeatherSelectedIds(allIds);
+                      onSelectElement(allIds[0] ?? null);
+                    }}
+                    className="text-[10px] font-semibold text-amber-300 hover:underline"
+                  >
+                    Todos
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setWeatherSelectedIds([]);
+                      onSelectElement(null);
+                    }}
+                    className="text-[10px] text-zinc-400 hover:text-zinc-200"
+                  >
+                    Limpar
+                  </button>
+                </div>
+              </div>
+
+              <div className="max-h-52 space-y-1 overflow-y-auto pr-0.5">
+                {sceneProps.map((p, idx) => {
+                  const checked = effectiveIds.includes(p.id);
+                  const pd = (p.data ?? {}) as SceneElementData;
+                  const activeWeather =
+                    pd.weatherPreset && pd.weatherPreset !== "none"
+                      ? formatWeatherBadge(pd.weatherPreset)
+                      : null;
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => {
+                        if (
+                          validSelectedIds.length === 0 &&
+                          selectedElement &&
+                          selectedElement.id !== p.id &&
+                          effectiveIds.includes(selectedElement.id)
+                        ) {
+                          setWeatherSelectedIds([selectedElement.id, p.id]);
+                        } else {
+                          toggleWeatherSelectedId(p.id);
+                        }
+                        onSelectElement(p.id);
+                      }}
+                      className={`flex w-full items-center gap-2 rounded-lg border px-2 py-1.5 text-left text-[11px] transition ${
+                        checked
+                          ? "border-sky-400/60 bg-sky-500/15 text-white"
+                          : "border-zinc-800 bg-zinc-900/70 text-zinc-300 hover:border-zinc-700"
+                      }`}
+                    >
+                      <span
+                        className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
+                          checked
+                            ? "border-sky-400 bg-sky-500 text-zinc-950"
+                            : "border-zinc-600 text-transparent"
+                        }`}
+                      >
+                        <Check className="h-3 w-3" />
+                      </span>
+                      <span className="min-w-0 flex-1 truncate font-medium">
+                        {getBlockDisplayName(p, idx)}
+                      </span>
+                      {activeWeather && (
+                        <span className="shrink-0 rounded bg-sky-500/15 px-1.5 py-0.5 text-[10px] text-sky-200">
+                          {activeWeather}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <p className="mt-2 border-t border-zinc-800/80 pt-1.5 text-[10px] text-zinc-500">
+                Dica: também pode segurar <strong className="text-zinc-300">Shift + Clique</strong> direto nos mapas do tabuleiro.
+              </p>
+            </div>
+          )}
+        </div>
       )}
 
-      {/* Controles de clima do bloco/mapa extra selecionado */}
-      {targetBlock && (
+      {/* Controles em lote para 1 ou vários blocos/mapas selecionados */}
+      {selectedBlocks.length > 0 && (
         <div className="flex items-center gap-1.5 rounded-lg border border-sky-500/40 bg-sky-500/10 px-2 py-1">
-          <span className="max-w-[110px] truncate text-[11px] font-semibold text-sky-200">
-            {targetData.label && targetData.label !== "__weather_zone__"
-              ? targetData.label
-              : targetBlock.kind === "image"
-                ? "Mapa Extra"
-                : "Zona Clima"}
-            :
+          <span className="max-w-[130px] truncate text-[11px] font-semibold text-sky-200">
+            {selectedBlocks.length > 1
+              ? `${selectedBlocks.length} mapas:`
+              : `${getBlockDisplayName(selectedBlocks[0]!, 0)}:`}
           </span>
           <select
             value={targetPreset}
             onChange={(e) =>
-              onUpdateElementWeather(targetBlock.id, {
+              onUpdateElementsWeather(effectiveIds, {
                 weatherPreset: e.target.value as WeatherPreset,
                 weatherIntensity: targetIntensity,
               })
@@ -228,7 +363,7 @@ export default function WeatherSubToolbar({
                 step={0.05}
                 value={targetIntensity}
                 onChange={(e) =>
-                  onUpdateElementWeather(targetBlock.id, {
+                  onUpdateElementsWeather(effectiveIds, {
                     weatherPreset: targetPreset,
                     weatherIntensity: Number(e.target.value),
                   })
@@ -237,9 +372,9 @@ export default function WeatherSubToolbar({
               />
               <button
                 type="button"
-                title="Remover clima deste bloco"
+                title="Remover clima dos mapas selecionados"
                 onClick={() =>
-                  onUpdateElementWeather(targetBlock.id, {
+                  onUpdateElementsWeather(effectiveIds, {
                     weatherPreset: "none",
                   })
                 }
@@ -249,11 +384,11 @@ export default function WeatherSubToolbar({
               </button>
             </>
           )}
-          {isWeatherOnlyZone && (
+          {isSingleWeatherZone && primaryBlock && (
             <button
               type="button"
               title="Excluir bloco de clima"
-              onClick={() => onDeleteElement(targetBlock.id)}
+              onClick={() => onDeleteElement(primaryBlock.id)}
               className="rounded p-0.5 text-rose-300 hover:bg-rose-500/20"
             >
               <Trash2 className="h-3 w-3" />

@@ -109,9 +109,9 @@ export default function DrawingSubToolbar({
   };
 
   return (
-    <div className="pointer-events-auto absolute top-14 left-1/2 z-20 flex max-w-[94vw] -translate-x-1/2 flex-wrap items-center gap-1.5 rounded-xl border border-amber-500/30 bg-zinc-950/95 px-2.5 py-1.5 text-xs shadow-2xl backdrop-blur">
+    <>
       {tool === "draw" && (
-        <>
+        <div className="pointer-events-auto absolute top-14 left-1/2 z-20 flex max-w-[calc(100vw-240px)] -translate-x-1/2 flex-wrap items-center gap-1.5 rounded-xl border border-amber-500/30 bg-zinc-950/95 px-2.5 py-1.5 text-xs shadow-2xl backdrop-blur">
           {(
             [
               { kind: "freehand", label: "Pincel", icon: Pencil },
@@ -196,13 +196,12 @@ export default function DrawingSubToolbar({
             <Eraser className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">Limpar</span>
           </button>
-        </>
+        </div>
       )}
 
       {selectedElement && (
-        <>
-          {tool === "draw" && <div className="mx-0.5 h-4 w-px bg-zinc-800" />}
-          <span className="font-semibold text-amber-300">
+        <div className="pointer-events-auto absolute bottom-4 left-1/2 z-30 flex max-w-[94vw] -translate-x-1/2 flex-wrap items-center gap-1.5 rounded-2xl border border-amber-500/35 bg-zinc-950/95 px-3 py-1.5 text-xs shadow-2xl backdrop-blur">
+          <span className="whitespace-nowrap font-semibold text-amber-300">
             {isImageProp ? "🗺️ Peça de Mapa" : "Item selecionado"}
           </span>
 
@@ -374,15 +373,15 @@ export default function DrawingSubToolbar({
                 type="button"
                 onClick={() => onDeleteElement(selectedElement.id)}
                 title="Excluir item selecionado (Delete / Backspace)"
-                className="inline-flex items-center gap-1 rounded-lg border border-rose-500/40 bg-rose-500/15 px-2.5 py-1 font-semibold text-rose-200 hover:bg-rose-500/25"
+                className="inline-flex items-center gap-1 whitespace-nowrap rounded-lg border border-rose-500/40 bg-rose-500/15 px-2.5 py-1 font-semibold text-rose-200 hover:bg-rose-500/25"
               >
                 <Trash2 className="h-3.5 w-3.5" />
                 Excluir (Del)
               </button>
             </>
           )}
-        </>
+        </div>
       )}
-    </div>
+    </>
   );
 }

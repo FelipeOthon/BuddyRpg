@@ -306,6 +306,7 @@ export default function ElementsLayer({
   canSelect,
   weatherToolActive = false,
   selectedElementId,
+  weatherSelectedIds = [],
   layerFilter = "all",
   depthFilter,
   gridSize = 70,
@@ -329,6 +330,7 @@ export default function ElementsLayer({
   canSelect: boolean;
   weatherToolActive?: boolean;
   selectedElementId: string | null;
+  weatherSelectedIds?: string[];
   layerFilter?: "all" | "prop" | "overlay";
   depthFilter?: ElementDepthLayer;
   gridSize?: number;
@@ -336,7 +338,7 @@ export default function ElementsLayer({
   gridOffsetY?: number;
   gridType?: GridType;
   snapEnabled?: boolean;
-  onSelectElement: (id: string | null) => void;
+  onSelectElement: (id: string | null, multi?: boolean) => void;
   onMoveElement: (elementId: string, nextX: number, nextY: number) => void;
   onTransformElement?: (
     elementId: string,
@@ -458,12 +460,12 @@ export default function ElementsLayer({
             onClick={(e) => {
               if (!canSelect) return;
               e.cancelBubble = true;
-              onSelectElement(el.id);
+              onSelectElement(el.id, e.evt.shiftKey);
             }}
             onTap={(e) => {
               if (!canSelect) return;
               e.cancelBubble = true;
-              onSelectElement(el.id);
+              onSelectElement(el.id, false);
             }}
             onDragEnd={(e) => {
               const rawPos = { x: e.target.x(), y: e.target.y() };
@@ -532,7 +534,9 @@ export default function ElementsLayer({
             {renderShapeGraphic({
               kind: el.kind,
               data,
-              isSelected: selectedElementId === el.id,
+              isSelected:
+                selectedElementId === el.id ||
+                (weatherToolActive && weatherSelectedIds.includes(el.id)),
               isGm,
               weatherToolActive,
             })}
