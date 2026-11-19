@@ -14,6 +14,8 @@ import {
 } from "lucide-react";
 import {
   buildAiBattlemapUrl,
+  buildAiPropUrl,
+  buildAiTokenUrl,
   canvasToMapFile,
   drawGeneratedMapToCanvas,
   FORGOTTEN_REALMS_PRESETS,
@@ -57,8 +59,9 @@ export default function MapStudioModal({
   const [seed, setSeed] = useState("faerun-undermountain-01");
 
   // Aba IA / URL
+  const [aiMode, setAiMode] = useState<"map" | "token" | "item">("map");
   const [aiPrompt, setAiPrompt] = useState(
-    "Ruínas de um templo élfico antigo na Floresta de Cormyr com rio subterrâneo e altar arcano"
+    "Ruínas de um templo élfico antigo com altar arcano e rio subterrâneo"
   );
   const [externalUrl, setExternalUrl] = useState("");
   const [previewAiUrl, setPreviewAiUrl] = useState<string | null>(null);
@@ -157,12 +160,13 @@ export default function MapStudioModal({
 
   const handleGenerateAiPreview = () => {
     if (!aiPrompt.trim()) return;
-    const url = buildAiBattlemapUrl(
-      aiPrompt,
-      1400,
-      1050,
-      String(Date.now())
-    );
+    const seed = String(Date.now());
+    const url =
+      aiMode === "map"
+        ? buildAiBattlemapUrl(aiPrompt, 1400, 1050, seed)
+        : aiMode === "token"
+          ? buildAiTokenUrl(aiPrompt, seed)
+          : buildAiPropUrl(aiPrompt, seed);
     setPreviewAiUrl(url);
     setExternalUrl(url);
   };
@@ -513,15 +517,45 @@ export default function MapStudioModal({
           {tab === "ai_url" && (
             <div className="space-y-4">
               <div className="fr-card space-y-3 rounded-2xl p-4">
-                <label className="block text-xs font-bold uppercase tracking-wider text-amber-300">
-                  Gerar Battlemap Top-Down por Prompt (IA Gratuita)
-                </label>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-amber-300">
+                    Gerar com IA Gratuita
+                  </label>
+                  <div className="flex items-center gap-1 rounded-lg border border-zinc-800 bg-zinc-950 p-0.5 text-[11px]">
+                    {(
+                      [
+                        { id: "map", label: "🗺️ Mapa 90°" },
+                        { id: "token", label: "🎭 Personagem" },
+                        { id: "item", label: "🪑 Item/Móvel" },
+                      ] as const
+                    ).map((m) => (
+                      <button
+                        key={m.id}
+                        type="button"
+                        onClick={() => setAiMode(m.id)}
+                        className={`rounded-md px-2 py-0.5 font-semibold transition ${
+                          aiMode === m.id
+                            ? "bg-amber-500 text-zinc-950"
+                            : "text-zinc-400 hover:text-zinc-200"
+                        }`}
+                      >
+                        {m.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 <div className="flex gap-2">
                   <input
                     type="text"
                     value={aiPrompt}
                     onChange={(e) => setAiPrompt(e.target.value)}
-                    placeholder="Descreva o cenário do encontro em Faerûn..."
+                    placeholder={
+                      aiMode === "map"
+                        ? "Descreva a planta baixa do mapa..."
+                        : aiMode === "token"
+                          ? "Descreva o personagem ou criatura..."
+                          : "Descreva o móvel ou item..."
+                    }
                     className="flex-1 rounded-xl border border-zinc-800 bg-zinc-950 px-3.5 py-2 text-xs text-white"
                   />
                   <button
@@ -530,7 +564,7 @@ export default function MapStudioModal({
                     className="inline-flex items-center gap-1.5 rounded-xl bg-amber-500 px-4 py-2 text-xs font-bold text-zinc-950 hover:bg-amber-400"
                   >
                     <Sparkles className="h-3.5 w-3.5" />
-                    Gerar Mapa IA
+                    Gerar com IA
                   </button>
                 </div>
               </div>

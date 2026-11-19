@@ -89,7 +89,7 @@ export default function InitiativeTrackerBar({
   if (!combat.active) {
     if (!isGm || sceneTokens.length === 0) return null;
     return (
-      <div className="pointer-events-auto absolute top-14 right-3 z-20">
+      <div className="pointer-events-auto absolute right-3 bottom-3 z-20">
         <button
           type="button"
           onClick={startCombat}

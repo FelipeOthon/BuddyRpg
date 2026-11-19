@@ -669,9 +669,25 @@ export function buildAiBattlemapUrl(
   height = 1050,
   seed = "42"
 ): string {
-  const enriched = `${prompt.trim()}, top-down RPG battlemap, Forgotten Realms D&D style, overhead 90 degree orthographic view, high detail tabletop map, no isometric`;
+  const enriched = `${prompt.trim()}, strictly 90 degree flat overhead birds-eye view architectural RPG battlemap floorplan, orthographic top-down dungeon map, gridless, no horizon, no sky, no landscape perspective, no isometric`;
   const seedNum = hashSeed(seed) % 999999;
   return `https://image.pollinations.ai/prompt/${encodeURIComponent(
     enriched
   )}?width=${width}&height=${height}&seed=${seedNum}&nologo=true`;
+}
+
+export function buildAiTokenUrl(prompt: string, seed = "42"): string {
+  const enriched = `${prompt.trim()}, D&D fantasy RPG character portrait token, centered head and shoulders, dramatic studio lighting, circular token medallion style, clean dark background, digital painting`;
+  const seedNum = hashSeed(seed) % 999999;
+  return `https://image.pollinations.ai/prompt/${encodeURIComponent(
+    enriched
+  )}?width=768&height=768&seed=${seedNum}&nologo=true`;
+}
+
+export function buildAiPropUrl(prompt: string, seed = "42"): string {
+  const enriched = `${prompt.trim()}, top-down 2D RPG tabletop prop or furniture item, overhead 90 degree orthographic view, isolated single object on solid dark background, clean sharp edges, D&D style`;
+  const seedNum = hashSeed(seed) % 999999;
+  return `https://image.pollinations.ai/prompt/${encodeURIComponent(
+    enriched
+  )}?width=768&height=768&seed=${seedNum}&nologo=true`;
 }

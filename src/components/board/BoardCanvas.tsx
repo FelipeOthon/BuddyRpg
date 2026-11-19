@@ -1956,6 +1956,129 @@ export default function BoardCanvas({
                 }
               });
             }}
+            onPlaceProp={({ imageUrl, label, cols, rows, zLayer }) => {
+              if (role !== "gm") return;
+              const g = Math.max(scene.grid_size || 70, 20);
+              const centerX =
+                (-viewport.x + size.width / 2) / viewport.scale;
+              const centerY =
+                (-viewport.y + size.height / 2) / viewport.scale;
+              const w = Math.round(cols * g);
+              const h = Math.round(rows * g);
+              const snapped = snapToGrid(
+                { x: centerX - w / 2, y: centerY - h / 2 },
+                g,
+                scene.snap_to_grid,
+                scene.grid_offset_x ?? 0,
+                scene.grid_offset_y ?? 0,
+                scene.grid_type ?? "square"
+              );
+              void createSceneElementAction({
+                sceneId: scene.id,
+                campaignId: scene.campaign_id,
+                layer: "prop",
+                kind: "image",
+                x: snapped.x,
+                y: snapped.y,
+                data: {
+                  imageUrl,
+                  width: w,
+                  height: h,
+                  opacity: 1,
+                  label,
+                  zLayer: zLayer ?? "above_map",
+                },
+              }).then((res) => {
+                if (res.ok && res.element) {
+                  upsertElement(res.element);
+                  setSelectedElementId(res.element.id);
+                  setTool("select");
+                }
+              });
+            }}
+            onPlaceMapPiece={({ url, title, cols, rows }) => {
+              if (role !== "gm") return;
+              const g = Math.max(scene.grid_size || 70, 20);
+              const existingProps = elements.filter(
+                (el) =>
+                  el.scene_id === scene.id &&
+                  el.layer === "prop" &&
+                  el.kind === "image"
+              );
+              let rawX = 0;
+              if (existingProps.length > 0) {
+                rawX = Math.max(
+                  ...existingProps.map(
+                    (el) =>
+                      el.x + ((el.data as SceneElementData)?.width ?? 280)
+                  )
+                );
+              } else if (scene.map_url) {
+                rawX = scene.map_width || 0;
+              }
+              const placeX = Math.round(rawX / g) * g;
+              void createSceneElementAction({
+                sceneId: scene.id,
+                campaignId: scene.campaign_id,
+                layer: "prop",
+                kind: "image",
+                x: placeX,
+                y: 0,
+                data: {
+                  imageUrl: url,
+                  width: cols * g,
+                  height: rows * g,
+                  opacity: 1,
+                  label: title,
+                  zLayer: "above_map",
+                },
+              }).then((res) => {
+                if (res.ok && res.element) {
+                  upsertElement(res.element);
+                  setSelectedElementId(res.element.id);
+                  setTool("select");
+                  setViewport({
+                    ...viewport,
+                    x: Math.round(80 - placeX * viewport.scale),
+                    y: 80,
+                  });
+                }
+              });
+            }}
+            onPlaceToken={({ name, imageUrl, size: tokenSize }) => {
+              if (role !== "gm") return;
+              const g = Math.max(scene.grid_size || 70, 20);
+              const centerX =
+                (-viewport.x + size.width / 2) / viewport.scale;
+              const centerY =
+                (-viewport.y + size.height / 2) / viewport.scale;
+              const snapped = snapToGrid(
+                { x: centerX - g / 2, y: centerY - g / 2 },
+                g,
+                scene.snap_to_grid,
+                scene.grid_offset_x ?? 0,
+                scene.grid_offset_y ?? 0,
+                scene.grid_type ?? "square"
+              );
+              void createTokenAction({
+                sceneId: scene.id,
+                campaignId: scene.campaign_id,
+                name,
+                imageUrl,
+                size: tokenSize,
+                hpCurrent: 20,
+                hpMax: 20,
+                posX: snapped.x,
+                posY: snapped.y,
+                visionRange: 4.5,
+              }).then((res) => {
+                if (res.ok && res.token) {
+                  upsertToken(res.token);
+                  setSelectedTokenId(res.token.id);
+                  setTool("select");
+                }
+              });
+            }}
             onOpenSceneManager={onOpenSceneManager}
             onClearPinnedRulers={() => {
               clearPinnedRulers(scene.id);

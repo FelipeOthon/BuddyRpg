@@ -67,7 +67,9 @@ const safeImageUrlSchema = z
       (!v.includes("..") &&
         (v.startsWith("/icons/") ||
           v.startsWith("/vfx/") ||
-          v.startsWith("/curated-maps/"))),
+          v.startsWith("/curated-maps/") ||
+          v.startsWith("/curated-tokens/") ||
+          v.startsWith("/curated-items/"))),
     "URL de imagem inválida."
   );
 
