@@ -368,6 +368,30 @@ export default function DashboardClient({
           )}
         </section>
       </main>
+
+      <footer className="border-t border-amber-500/15 bg-zinc-950/80 py-5 text-center text-xs text-zinc-500">
+        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-3 px-6 sm:flex-row">
+          <span>
+            BuddyRPG · Criado por{" "}
+            <span className="font-medium text-amber-300">Felipe Othon</span> &amp;{" "}
+            <span className="font-medium text-amber-300">Fabrício Vaz</span>
+          </span>
+          <div className="flex items-center gap-3 text-zinc-400">
+            <Link href="/#historia" className="transition hover:text-amber-300">
+              História do Projeto
+            </Link>
+            <span>·</span>
+            <a
+              href="https://github.com/FelipeOthon/BuddyRpg"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="transition hover:text-amber-300"
+            >
+              GitHub
+            </a>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }
