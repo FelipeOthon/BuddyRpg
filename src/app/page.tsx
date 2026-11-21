@@ -221,17 +221,32 @@ export default function Home() {
                     PeerBuddy
                   </h3>
                   <p className="text-xs font-medium text-amber-400/90">
-                    Criado por Fabrício Vaz
+                    Criado por{" "}
+                    <a
+                      href="https://github.com/VazFabricio"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="underline decoration-amber-500/50 underline-offset-2 transition hover:text-amber-200"
+                    >
+                      Fabrício Vaz
+                    </a>
                   </p>
                 </div>
 
                 <p className="mt-3 text-xs leading-relaxed text-zinc-300/90">
                   O projeto começou localmente pelas mãos de{" "}
-                  <strong className="text-amber-200">Fabrício Vaz</strong>, com
-                  o objetivo direto de acabar com a dor de cabeça e lentidão de
-                  ter que ficar compartilhando telas entre amigos durante as
-                  sessões. O PeerBuddy nasceu para sincronizar e espelhar as telas
-                  sem que ninguém perdesse o foco da narrativa.
+                  <a
+                    href="https://github.com/VazFabricio"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-semibold text-amber-200 underline decoration-amber-500/40 underline-offset-2 transition hover:text-white"
+                  >
+                    Fabrício Vaz
+                  </a>
+                  , com o objetivo direto de acabar com a dor de cabeça e
+                  lentidão de ter que ficar compartilhando telas entre amigos
+                  durante as sessões. O PeerBuddy nasceu para sincronizar e
+                  espelhar as telas sem que ninguém perdesse o foco da narrativa.
                 </p>
               </div>
 
@@ -266,7 +281,15 @@ export default function Home() {
                     PeerBuddyRpg
                   </h3>
                   <p className="text-xs font-medium text-amber-400/90">
-                    Criado por Felipe Othon
+                    Criado por{" "}
+                    <a
+                      href="https://github.com/FelipeOthon"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="underline decoration-amber-500/50 underline-offset-2 transition hover:text-amber-200"
+                    >
+                      Felipe Othon Santiago
+                    </a>
                   </p>
                 </div>
 
@@ -274,9 +297,17 @@ export default function Home() {
                   Ao notar o gargalo latente na comunidade de RPG de mesa e o
                   súbito vácuo deixado pelos bloqueios e instabilidades do
                   Discord no Brasil,{" "}
-                  <strong className="text-amber-200">Felipe Othon</strong> viu a
-                  urgência de reunir as ferramentas fundamentais do mestre e dos
-                  jogadores em um único refúgio, dando início ao PeerBuddyRpg.
+                  <a
+                    href="https://github.com/FelipeOthon"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-semibold text-amber-200 underline decoration-amber-500/40 underline-offset-2 transition hover:text-white"
+                  >
+                    Felipe Othon
+                  </a>{" "}
+                  viu a urgência de reunir as ferramentas fundamentais do mestre
+                  e dos jogadores em um único refúgio, dando início ao
+                  PeerBuddyRpg.
                 </p>
               </div>
 
@@ -311,14 +342,30 @@ export default function Home() {
                     BuddyRPG (Web &amp; Tempo Real)
                   </h3>
                   <p className="text-xs font-medium text-amber-400/90">
-                    Evoluído por Felipe Othon
+                    Evoluído por{" "}
+                    <a
+                      href="https://github.com/FelipeOthon"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="underline decoration-amber-500/50 underline-offset-2 transition hover:text-amber-200"
+                    >
+                      Felipe Othon Santiago
+                    </a>
                   </p>
                 </div>
 
                 <p className="mt-3 text-xs leading-relaxed text-zinc-300/90">
                   Para que ninguém precisasse instalar dependências pesadas ou
-                  configurar redes locais, Felipe decidiu construir toda a base
-                  100% online no navegador. Nasceu o{" "}
+                  configurar redes locais,{" "}
+                  <a
+                    href="https://github.com/FelipeOthon"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-semibold text-amber-200 underline decoration-amber-500/40 underline-offset-2 transition hover:text-white"
+                  >
+                    Felipe
+                  </a>{" "}
+                  decidiu construir toda a base 100% online no navegador. Nasceu o{" "}
                   <strong className="text-amber-300">BuddyRPG</strong>: um VTT
                   completo em tempo real, com física de dados 3D, névoa e
                   escuridão dinâmicas, forja de masmorras e biblioteca de tokens.
@@ -344,9 +391,24 @@ export default function Home() {
           <div className="mt-8 rounded-2xl border border-amber-500/30 bg-gradient-to-r from-amber-500/10 via-zinc-900/70 to-amber-500/10 p-6 text-center shadow-[0_0_30px_rgba(245,158,11,0.08)]">
             <p className="text-sm font-medium leading-relaxed text-amber-200">
               ⚔️ Criado de forma colaborativa e aberta por{" "}
-              <strong className="text-amber-300">Fabrício Vaz</strong> e{" "}
-              <strong className="text-amber-300">Felipe Othon</strong>.
-              Construído de mestre para jogador, com tecnologia aberta e sem
+              <a
+                href="https://github.com/VazFabricio"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-bold text-amber-300 underline decoration-amber-500/50 underline-offset-2 transition hover:text-white"
+              >
+                Fabrício Vaz
+              </a>{" "}
+              e{" "}
+              <a
+                href="https://github.com/FelipeOthon"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-bold text-amber-300 underline decoration-amber-500/50 underline-offset-2 transition hover:text-white"
+              >
+                Felipe Othon Santiago
+              </a>
+              . Construído de mestre para jogador, com tecnologia aberta e sem
               barreiras para unir mesas de RPG onde quer que estejam.
             </p>
           </div>
@@ -360,8 +422,23 @@ export default function Home() {
             <Shield className="h-3.5 w-3.5 text-amber-500/70" />
             <span>
               BuddyRPG — Forgotten Realms Edition · Criado por{" "}
-              <span className="text-amber-300 font-medium">Felipe Othon</span> &amp;{" "}
-              <span className="text-amber-300 font-medium">Fabrício Vaz</span>
+              <a
+                href="https://github.com/FelipeOthon"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-medium text-amber-300 transition hover:underline"
+              >
+                Felipe Othon Santiago
+              </a>{" "}
+              &amp;{" "}
+              <a
+                href="https://github.com/VazFabricio"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-medium text-amber-300 transition hover:underline"
+              >
+                Fabrício Vaz
+              </a>
             </span>
           </div>
 
@@ -388,7 +465,7 @@ export default function Home() {
               href="https://github.com/FelipeOthon/BuddyRpg"
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-amber-400 font-medium transition hover:text-amber-200"
+              className="inline-flex items-center gap-1 font-medium text-amber-400 transition hover:text-amber-200"
             >
               <GithubIcon className="h-3 w-3" /> BuddyRpg (Atual)
             </a>
